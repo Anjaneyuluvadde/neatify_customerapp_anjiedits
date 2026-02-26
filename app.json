@@ -1,0 +1,115 @@
+{
+  "expo": {
+    "name": "The Neatify Team",
+    "slug": "The-Neatify-Team",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": [
+      "neatifynation",
+      "theneatifyteam"
+    ],
+    "icon": "./assets/images/icon.png",
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "We need your location to provide services at your address"
+      },
+      "associatedDomains": [
+        "applinks:www.theneatifyteam.in",
+        "applinks:theneatifyteam.in",
+        "applinks:neatify-version2-hosting.vercel.app"
+      ]
+    },
+    "android": {
+      "package": "com.theneatifyteam.app",
+      "versionCode": 1,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "www.theneatifyteam.in",
+              "pathPrefix": "/service"
+            },
+            {
+              "scheme": "https",
+              "host": "theneatifyteam.in",
+              "pathPrefix": "/service"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "neatify-version2-hosting.vercel.app",
+              "pathPrefix": "/service"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ],
+          "data": [
+            {
+              "scheme": "https",
+              "host": "pg-router.dev.razorpay.in"
+            }
+          ]
+        }
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground1.png",
+        "backgroundImage": "./assets/images/android-icon-background1.png",
+        "backgroundColor": "#E6F4FE"
+      }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-router",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 24,
+            "targetSdkVersion": 34
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f18007ff-3f70-4132-9459-4fbd872d281d"
+      }
+    },
+    "owner": "vijayadurga_03"
+  }
+}
