@@ -1,3 +1,4 @@
+import React, { memo } from "react";
 import { Image, Pressable, Text, View } from "react-native";
 import { useLanguage } from "../context/LanguageContext";
 import { COLORS } from "../theme/colors";
@@ -8,7 +9,7 @@ type Props = {
   onPress: () => void;
 };
 
-export default function ServiceCard({ service, onPress }: Props) {
+export default memo(function ServiceCard({ service, onPress }: Props) {
   const { t } = useLanguage();
 
   return (
@@ -127,4 +128,4 @@ export default function ServiceCard({ service, onPress }: Props) {
       </View>
     </Pressable>
   );
-}
+});

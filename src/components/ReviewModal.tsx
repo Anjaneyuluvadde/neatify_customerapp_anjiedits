@@ -75,7 +75,7 @@ export default function ReviewModal({
             statusBarTranslucent={true}
         >
             <KeyboardAvoidingView
-                behavior={Platform.OS === "ios" ? "padding" : "height"}
+                behavior={Platform.OS === "ios" ? "padding" : undefined}
                 style={styles.modalOverlay}
             >
                 <View style={styles.modalContent}>
@@ -105,7 +105,7 @@ export default function ReviewModal({
                             onPress={onClose}
                             disabled={isSubmitting}
                         >
-                            <Text style={styles.modalCancelText}>{t("common.cancel") || "Cancel"}</Text>
+                            <Text style={styles.modalCancelText}>Cancel</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -116,7 +116,7 @@ export default function ReviewModal({
                             {isSubmitting ? (
                                 <ActivityIndicator color="#fff" />
                             ) : (
-                                <Text style={styles.modalSubmitText}>{t("common.submit") || "Submit"}</Text>
+                                <Text style={styles.modalSubmitText}>Submit</Text>
                             )}
                         </TouchableOpacity>
                     </View>

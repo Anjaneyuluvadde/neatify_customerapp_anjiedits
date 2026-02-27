@@ -72,7 +72,7 @@ export default function App() {
           return;
         }
       }
-      setInitialRoute(session ? "Home" : "Login");
+      setInitialRoute(session ? "Home" : "Home");
       setLoading(false);
     };
     initApp();

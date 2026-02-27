@@ -1,144 +1,3 @@
-// import { Ionicons } from "@expo/vector-icons";
-// import { useEffect, useMemo, useState } from "react";
-// import {
-//   ActivityIndicator,
-//   FlatList,
-//   StatusBar,
-//   Text,
-//   View,
-// } from "react-native";
-// import { SafeAreaView } from "react-native-safe-area-context";
-
-// import CategoryTabs from "../components/CategoryTabs";
-// import Header from "../components/Header";
-// import ServiceCard from "../components/ServiceCard";
-// import { supabase } from "../lib/supabase";
-// import { COLORS } from "../theme/colors";
-// import { Service } from "../types/service";
-
-// export default function HomeScreen({ navigation }: any) {
-//   const [services, setServices] = useState<Service[]>([]);
-//   const [activeCategory, setActiveCategory] = useState("ALL");
-//   const [searchText, setSearchText] = useState("");
-//   const [loading, setLoading] = useState(true);
-
-//   useEffect(() => {
-//     fetchServices();
-//   }, []);
-
-//   const fetchServices = async () => {
-//     setLoading(true);
-
-//     const { data, error } = await supabase.from("services").select(`
-//         id,
-//         title,
-//         service_type,
-//         duration,
-//         price,
-//         image,
-//         gallery_images,
-//         description
-//       `);
-
-//     if (error) {
-//       console.log("Supabase error:", error);
-//     } else {
-//       setServices(data || []);
-//     }
-
-//     setLoading(false);
-//   };
-
-//   /* ✅ Tabs dynamically from service_type */
-//   const tabs = useMemo(() => {
-//     const uniqueTypes = Array.from(
-//       new Set((services || []).map((s) => s.service_type).filter(Boolean))
-//     );
-
-//     return [
-//       { label: "All Services", value: "ALL" },
-//       ...uniqueTypes.map((type) => ({
-//         label: type
-//           .toLowerCase()
-//           .replace(/_/g, " ")
-//           .replace(/\b\w/g, (c) => c.toUpperCase()),
-//         value: type,
-//       })),
-//     ];
-//   }, [services]);
-
-//   /* ✅ Search + Filter using service_type */
-//   const filteredServices = services.filter((service) => {
-//     const search = (searchText ?? "").trim().toLowerCase();
-
-//     const title = (service.title ?? "").toLowerCase();
-//     const serviceType = (service.service_type ?? "").toLowerCase();
-
-//     const matchesSearch =
-//       search.length === 0 ||
-//       title.includes(search) ||
-//       serviceType.includes(search);
-
-//     const matchesCategory =
-//       activeCategory === "ALL" || service.service_type === activeCategory;
-
-//     return matchesSearch && matchesCategory;
-//   });
-
-//   return (
-//     <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top"]}>
-//       {/* ✅ This makes sure status bar looks clean */}
-//       <StatusBar barStyle="dark-content" backgroundColor="#fff" />
-
-//       <View style={{ flex: 1, backgroundColor: "#fff" }}>
-//         <Header
-//           searchText={searchText}
-//           onSearchChange={(text) => {
-//             setSearchText(text);
-//             setActiveCategory("ALL");
-//           }}
-//         />
-
-//         <CategoryTabs
-//           activeTab={activeCategory}
-//           onChange={setActiveCategory}
-//           tabs={tabs}
-//         />
-
-//         {loading ? (
-//           <ActivityIndicator size="large" style={{ marginTop: 40 }} />
-//         ) : filteredServices.length === 0 ? (
-//           <View style={{ marginTop: 60, alignItems: "center" }}>
-//             <Ionicons name="search-outline" size={40} color={COLORS.gray} />
-//             <Text style={{ marginTop: 12, color: COLORS.gray, fontSize: 16 }}>
-//               No search results found
-//             </Text>
-//           </View>
-//         ) : (
-//           <FlatList
-//             data={filteredServices}
-//             keyExtractor={(item) => item.id}
-//             numColumns={2}
-//             contentContainerStyle={{
-//               padding: 8,
-//               backgroundColor: "#fff", // ✅ Fix gray background
-//             }}
-//             renderItem={({ item }) => (
-//               <ServiceCard
-//                 service={item}
-//                 onPress={() =>
-//                   navigation.navigate("ServiceDetail", {
-//                     service: item,
-//                   })
-//                 }
-//               />
-//             )}
-//           />
-//         )}
-//       </View>
-//     </SafeAreaView>
-//   );
-// }
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -196,6 +55,9 @@ const getLevenshteinDistance = (a: string, b: string) => {
 
   return matrix[b.length][a.length];
 };
+
+// ✅ Module-level flag: only show popup once per app session
+let hasShownPopupThisSession = false;
 
 export default function HomeScreen({ navigation }: any) {
   const { checkAuth } = useAuthGuard();
@@ -350,6 +212,9 @@ export default function HomeScreen({ navigation }: any) {
   /* ================= POPUPS ================= */
 
   const fetchPopups = async () => {
+    // ✅ Only show popup once per app session
+    if (hasShownPopupThisSession) return;
+
     // 1. Check app_popups first (priority)
     const { data: popupData } = await supabase
       .from("app_popups")
@@ -361,6 +226,7 @@ export default function HomeScreen({ navigation }: any) {
       setPopupIndex(0);
       setPopupType("APP_POPUP");
       setShowPopup(true);
+      hasShownPopupThisSession = true;
       return;
     }
 
@@ -374,6 +240,7 @@ export default function HomeScreen({ navigation }: any) {
       setActiveOffers(offersData);
       setPopupType("OFFERS");
       setShowPopup(true);
+      hasShownPopupThisSession = true;
     }
   };
 
