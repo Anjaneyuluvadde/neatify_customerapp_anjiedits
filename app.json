@@ -23,8 +23,7 @@
       },
       "associatedDomains": [
         "applinks:www.theneatifyteam.in",
-        "applinks:theneatifyteam.in",
-        "applinks:neatify-version2-hosting.vercel.app"
+        "applinks:theneatifyteam.in"
       ]
     },
     "android": {
@@ -47,21 +46,6 @@
             {
               "scheme": "https",
               "host": "theneatifyteam.in",
-              "pathPrefix": "/service"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "neatify-version2-hosting.vercel.app",
               "pathPrefix": "/service"
             }
           ],

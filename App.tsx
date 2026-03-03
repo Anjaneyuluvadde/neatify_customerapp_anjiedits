@@ -169,9 +169,7 @@ export default function App() {
       Linking.createURL("/"),
       "neatifynation://",
       "https://www.theneatifyteam.in",
-      "https://theneatifyteam.in",
-      "https://website-v2-swart-phi.vercel.app",
-      "https://neatify-version2-hosting.vercel.app"
+      "https://theneatifyteam.in"
     ],
     config: {
       screens: {

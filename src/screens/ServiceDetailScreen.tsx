@@ -285,7 +285,7 @@ export default function ServiceDetailScreen({ route }: Props) {
     try {
       // Use slug for cleaner links, fallback to ID
       const identifier = service.slug || service.id;
-      const url = `https://neatify-version2-hosting.vercel.app/service/${identifier}`;
+      const url = `https://www.theneatifyteam.in/service/${identifier}`;
 
       await Share.share({
         message: `Check out this service: ${service.title} - ${service.description?.substring(0, 100)}... \n\nBook now on The Neatify Team! \n${url}`,
