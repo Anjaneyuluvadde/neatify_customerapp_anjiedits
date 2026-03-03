@@ -41,16 +41,7 @@ export default function CompleteProfileScreen() {
 
     // Auth state flags
     const [needsEmail, setNeedsEmail] = useState(true);
-    const [needsPhone, setNeedsPhone] = useState(true);
     const [needsPassword, setNeedsPassword] = useState(false);
-    // Track whether this user had NO email in Auth at the time they opened this screen
-    const [startedWithoutEmail, setStartedWithoutEmail] = useState(false);
-
-    // OTP states
-    const [otpSent, setOtpSent] = useState(false);
-    const [otpCode, setOtpCode] = useState("");
-    const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-    const [otpLoading, setOtpLoading] = useState(false);
 
     useEffect(() => {
         loadCurrentData();
@@ -73,7 +64,6 @@ export default function CompleteProfileScreen() {
             // Helper to clean phone to 10 digits
             const cleanPhone = (raw?: string | null) => {
                 if (!raw) return "";
-                // Strip all non-digits and keep only last 10
                 const digits = raw.replace(/\D/g, "");
                 return digits.slice(-10);
             };
@@ -81,17 +71,9 @@ export default function CompleteProfileScreen() {
             // Pre-fill from Auth
             setFullName(user.user_metadata?.full_name || "");
             setEmail(user.email || "");
-
-            // Check if they have a verified phone identity
-            // We consider the phone verified ONLY if phone_confirmed_at exists.
-            const hasPhoneIdentity = !!user.phone_confirmed_at;
             setPhone(cleanPhone(user.user_metadata?.phone_number) || cleanPhone(user.user_metadata?.phone) || cleanPhone(user.phone));
-            setIsPhoneVerified(hasPhoneIdentity);
-            setNeedsPhone(!hasPhoneIdentity);
 
             setNeedsEmail(!user.email);
-            // If user had no email when they opened this screen, remember that
-            setStartedWithoutEmail(!user.email);
 
             // Pre-fill from Profile table
             const { data: profile } = await supabase
@@ -129,76 +111,6 @@ export default function CompleteProfileScreen() {
         }
     };
 
-    const handleSendOtp = async () => {
-        if (!phone.trim() || phone.length < 10) {
-            showAlert({ type: "warning", title: "Invalid Phone", message: "Please enter a valid 10-digit phone number." });
-            return;
-        }
-
-        setOtpLoading(true);
-        try {
-            const formattedPhone = `+91${phone}`;
-
-            // Existing user (Google/phone/email) — use updateUser to link phone
-            const { error } = await supabase.auth.updateUser({
-                phone: formattedPhone
-            });
-            if (error) throw error;
-
-            setOtpSent(true);
-            showToast("Verification code sent!", "info");
-        } catch (error: any) {
-            console.error("Error sending OTP:", error);
-            showAlert({
-                type: "error",
-                title: "OTP Failed",
-                message: error.message
-            });
-        } finally {
-            setOtpLoading(false);
-        }
-    };
-
-    const handleVerifyOtp = async () => {
-        if (!otpCode || otpCode.length !== 6) {
-            showAlert({ type: "warning", title: "Invalid Code", message: "Please enter the 6-digit verification code." });
-            return;
-        }
-
-        setOtpLoading(true);
-        try {
-            const formattedPhone = `+91${phone}`;
-
-            // Linking phone to a session that was triggered by updateUser
-            const { error } = await supabase.auth.verifyOtp({
-                phone: formattedPhone,
-                token: otpCode,
-                type: 'phone_change'
-            });
-            if (error) throw error;
-
-            setIsPhoneVerified(true);
-            setOtpSent(false);
-            setNeedsPhone(false);
-
-            // Show final success alert
-            showAlert({
-                type: "success",
-                title: "Phone Verified!",
-                message: "Your phone number has been successfully verified.",
-            });
-        } catch (error: any) {
-            console.error("Error verifying OTP:", error);
-            showAlert({
-                type: "error",
-                title: "Verification Failed",
-                message: error.message
-            });
-        } finally {
-            setOtpLoading(false);
-        }
-    };
-
     const handleSubmit = async () => {
         if (!fullName.trim()) {
             showAlert({ type: "warning", title: "Missing Information", message: "Please enter your full name." });
@@ -212,12 +124,6 @@ export default function CompleteProfileScreen() {
 
         if (!phone.trim() || phone.length < 10) {
             showAlert({ type: "warning", title: "Invalid Phone", message: "Please enter a valid 10-digit phone number." });
-            return;
-        }
-
-        // Check if phone verified
-        if (!isPhoneVerified) {
-            showAlert({ type: "warning", title: "Phone Unverified", message: "Please verify your phone number first." });
             return;
         }
 
@@ -285,27 +191,12 @@ export default function CompleteProfileScreen() {
                 })
             ]);
 
-            if (startedWithoutEmail) {
-                // Phone user who just added email via updateUser — needs to confirm it
-                showAlert({
-                    type: "info",
-                    title: "Confirm Your Email",
-                    message: `A verification link has been sent to ${email.trim()}. You can click it later to enable Email/Google login for this account.`,
-                    onConfirm: () => {
-                        navigation.reset({
-                            index: 0,
-                            routes: [{ name: "Home" }],
-                        });
-                    }
-                });
-            } else {
-                // Everything done (e.g. Google user update)
-                showToast("Profile updated!", "success");
-                navigation.reset({
-                    index: 0,
-                    routes: [{ name: "Home" }],
-                });
-            }
+            // Everything done — go to Home
+            showToast("Profile updated!", "success");
+            navigation.reset({
+                index: 0,
+                routes: [{ name: "Home" }],
+            });
 
         } catch (error: any) {
             console.log("Error handling profile:", error);
@@ -382,81 +273,30 @@ export default function CompleteProfileScreen() {
                             />
                         </View>
 
-                        {/* PHONE NUMBER - Critical for Google/Email users */}
-                        <View>
-                            <View style={styles.inputContainer}>
-                                <Phone size={20} color={COLORS.textLight} />
-                                <Text style={{ marginLeft: 10, fontSize: 16, color: COLORS.text, fontWeight: '600' }}>+91</Text>
-                                <TextInput
-                                    style={styles.input}
-                                    placeholder="Phone Number"
-                                    placeholderTextColor={COLORS.placeholder}
-                                    value={phone}
-                                    onChangeText={(text) => {
-                                        // Strip all non-digits
-                                        let cleaned = text.replace(/\D/g, '');
-                                        // If it starts with 91 and is longer than 10 digits, strip the 91
-                                        if (cleaned.startsWith('91') && cleaned.length > 10) {
-                                            cleaned = cleaned.slice(2);
-                                        }
-                                        setPhone(cleaned.slice(0, 10));
-                                        if (isPhoneVerified) setIsPhoneVerified(false);
-                                    }}
-                                    keyboardType="phone-pad"
-                                    maxLength={10}
-                                    editable={!otpSent && !isPhoneVerified}
-                                />
-                                {isPhoneVerified ? (
-                                    <View style={styles.verifiedBadge}>
-                                        <Text style={styles.verifiedText}>Verified</Text>
-                                    </View>
-                                ) : (
-                                    <TouchableOpacity
-                                        onPress={handleSendOtp}
-                                        disabled={otpLoading || phone.length < 10 || otpSent || isPhoneVerified}
-                                        style={{ padding: 5 }}
-                                    >
-                                        <Text style={{
-                                            color: (phone.length === 10 && !otpSent && !isPhoneVerified)
-                                                ? COLORS.saffron
-                                                : COLORS.textLight,
-                                            fontWeight: '700'
-                                        }}>
-                                            {otpLoading ? "..." : otpSent ? "Sent" : "Verify"}
-                                        </Text>
-                                    </TouchableOpacity>
-                                )}
-                            </View>
-
-                            {/* OTP INPUT */}
-                            {otpSent && (
-                                <View style={[styles.inputContainer, { marginTop: 10, borderColor: COLORS.saffron }]}>
-                                    <Lock size={20} color={COLORS.saffron} />
-                                    <TextInput
-                                        style={styles.input}
-                                        placeholder="Enter 6-digit OTP"
-                                        placeholderTextColor={COLORS.placeholder}
-                                        value={otpCode}
-                                        onChangeText={setOtpCode}
-                                        keyboardType="number-pad"
-                                        maxLength={6}
-                                    />
-                                    <TouchableOpacity
-                                        onPress={handleVerifyOtp}
-                                        disabled={otpLoading || otpCode.length < 6}
-                                        style={styles.verifyBtn}
-                                    >
-                                        {otpLoading ? (
-                                            <ActivityIndicator size="small" color="#fff" />
-                                        ) : (
-                                            <Text style={styles.verifyBtnText}>Confirm</Text>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
-                            )}
+                        {/* PHONE NUMBER - Simple input, no OTP verification */}
+                        <View style={styles.inputContainer}>
+                            <Phone size={20} color={COLORS.textLight} />
+                            <Text style={{ marginLeft: 10, fontSize: 16, color: COLORS.text, fontWeight: '600' }}>+91</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="Phone Number"
+                                placeholderTextColor={COLORS.placeholder}
+                                value={phone}
+                                onChangeText={(text) => {
+                                    // Strip all non-digits
+                                    let cleaned = text.replace(/\D/g, '');
+                                    // If it starts with 91 and is longer than 10 digits, strip the 91
+                                    if (cleaned.startsWith('91') && cleaned.length > 10) {
+                                        cleaned = cleaned.slice(2);
+                                    }
+                                    setPhone(cleaned.slice(0, 10));
+                                }}
+                                keyboardType="phone-pad"
+                                maxLength={10}
+                            />
                         </View>
 
-                        {/* PASSWORD (Only if needed) */}
+                        {/* PASSWORD (Only if needed — e.g. Google users) */}
                         {needsPassword && (
                             <>
                                 <View style={styles.inputContainer}>
@@ -492,9 +332,9 @@ export default function CompleteProfileScreen() {
                         )}
 
                         <TouchableOpacity
-                            style={[styles.primaryBtn, (saving || otpSent || !isPhoneVerified) && styles.disabledBtn]}
+                            style={[styles.primaryBtn, saving && styles.disabledBtn]}
                             onPress={handleSubmit}
-                            disabled={saving || otpSent || !isPhoneVerified}
+                            disabled={saving}
                         >
                             {saving ? (
                                 <ActivityIndicator color="#fff" />
@@ -548,26 +388,4 @@ const styles = StyleSheet.create({
         opacity: 0.7,
     },
     primaryText: { color: COLORS.text, fontWeight: "700", fontSize: 16 },
-    verifiedBadge: {
-        backgroundColor: "#e8f5e9",
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 6,
-    },
-    verifiedText: {
-        color: "#2e7d32",
-        fontSize: 12,
-        fontWeight: "700",
-    },
-    verifyBtn: {
-        backgroundColor: COLORS.saffron,
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 8,
-    },
-    verifyBtnText: {
-        color: COLORS.text,
-        fontSize: 14,
-        fontWeight: "700",
-    },
 });

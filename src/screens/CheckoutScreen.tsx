@@ -350,8 +350,8 @@ export default function CheckoutScreen({ route }: Props) {
   const totalOriginalPrice = useMemo(
     () => services.reduce((sum, s) => {
       const qty = s.quantity || 1;
-      if (s.original_price && Number(s.original_price) > 0) {
-        return sum + (Number(s.original_price) * qty);
+      if (s.original_price && Number(String(s.original_price).replace(/[^\d.]/g, '')) > 0) {
+        return sum + (Number(String(s.original_price).replace(/[^\d.]/g, '')) * qty);
       }
       return sum + (parsePrice(s.price) * qty);
     }, 0),
@@ -557,7 +557,7 @@ export default function CheckoutScreen({ route }: Props) {
         // ✅ Update booking to "failed" status
         await supabase
           .from("bookings")
-          .update({ payment_status: "failed" })
+          .update({ payment_status: "failed", work_status: "PAYMENT FAILED" })
           .eq("id", bookingId);
 
         setIsProcessing(false);
@@ -769,6 +769,7 @@ export default function CheckoutScreen({ route }: Props) {
               <TextInput
                 style={styles.input}
                 value={profile?.full_name}
+                placeholderTextColor="#999"
                 onChangeText={(text) =>
                   setProfile((prev) => (prev ? { ...prev, full_name: text } : null))
                 }
@@ -785,25 +786,26 @@ export default function CheckoutScreen({ route }: Props) {
                 keyboardType="phone-pad"
                 maxLength={10}
                 placeholder="10-digit mobile number"
+                placeholderTextColor="#999"
               />
             </View>
 
             {/* Address Inputs */}
             <View>
               <Text style={styles.label}>{t("checkout.house")}</Text>
-              <TextInput style={styles.input} value={houseNo} onChangeText={setHouseNo} placeholder="e.g. Flat 102" />
+              <TextInput style={styles.input} value={houseNo} onChangeText={setHouseNo} placeholder="e.g. Flat 102" placeholderTextColor="#999" />
 
               <Text style={styles.label}>{t("checkout.area")}</Text>
-              <TextInput style={styles.input} value={area} onChangeText={setArea} placeholder="e.g. Road No. 12" />
+              <TextInput style={styles.input} value={area} onChangeText={setArea} placeholder="e.g. Road No. 12" placeholderTextColor="#999" />
 
               <Text style={styles.label}>{t("checkout.landmark")}</Text>
-              <TextInput style={styles.input} value={landmark} onChangeText={setLandmark} placeholder="e.g. Near Hospital" />
+              <TextInput style={styles.input} value={landmark} onChangeText={setLandmark} placeholder="e.g. Near Hospital" placeholderTextColor="#999" />
 
               {/* ✅ CITY + PINCODE ROW */}
               <View style={styles.rowInputs}>
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={styles.label}>{t("checkout.city")}</Text>
-                  <TextInput style={styles.input} value={city} onChangeText={setCity} placeholder="Hyderabad" />
+                  <TextInput style={styles.input} value={city} onChangeText={setCity} placeholder="Hyderabad" placeholderTextColor="#999" />
                 </View>
 
                 <View style={{ flex: 0.8 }}>
@@ -818,6 +820,7 @@ export default function CheckoutScreen({ route }: Props) {
                     keyboardType="numeric"
                     maxLength={6}
                     placeholder="500033"
+                    placeholderTextColor="#999"
                   />
                 </View>
               </View>

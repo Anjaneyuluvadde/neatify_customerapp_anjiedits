@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
@@ -30,6 +30,22 @@ export default function BookingDetailsScreen({ route }: Props) {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [review, setReview] = useState<{ rating: number; comment: string } | null>(null);
   const [submittingReview, setSubmittingReview] = useState(false);
+
+  // Fetch fresh booking data on mount
+  useEffect(() => {
+    if (!initialBooking?.id) return;
+    const fetchLatest = async () => {
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .eq("id", initialBooking.id)
+        .maybeSingle();
+      if (data && !error) {
+        setBooking(data as typeof initialBooking);
+      }
+    };
+    fetchLatest();
+  }, [initialBooking?.id]);
 
 
 
@@ -321,11 +337,13 @@ export default function BookingDetailsScreen({ route }: Props) {
           {services.length > 0 ? (
             services.map((s: any, index: number) => (
               <View key={s.id || index} style={styles.serviceRow}>
-                <View>
+                <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={styles.bold}>{s.title || s.service_name || 'Service'}</Text>
-                  <Text>{s.duration || 'N/A'}</Text>
+                  <Text style={{ color: "#555", marginTop: 2 }}>{s.duration || 'N/A'}</Text>
                 </View>
-                <Text>{s.price || 0}</Text>
+                <Text style={{ fontWeight: "700", flexShrink: 0 }}>
+                  {String(s.price || '0').startsWith('₹') ? s.price : `₹${s.price || 0}`}
+                </Text>
               </View>
             ))
           ) : (
@@ -351,7 +369,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         </View>
 
         {/* STAFF ASSIGNMENT - Only show for non-completed bookings */}
-        {booking.work_status !== "COMPLETED" && booking.work_status !== "CANCELLED" && (
+        {booking.work_status !== "COMPLETED" && booking.work_status !== "CANCELLED" && booking.payment_status !== "failed" && (
           <>
             <Text style={styles.section}>{t("bookingDetails.staffAssignment")}</Text>
             <View style={styles.card}>
@@ -399,7 +417,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         )}
 
         {/* CANCEL BUTTON */}
-        {isEligibleToCancel && booking.work_status !== 'CANCELLED' ? (
+        {isEligibleToCancel && booking.work_status !== 'CANCELLED' && booking.payment_status !== 'failed' ? (
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={handleCancelBooking}
@@ -489,7 +507,7 @@ export default function BookingDetailsScreen({ route }: Props) {
           statusBarTranslucent={true}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior="padding"
             style={styles.modalOverlay}
           >
             <View style={styles.modalContent}>
@@ -569,6 +587,7 @@ const styles = StyleSheet.create({
   serviceRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "flex-start",
     marginBottom: 10,
   },
 

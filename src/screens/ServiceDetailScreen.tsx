@@ -1,9 +1,9 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
+import { Image } from "expo-image";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -15,6 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import Header from "../components/Header";
 import { useLanguage } from "../context/LanguageContext";
+import { useAuthGuard } from "../hooks/useAuthGuard";
 import { supabase } from "../lib/supabase";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
@@ -35,7 +36,7 @@ type SelectedService = {
   title: string;
   duration: string;
   price: string;
-  original_price?: number | null;
+  original_price?: string | null;
   discount_percent?: number | null;
   image?: string | null;
   discount_label?: string | null;
@@ -47,16 +48,40 @@ type AddOn = {
   id: string;
   title: string;
   duration: number; // integer in db
-  price: number;
+  price: string; // text with ₹ symbol from db
   image?: string | null;
   service_type?: string;
   description?: string;
   sort_order?: number;
-  original_price?: number | null;
+  original_price?: string | null; // text with ₹ symbol from db
   discount_percent?: number | null;
-  work_includes?: string[] | null; // text[] in db
+  work_includes?: string | null; // text in db (was text[], now text)
+  work_not_included?: string | null; // text in db
   discount_label?: string | null;
   tax_percent?: number | null;
+  max_quantity?: number | null; // max times this addon can be added (from db)
+};
+
+/**
+ * Parse text that may be in PostgreSQL array format {"item1","item2"} or newline-separated text.
+ * Returns an array of individual items.
+ */
+const parseTextList = (text: string): string[] => {
+  const trimmed = text.trim();
+  // Check for PostgreSQL array format: {"item1","item2"}
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return trimmed
+      .slice(1, -1) // Remove outer braces
+      .split(/",\s*"/)
+      .map((s) => s.replace(/^"|"$/g, '').trim())
+      .filter(Boolean);
+  }
+  // Otherwise, split by newlines
+  return trimmed
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
 };
 
 /* ================= COMPONENT ================= */
@@ -64,6 +89,7 @@ type AddOn = {
 export default function ServiceDetailScreen({ route }: Props) {
   const navigation = useNavigation<any>();
   const { t } = useLanguage();
+  const { checkAuth } = useAuthGuard();
   const insets = useSafeAreaInsets();
   const { service: paramService, serviceId } = route.params;
 
@@ -117,7 +143,7 @@ export default function ServiceDetailScreen({ route }: Props) {
     supabase
       .from("services")
       .select(
-        "id, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images"
+        "id, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_not_included"
       )
       .then(({ data }) => {
         if (data) setAvailableServices(data as Service[]);
@@ -143,7 +169,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         const { data, error } = await supabase
           .from("services")
           .select(
-            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes"
+            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes, work_not_included"
           )
           .eq("slug", serviceId)
           .maybeSingle();
@@ -154,7 +180,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         const { data, error } = await supabase
           .from("services")
           .select(
-            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes"
+            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes, work_not_included"
           )
           .eq("id", serviceId)
           .maybeSingle();
@@ -218,14 +244,15 @@ export default function ServiceDetailScreen({ route }: Props) {
 
       if (activeOfferPercent && activeOfferPercent > 0) {
         // Use original_price as the base for calculating offer discount
-        const basePrice = effectiveOriginalPrice && Number(effectiveOriginalPrice) > 0
-          ? Number(effectiveOriginalPrice)
+        const cleanedOriginal = String(effectiveOriginalPrice ?? '').replace(/[^\d.]/g, '');
+        const basePrice = cleanedOriginal && Number(cleanedOriginal) > 0
+          ? Number(cleanedOriginal)
           : parseFloat(String(service.price).replace(/[^\d.]/g, ""));
 
         const discountedPrice = Math.round(basePrice - (basePrice * activeOfferPercent / 100));
         effectivePrice = discountedPrice.toString();
         effectiveLabel = `${activeOfferPercent}% OFF`;
-        effectiveOriginalPrice = basePrice;
+        effectiveOriginalPrice = basePrice.toString();
         effectiveDiscountPercent = activeOfferPercent;
       }
 
@@ -275,8 +302,9 @@ export default function ServiceDetailScreen({ route }: Props) {
     const existingAddon = selectedServices.find((s) => s.id === addon.id);
 
     if (existingAddon) {
-      // If already added, increment quantity (max 3)
-      if ((existingAddon.quantity || 1) >= 3) {
+      // If already added, increment quantity (up to max_quantity)
+      const maxQty = addons.find((a) => a.id === addon.id)?.max_quantity || 3;
+      if ((existingAddon.quantity || 1) >= maxQty) {
         // Already at max, do nothing
         return;
       }
@@ -295,8 +323,8 @@ export default function ServiceDetailScreen({ route }: Props) {
         id: addon.id,
         title: addon.title,
         duration: `${addon.duration} mins`, // Convert int to string format
-        price: addon.price.toString(),
-        original_price: addon.original_price,
+        price: addon.price, // already string with ₹ from db
+        original_price: addon.original_price, // already string with ₹ from db
         discount_percent: addon.discount_percent,
         discount_label: (addon as any)?.discount_label ?? null,
         tax_percent: (addon as any)?.tax_percent ?? null,
@@ -352,7 +380,7 @@ export default function ServiceDetailScreen({ route }: Props) {
   const hasMRP =
     (service as any)?.original_price !== null &&
     (service as any)?.original_price !== undefined &&
-    Number((service as any)?.original_price) > 0;
+    Number(String((service as any)?.original_price).replace(/[^\d.]/g, '')) > 0;
 
   /* ================= REUSABLE PRICE ROW (EXACT LIKE SCREENSHOT) ================= */
 
@@ -643,6 +671,58 @@ export default function ServiceDetailScreen({ route }: Props) {
             </>
           ) : null}
 
+          {/* ✅ Work Not Includes */}
+          {service.work_not_included && service.work_not_included.trim() ? (
+            <>
+              <Text
+                style={{
+                  fontSize: 22,
+                  fontWeight: "800",
+                  marginTop: 26,
+                  color: "#D32F2F",
+                }}
+              >
+                Work Not Includes
+              </Text>
+
+              {service.work_not_included
+                .replace(/\r\n/g, "\n")
+                .split("\n")
+                .map((l) => l.trim())
+                .filter(Boolean)
+                .map((line, index) => (
+                  <View
+                    key={index}
+                    style={{
+                      flexDirection: "row",
+                      marginTop: 8,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        lineHeight: 22,
+                        color: "#555",
+                        marginRight: 8,
+                      }}
+                    >
+                      •
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        lineHeight: 22,
+                        color: "#555",
+                        flex: 1,
+                      }}
+                    >
+                      {line}
+                    </Text>
+                  </View>
+                ))}
+            </>
+          ) : null}
+
           {/* ✅ Gallery */}
           {Array.isArray(service.gallery_images) &&
             service.gallery_images.length > 0 ? (
@@ -681,7 +761,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         </View>
 
         {/* ================= SUMMARY MODAL ================= */}
-        <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true}>
+        <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
           <View
             style={{
               flex: 1,
@@ -736,7 +816,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                         {/* ✅ Calculate price based on quantity */}
                         <PriceRow
                           price={(parseFloat(formatPrice(s.price)) * (s.quantity || 1)).toString()}
-                          original_price={s.original_price ? Number(s.original_price) * (s.quantity || 1) : null}
+                          original_price={s.original_price ? Number(String(s.original_price).replace(/[^\d.]/g, '')) * (s.quantity || 1) : null}
                           discount_percent={s.discount_percent}
                           percentText={(s as any)?.discount_label}
                           size="small"
@@ -782,11 +862,14 @@ export default function ServiceDetailScreen({ route }: Props) {
                 )}
 
               <Pressable
-                onPress={() => {
-                  setShowSummary(false);
-                  navigation.navigate("Schedule", {
-                    services: selectedServices,
-                  });
+                onPress={async () => {
+                  const isAuth = await checkAuth("schedule an appointment");
+                  if (isAuth) {
+                    setShowSummary(false);
+                    navigation.navigate("Schedule", {
+                      services: selectedServices,
+                    });
+                  }
                 }}
                 style={{
                   backgroundColor: COLORS.saffron,
@@ -805,7 +888,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         </Modal>
 
         {/* ================= ADDONS LIST MODAL ================= */}
-        <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true}>
+        <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); setShowSummary(true); }}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top", "bottom"]}>
             <View style={{ flex: 1 }}>
               {/* Header */}
@@ -976,13 +1059,13 @@ export default function ServiceDetailScreen({ route }: Props) {
                                     paddingHorizontal: 12,
                                     paddingVertical: 6,
                                   }}
-                                  disabled={(selectedServices.find((s) => s.id === addon.id)?.quantity || 1) >= 3}
+                                  disabled={(selectedServices.find((s) => s.id === addon.id)?.quantity || 1) >= (addon.max_quantity || 3)}
                                 >
                                   <Text
                                     style={{
                                       fontSize: 18,
                                       fontWeight: "700",
-                                      color: (selectedServices.find((s) => s.id === addon.id)?.quantity || 1) >= 3 ? "#ccc" : "#000"
+                                      color: (selectedServices.find((s) => s.id === addon.id)?.quantity || 1) >= (addon.max_quantity || 3) ? "#ccc" : "#000"
                                     }}
                                   >
                                     +
@@ -1048,7 +1131,8 @@ export default function ServiceDetailScreen({ route }: Props) {
                   width: 36,
                   height: 36,
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  marginTop: 30
                 }}
               >
                 <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
@@ -1056,26 +1140,28 @@ export default function ServiceDetailScreen({ route }: Props) {
 
               <ScrollView>
                 {/* Full Image */}
-                {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (
-                  <Image
-                    source={{ uri: selectedAddonDetail.image }}
-                    style={{ width: "100%", height: 280, borderRadius: 8 }}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View
-                    style={{
-                      width: "100%",
-                      height: 200,
-                      backgroundColor: "#f0f0f0",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      borderRadius: 8,
-                    }}
-                  >
-                    <Text style={{ color: "#ccc" }}>{t("serviceDetail.noImage")}</Text>
-                  </View>
-                )}
+                <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+                  {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (
+                    <Image
+                      source={{ uri: selectedAddonDetail.image }}
+                      style={{ width: "100%", height: 280, borderRadius: 16 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View
+                      style={{
+                        width: "100%",
+                        height: 200,
+                        backgroundColor: "#f0f0f0",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        borderRadius: 16,
+                      }}
+                    >
+                      <Text style={{ color: "#ccc" }}>{t("serviceDetail.noImage")}</Text>
+                    </View>
+                  )}
+                </View>
 
                 <View style={{ padding: 20 }}>
                   <Text style={{ fontSize: 24, fontWeight: "800" }}>{selectedAddonDetail.title}</Text>
@@ -1172,17 +1258,30 @@ export default function ServiceDetailScreen({ route }: Props) {
                   )}
 
                   {/* Work Includes */}
-                  {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.length > 0 && (
+                  {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.trim() ? (
                     <>
                       <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: COLORS.saffron }}>Work Includes</Text>
-                      {selectedAddonDetail.work_includes.map((work, idx) => (
+                      {parseTextList(selectedAddonDetail.work_includes).map((line, idx) => (
                         <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
                           <Text style={{ marginRight: 8, fontSize: 15 }}>•</Text>
-                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22 }}>{work}</Text>
+                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22 }}>{line}</Text>
                         </View>
                       ))}
                     </>
-                  )}
+                  ) : null}
+
+                  {/* Work Not Includes */}
+                  {selectedAddonDetail.work_not_included && selectedAddonDetail.work_not_included.trim() ? (
+                    <>
+                      <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: "#D32F2F" }}>Work Not Includes</Text>
+                      {parseTextList(selectedAddonDetail.work_not_included).map((line, idx) => (
+                        <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
+                          <Text style={{ marginRight: 8, fontSize: 15, color: "#555" }}>•</Text>
+                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: "#555" }}>{line}</Text>
+                        </View>
+                      ))}
+                    </>
+                  ) : null}
                 </View>
               </ScrollView>
             </SafeAreaView>

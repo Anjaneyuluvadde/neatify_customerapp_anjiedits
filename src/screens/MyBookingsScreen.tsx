@@ -153,9 +153,11 @@ export default function MyBookingsScreen() {
                       ? styles.completed
                       : b.work_status === "CANCELLED"
                         ? styles.cancelled
-                        : b.assigned_staff_email
-                          ? styles.assigned
-                          : styles.pending,
+                        : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
+                          ? styles.paymentFailed
+                          : b.assigned_staff_email
+                            ? styles.assigned
+                            : styles.pending,
                   ]}
                 >
                   <Text style={styles.statusText}>
@@ -163,9 +165,11 @@ export default function MyBookingsScreen() {
                       ? t("bookings.status.completed")
                       : b.work_status === "CANCELLED"
                         ? t("bookings.status.cancelled")
-                        : b.assigned_staff_email
-                          ? t("bookings.status.assigned")
-                          : t("bookings.status.pending")}
+                        : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
+                          ? "PAYMENT FAILED"
+                          : b.assigned_staff_email
+                            ? t("bookings.status.assigned")
+                            : t("bookings.status.pending")}
                   </Text>
                 </View>
               </View>
@@ -258,6 +262,7 @@ const styles = StyleSheet.create({
   pending: { backgroundColor: "#FEF3C7" },
   assigned: { backgroundColor: "#DBEAFE" },
   cancelled: { backgroundColor: "#FEE2E2" },
+  paymentFailed: { backgroundColor: "#FEE2E2" },
   completed: { backgroundColor: "#DCFCE7" },
   statusText: { fontSize: 12, fontWeight: "700" },
 

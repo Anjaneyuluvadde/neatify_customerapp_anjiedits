@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
-import { Image, TextInput, TouchableOpacity, View } from "react-native";
+import { Image } from "expo-image";
+import { TextInput, TouchableOpacity, View } from "react-native";
 
 import { useLanguage } from "../context/LanguageContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { COLORS } from "../theme/colors";
-import LanguageSelector from "./LanguageSelector";
 
 type HeaderProps = {
   searchText?: string;
@@ -56,10 +56,10 @@ export default function Header({ searchText, onSearchChange }: HeaderProps) {
           >
             <Image
               source={require("../../assets/images/neatifylogo.png")}
+              contentFit="contain"
               style={{
                 width: 160,
                 height: 40,
-                resizeMode: "contain",
                 marginLeft: "-8%",
               }}
             />

@@ -5,6 +5,7 @@ import React, { memo, useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Platform,
@@ -14,7 +15,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -70,7 +71,7 @@ const FieldCard = memo(
             multiline={multiline}
             keyboardType={keyboardType}
             maxLength={maxLength}
-            blurOnSubmit={false}
+            blurOnSubmit={!multiline}
           />
         ) : (
           <Text style={styles.value}>
@@ -181,15 +182,27 @@ export default function ProfileScreen() {
     setSaving(true);
 
     try {
+      // Clean the phone to 10 digits
+      const cleanPhone = formData.phone.replace(/\D/g, "").slice(-10);
+      const formattedPhone = `+91${cleanPhone}`;
+
+      // Update profile table
       const { error } = await supabase
         .from("profile")
         .update({
           full_name: formData.full_name.trim(),
-          phone: formData.phone.trim(),
+          phone: cleanPhone,
           address: formData.address.trim(),
           pincode: formData.pincode.trim(),
         })
         .eq("id", userId);
+
+      // Also sync phone to Supabase Auth metadata
+      await supabase.auth.updateUser({
+        data: {
+          phone_number: formattedPhone
+        }
+      });
 
       if (error) throw error;
 
@@ -275,6 +288,8 @@ export default function ProfileScreen() {
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onScrollBeginDrag={Keyboard.dismiss}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
@@ -330,9 +345,17 @@ export default function ProfileScreen() {
             label={t("profile.phone")}
             value={formatDisplayPhone(formData.phone)}
             isEditing={isEditing}
-            editable={false} // Make read-only
+            editable
             keyboardType="phone-pad"
-            onChangeText={(t) => { }} // No-op
+            maxLength={10}
+            onChangeText={(t) => {
+              // Strip non-digits and limit to 10
+              let cleaned = t.replace(/\D/g, '');
+              if (cleaned.startsWith('91') && cleaned.length > 10) {
+                cleaned = cleaned.slice(2);
+              }
+              setFormData((p) => ({ ...p, phone: cleaned.slice(0, 10) }));
+            }}
             placeholder={t("profile.phonePlaceholder")}
             fallback={t("profile.notProvided")}
           />

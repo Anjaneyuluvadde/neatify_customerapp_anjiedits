@@ -45,7 +45,7 @@ export default function ResetPasswordScreen() {
             const redirectTo = "theneatifyteam://reset-password";
             const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
             if (error) throw error;
-            showToast("Check your inbox for the reset link! 📧", "success");
+            showAlert({ type: "success", title: "Reset Link Sent 📧", message: "Check your inbox for the reset link!" });
         } catch (err: any) {
             showAlert({ type: "error", title: "Error", message: err.message });
         } finally {
@@ -66,11 +66,22 @@ export default function ResetPasswordScreen() {
         setLoading(true);
         try {
             // Set session first using tokens from the deep link
-            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+            const { error: sessionError } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+            if (sessionError) throw sessionError;
+
             const { error } = await supabase.auth.updateUser({ password: newPassword });
             if (error) throw error;
-            showToast("Password updated successfully! 🎉", "success");
-            navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+
+            // Success — sign out first so user logs in fresh with new password
+            await supabase.auth.signOut();
+            showAlert({
+                type: "success",
+                title: "Password Updated 🎉",
+                message: "Your password has been updated. Please login with your new password.",
+                onConfirm: () => {
+                    navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+                }
+            });
         } catch (err: any) {
             showAlert({ type: "error", title: "Error", message: err.message });
         } finally {

@@ -1,10 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   FlatList,
-  Image,
   ImageSourcePropType,
   Modal,
   Pressable,
@@ -20,7 +20,6 @@ import CategoryTabs from "../components/CategoryTabs";
 import Header from "../components/Header";
 import ServiceCard from "../components/ServiceCard";
 import { useLanguage } from "../context/LanguageContext";
-import { useAuthGuard } from "../hooks/useAuthGuard";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
@@ -60,7 +59,6 @@ const getLevenshteinDistance = (a: string, b: string) => {
 let hasShownPopupThisSession = false;
 
 export default function HomeScreen({ navigation }: any) {
-  const { checkAuth } = useAuthGuard();
   const { t } = useLanguage();
   const [services, setServices] = useState<Service[]>([]);
   const [activeCategory, setActiveCategory] = useState("BATHROOM");
@@ -118,7 +116,7 @@ export default function HomeScreen({ navigation }: any) {
         original_price,
         discount_percent,
         work_includes,
-        work_includes,
+        work_not_included,
         discount_label,
         tax_percent
       `);
@@ -143,9 +141,10 @@ export default function HomeScreen({ navigation }: any) {
           (o) => o.title.toLowerCase() === svc.title.toLowerCase()
         );
         if (matchingOffer && matchingOffer.offer_percentage > 0) {
+          const cleanedOriginal = String(svc.original_price ?? '').replace(/[^\d.]/g, '');
           const basePrice =
-            svc.original_price && Number(svc.original_price) > 0
-              ? Number(svc.original_price)
+            svc.original_price && cleanedOriginal && Number(cleanedOriginal) > 0
+              ? Number(cleanedOriginal)
               : parseFloat(String(svc.price).replace(/[^\d.]/g, ""));
           const discountedPrice = Math.round(
             basePrice - (basePrice * matchingOffer.offer_percentage) / 100
@@ -153,7 +152,7 @@ export default function HomeScreen({ navigation }: any) {
           return {
             ...svc,
             price: `₹${discountedPrice}`,
-            original_price: basePrice,
+            original_price: basePrice.toString(),
             discount_label: `${matchingOffer.offer_percentage}% OFF`,
             discount_percent: matchingOffer.offer_percentage,
           };
@@ -456,7 +455,7 @@ export default function HomeScreen({ navigation }: any) {
                             style={{ width: "100%", height: "100%" }}
                             resizeMode="cover"
                             onError={(e) =>
-                              console.log("❌ Banner load error:", e.nativeEvent)
+                              console.log("❌ Banner load error:", e)
                             }
                           />
                         </Pressable>
@@ -512,13 +511,10 @@ export default function HomeScreen({ navigation }: any) {
           renderItem={({ item }) => (
             <ServiceCard
               service={item}
-              onPress={async () => {
-                const isAuth = await checkAuth("view service details");
-                if (isAuth) {
-                  navigation.navigate("ServiceDetail", {
-                    service: item,
-                  });
-                }
+              onPress={() => {
+                navigation.navigate("ServiceDetail", {
+                  service: item,
+                });
               }}
             />
           )}

@@ -13,6 +13,7 @@ export default function App() {
   const [initialRoute, setInitialRoute] = useState<"Login" | "Home" | "CompleteProfile">("Login");
   const [loading, setLoading] = useState(true);
   const navigationRef = React.useRef<any>(null);
+  const skipAuthRedirect = React.useRef(false);
 
   useEffect(() => {
     // Helper: check DB + Auth completeness
@@ -36,11 +37,8 @@ export default function App() {
         const hasFullProfile =
           !!(profile?.full_name && profile?.email && profile?.phone);
 
-        // Auth must have at least one confirmed identity:
-        //   - Email confirmed (email + Google users)
-        //   - Phone verified (OTP users) — user.phone is only set after successful OTP verification
-        const hasConfirmedIdentity =
-          !!(user.email_confirmed_at || user.phone_confirmed_at || user.phone);
+        // Auth must have confirmed email (covers both email and Google users)
+        const hasConfirmedIdentity = !!user.email_confirmed_at;
 
         const isComplete = hasFullProfile && hasConfirmedIdentity;
 
@@ -82,6 +80,17 @@ export default function App() {
     let hasCheckedOnce = false;
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        // Reset skip flag when user signs out (after password reset completes)
+        if (event === "SIGNED_OUT") {
+          skipAuthRedirect.current = false;
+          hasCheckedOnce = false;
+          return;
+        }
+        // Skip auto-redirect during password reset flow
+        if (skipAuthRedirect.current && event === "SIGNED_IN") {
+          console.log("Skipping auth redirect (password reset in progress)");
+          return;
+        }
         if (event === "SIGNED_IN" && session?.user && !hasCheckedOnce) {
           hasCheckedOnce = true;
           setTimeout(async () => {
@@ -128,6 +137,8 @@ export default function App() {
           }
         }
       } else if (url.includes("reset-password")) {
+        // Set flag to prevent onAuthStateChange from redirecting to Home
+        skipAuthRedirect.current = true;
         const fragment = url.split("#")[1];
         if (fragment) {
           const params = new URLSearchParams(fragment);

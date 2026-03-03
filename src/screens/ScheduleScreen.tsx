@@ -1,8 +1,8 @@
 import { Picker } from "@react-native-picker/picker";
 import { RouteProp, useNavigation } from "@react-navigation/native";
+import { Image } from "expo-image";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  Image,
   Modal,
   Pressable,
   ScrollView,
@@ -35,16 +35,37 @@ type AddOn = {
   id: string;
   title: string;
   duration: number;
-  price: number;
+  price: string; // text with ₹ symbol from db
   image?: string | null;
   service_type?: string;
   description?: string;
   sort_order?: number;
-  original_price?: number | null;
+  original_price?: string | null; // text with ₹ symbol from db
   discount_percent?: number | null;
-  work_includes?: string[] | null;
+  work_includes?: string | null; // text (was text[], now text)
+  work_not_included?: string | null; // text in db
   discount_label?: string | null;
   tax_percent?: number | null;
+  max_quantity?: number | null; // max times this addon can be added (from db)
+};
+
+/**
+ * Parse text that may be in PostgreSQL array format {"item1","item2"} or newline-separated text.
+ */
+const parseTextList = (text: string): string[] => {
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    return trimmed
+      .slice(1, -1)
+      .split(/",\s*"/)
+      .map((s) => s.replace(/^"|"$/g, '').trim())
+      .filter(Boolean);
+  }
+  return trimmed
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
 };
 
 /* ================= CONSTANTS ================= */
@@ -216,24 +237,58 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
   const addAddonToCart = (addon: AddOn) => {
     // Check if already added
-    if (editServices.find((s) => s.id === addon.id)) {
-      return;
+    const existingAddon = editServices.find((s) => s.id === addon.id);
+
+    if (existingAddon) {
+      // If already added, increment quantity (up to max_quantity)
+      const maxQty = addons.find((a) => a.id === addon.id)?.max_quantity || 3;
+      if ((existingAddon.quantity || 1) >= maxQty) {
+        return;
+      }
+
+      setEditServices((prev) =>
+        prev.map((s) =>
+          s.id === addon.id
+            ? { ...s, quantity: (s.quantity || 1) + 1 }
+            : s
+        )
+      );
+    } else {
+      // Add new addon with quantity 1
+      const newService: SelectedService = {
+        id: addon.id,
+        title: addon.title,
+        duration: `${addon.duration} mins`,
+        price: addon.price,
+        original_price: addon.original_price,
+        discount_percent: addon.discount_percent,
+        discount_label: (addon as any)?.discount_label ?? null,
+        tax_percent: (addon as any)?.tax_percent ?? null,
+        image: addon.image ?? undefined,
+        quantity: 1,
+      };
+
+      setEditServices((prev) => [...prev, newService]);
     }
+  };
 
-    const newService: SelectedService = {
-      id: addon.id,
-      title: addon.title,
-      duration: `${addon.duration} mins`,
-      price: addon.price.toString(),
-      original_price: addon.original_price,
-      discount_percent: addon.discount_percent,
-      discount_label: (addon as any)?.discount_label ?? null,
-      tax_percent: (addon as any)?.tax_percent ?? null,
-      image: addon.image ?? undefined,
-    };
+  const decrementAddon = (addonId: string) => {
+    const existingAddon = editServices.find((s) => s.id === addonId);
+    if (!existingAddon) return;
 
-    setEditServices((prev) => [...prev, newService]);
-    if (selectedAddonDetail) setSelectedAddonDetail(null);
+    if ((existingAddon.quantity || 1) <= 1) {
+      // Remove the addon if quantity would go to 0
+      setEditServices((prev) => prev.filter((s) => s.id !== addonId));
+    } else {
+      // Decrement quantity
+      setEditServices((prev) =>
+        prev.map((s) =>
+          s.id === addonId
+            ? { ...s, quantity: (s.quantity || 1) - 1 }
+            : s
+        )
+      );
+    }
   };
 
   /* ================= UI ================= */
@@ -693,7 +748,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
                               <Text style={{ fontSize: 16, fontWeight: "800" }}>
-                                ₹{addon.price}
+                                {addon.price}
                               </Text>
 
                               {/* ✅ Discount Badge */}
@@ -738,21 +793,54 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                               <View
                                 style={{
                                   flex: 1,
-                                  backgroundColor: "#d1fae5",
-                                  paddingVertical: 6,
-                                  borderRadius: 6,
+                                  flexDirection: "row",
                                   alignItems: "center",
+                                  justifyContent: "space-between",
+                                  backgroundColor: "#f0f0f0",
+                                  borderRadius: 6,
+                                  paddingHorizontal: 4,
                                 }}
                               >
-                                <Text
+                                <Pressable
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    decrementAddon(addon.id);
+                                  }}
                                   style={{
-                                    fontSize: 13,
-                                    fontWeight: "700",
-                                    color: "#059669",
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 6,
                                   }}
                                 >
-                                  Added
+                                  <Text style={{ fontSize: 18, fontWeight: "700", color: "#000" }}>
+                                    -
+                                  </Text>
+                                </Pressable>
+
+                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#000" }}>
+                                  {editServices.find((s) => s.id === addon.id)?.quantity || 1}
                                 </Text>
+
+                                <Pressable
+                                  onPress={(e) => {
+                                    e.stopPropagation();
+                                    addAddonToCart(addon);
+                                  }}
+                                  style={{
+                                    paddingHorizontal: 12,
+                                    paddingVertical: 6,
+                                  }}
+                                  disabled={(editServices.find((s) => s.id === addon.id)?.quantity || 1) >= (addon.max_quantity || 3)}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 18,
+                                      fontWeight: "700",
+                                      color: (editServices.find((s) => s.id === addon.id)?.quantity || 1) >= (addon.max_quantity || 3) ? "#ccc" : "#000"
+                                    }}
+                                  >
+                                    +
+                                  </Text>
+                                </Pressable>
                               </View>
                             ) : (
                               <Pressable
@@ -792,7 +880,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
         {/* ================= ADDON DETAIL MODAL ================= */}
         {selectedAddonDetail && (
-          <Modal visible={!!selectedAddonDetail} transparent animationType="slide" statusBarTranslucent={true}>
+          <Modal visible={!!selectedAddonDetail} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => setSelectedAddonDetail(null)}>
             <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)" }}>
               <Pressable
                 style={{ flex: 1 }}
@@ -830,7 +918,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
                   {/* Price */}
                   <Text style={{ fontSize: 20, fontWeight: "800", marginBottom: 16 }}>
-                    ₹{selectedAddonDetail.price}
+                    {String(selectedAddonDetail.price).startsWith('₹') ? selectedAddonDetail.price : `₹${selectedAddonDetail.price}`}
                   </Text>
 
                   {/* Description */}
@@ -842,24 +930,62 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                   )}
 
                   {/* Work Includes */}
-                  {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.length > 0 && (
+                  {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.trim() ? (
                     <>
                       <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: COLORS.saffron }}>Work Includes</Text>
-                      {selectedAddonDetail.work_includes.map((work, idx) => (
+                      {parseTextList(selectedAddonDetail.work_includes).map((line, idx) => (
                         <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
                           <Text style={{ marginRight: 8, fontSize: 15 }}>•</Text>
-                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22 }}>{work}</Text>
+                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22 }}>{line}</Text>
                         </View>
                       ))}
                     </>
-                  )}
+                  ) : null}
+
+                  {/* Work Not Includes */}
+                  {selectedAddonDetail.work_not_included && selectedAddonDetail.work_not_included.trim() ? (
+                    <>
+                      <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: "#D32F2F" }}>Work Not Includes</Text>
+                      {parseTextList(selectedAddonDetail.work_not_included).map((line, idx) => (
+                        <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
+                          <Text style={{ marginRight: 8, fontSize: 15, color: "#555" }}>•</Text>
+                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: "#555" }}>{line}</Text>
+                        </View>
+                      ))}
+                    </>
+                  ) : null}
                 </ScrollView>
 
                 {/* Add Button */}
                 <View style={{ padding: 16 }}>
                   {editServices.some((s) => s.id === selectedAddonDetail.id) ? (
-                    <View style={{ backgroundColor: "#d1fae5", paddingVertical: 14, borderRadius: 10, alignItems: "center" }}>
-                      <Text style={{ color: "#059669", fontWeight: "800" }}>Added</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#f0f0f0", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6 }}>
+                      <Pressable
+                        onPress={() => decrementAddon(selectedAddonDetail.id)}
+                        style={{ paddingHorizontal: 20, paddingVertical: 8 }}
+                      >
+                        <Text style={{ fontSize: 22, fontWeight: "700", color: "#000" }}>-</Text>
+                      </Pressable>
+
+                      <Text style={{ fontSize: 18, fontWeight: "700", color: "#000" }}>
+                        {editServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1}
+                      </Text>
+
+                      <Pressable
+                        onPress={() => addAddonToCart(selectedAddonDetail)}
+                        style={{ paddingHorizontal: 20, paddingVertical: 8 }}
+                        disabled={(editServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1) >= (selectedAddonDetail.max_quantity || 3)}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 22,
+                            fontWeight: "700",
+                            color: (editServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1) >= (selectedAddonDetail.max_quantity || 3) ? "#ccc" : "#000"
+                          }}
+                        >
+                          +
+                        </Text>
+                      </Pressable>
                     </View>
                   ) : (
                     <Pressable
@@ -886,7 +1012,7 @@ const styles = StyleSheet.create({
   pageTitle: { fontSize: 26, fontWeight: "700" },
 
   dropdownRow: { flexDirection: "row", gap: 10 },
-  picker: { flex: 1, color: "#000" },
+  picker: { flex: 1, color: "#000", backgroundColor: "#fff" },
 
   calendar: { marginTop: 15 },
   dayCol: { alignItems: "center", width: 45 },

@@ -1,10 +1,10 @@
 import { useNavigation } from "@react-navigation/native";
+import { Image } from "expo-image";
 import { Eye, EyeOff, Lock, Mail, Phone, User } from "lucide-react-native";
 import React, { useState } from "react";
 
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -18,7 +18,6 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import NeatifyLogo from "../../assets/images/neatifylogo.png";
-// import LanguageSelector from "../components/LanguageSelector"; // REMOVED
 import { signInWithGoogle } from "../auth/useGoogleAuth";
 import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
@@ -31,7 +30,6 @@ export default function LoginScreen(props: any) {
   const { showAlert, showToast } = useNotification();
   const { t } = useLanguage();
 
-  /* ================= OLD STATE (Restored) ================= */
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -43,51 +41,7 @@ export default function LoginScreen(props: any) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  /* ================= NEW: PHONE LOGIN STATE ================= */
-  const [loginMethod, setLoginMethod] = useState<"email" | "phone">("email");
-  const [otpSent, setOtpSent] = useState(false);
-  const [otp, setOtp] = useState("");
-  const [phoneLoading, setPhoneLoading] = useState(false);
-
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-
-  // =====================================================
-  // PHONE LOGIN HANDLERS
-  // =====================================================
-
-  const handleSendOtp = async () => {
-    if (!phone || phone.length < 10) {
-      showAlert({
-        type: "warning",
-        title: "Invalid Phone Number",
-        message: "Please enter a valid 10-digit phone number."
-      });
-      return;
-    }
-
-    setPhoneLoading(true);
-    try {
-      // phone is guaranteed to be 10 digits from text cleaning
-      const formattedPhone = `+91${phone}`;
-
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
-      });
-
-      if (error) throw error;
-
-      setOtpSent(true);
-      showToast("OTP sent successfully!", "success");
-    } catch (err: any) {
-      showAlert({
-        type: "error",
-        title: "OTP Failed",
-        message: err.message
-      });
-    } finally {
-      setPhoneLoading(false);
-    }
-  };
 
   // =====================================================
   // SHARED: CHECK PROFILE & NAVIGATE
@@ -105,10 +59,8 @@ export default function LoginScreen(props: any) {
       // Profile DB: all 3 fields must exist
       const hasFullProfile = !!(profile?.full_name && profile?.email && profile?.phone);
 
-      // Auth: at least one confirmed identity
-      //   - email_confirmed_at → email or Google users
-      //   - phone_confirmed_at or user.phone → phone OTP users
-      const hasConfirmedIdentity = !!(user?.email_confirmed_at || user?.phone_confirmed_at || user?.phone);
+      // Auth: email must be confirmed (covers both email and Google users)
+      const hasConfirmedIdentity = !!user?.email_confirmed_at;
 
       if (!hasFullProfile || !hasConfirmedIdentity) {
         // Incomplete profile → Go to CompleteProfile
@@ -130,48 +82,8 @@ export default function LoginScreen(props: any) {
     }
   };
 
-  const handleVerifyOtp = async () => {
-    if (!otp || otp.length !== 6) {
-      showAlert({
-        type: "warning",
-        title: "Invalid OTP",
-        message: "Please enter the 6-digit OTP."
-      });
-      return;
-    }
-
-    setPhoneLoading(true);
-    try {
-      // phone is now strictly 10 digits from onChangeText
-      const formattedPhone = `+91${phone}`;
-
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.verifyOtp({
-        phone: formattedPhone,
-        token: otp,
-        type: "sms",
-      });
-
-      if (error) throw error;
-
-      if (user) {
-        await checkProfileAndNavigate(user.id);
-      }
-    } catch (err: any) {
-      showAlert({
-        type: "error",
-        title: "Verification Failed",
-        message: err.message
-      });
-    } finally {
-      setPhoneLoading(false);
-    }
-  };
-
   // =====================================================
-  // EMAIL LOGIN / SIGNUP
+  // GOOGLE SIGN-IN
   // =====================================================
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
@@ -189,6 +101,9 @@ export default function LoginScreen(props: any) {
     }
   };
 
+  // =====================================================
+  // EMAIL LOGIN / SIGNUP
+  // =====================================================
   const handleSubmit = async () => {
     setLoading(true);
 
@@ -236,6 +151,13 @@ export default function LoginScreen(props: any) {
 
         // Strip any leading +91/91 and non-digits, keep only last 10
         const cleanPhone = phone.replace(/\D/g, "").slice(-10);
+
+        if (cleanPhone.length < 10) {
+          showAlert({ type: "warning", title: "Invalid Phone", message: "Please enter a valid 10-digit phone number." });
+          setLoading(false);
+          return;
+        }
+
         const formattedPhone = `+91${cleanPhone}`;
 
         const { data, error } = await supabase.auth.signUp({
@@ -245,13 +167,45 @@ export default function LoginScreen(props: any) {
             data: {
               full_name: fullName.trim(),
               phone_number: formattedPhone,
-              phone_verified: false
             }
           }
         });
 
         if (error) throw error;
         authUser = data.user;
+
+        // If identities is empty, the email was already registered
+        if (!authUser?.identities?.length) {
+          throw new Error("This email is already registered. Please login instead.");
+        }
+
+        // Explicitly update Auth user_metadata to ensure it persists
+        if (authUser) {
+          await supabase.auth.updateUser({
+            data: {
+              full_name: fullName.trim(),
+              phone_number: formattedPhone,
+            }
+          });
+        }
+
+        // Upsert profile and signup tables immediately so completeness check passes
+        if (authUser) {
+          await Promise.all([
+            supabase.from("profile").upsert({
+              id: authUser.id,
+              full_name: fullName.trim(),
+              email: email.trim(),
+              phone: cleanPhone,
+            }),
+            supabase.from("signup").upsert({
+              id: authUser.id,
+              full_name: fullName.trim(),
+              email: email.trim(),
+              phone: cleanPhone,
+            })
+          ]);
+        }
       }
 
       if (authUser) {
@@ -285,7 +239,6 @@ export default function LoginScreen(props: any) {
         >
           {/* HEADER */}
           <View style={styles.header}>
-            {/* Language Selector Removed */}
             <Image
               source={NeatifyLogo}
               style={styles.logo}
@@ -294,160 +247,95 @@ export default function LoginScreen(props: any) {
             <Text style={styles.subtitle}>{t("login.title")}</Text>
           </View>
 
-          {/* METHOD TOGGLE (Email vs Phone) */}
-          <View style={styles.methodToggleContainer}>
-            <TouchableOpacity
-              style={[styles.methodToggle, loginMethod === "email" && styles.methodToggleActive]}
-              onPress={() => setLoginMethod("email")}
-            >
-              <Mail size={18} color={loginMethod === "email" ? COLORS.text : COLORS.textLight} />
-              <Text style={[styles.methodText, loginMethod === "email" && styles.methodTextActive]}>Email</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.methodToggle, loginMethod === "phone" && styles.methodToggleActive]}
-              onPress={() => setLoginMethod("phone")}
-            >
-              <Phone size={18} color={loginMethod === "phone" ? COLORS.text : COLORS.textLight} />
-              <Text style={[styles.methodText, loginMethod === "phone" && styles.methodTextActive]}>Phone OTP</Text>
-            </TouchableOpacity>
-          </View>
-
           {/* FORM */}
           <View style={styles.form}>
 
-            {/* ================= PHONE LOGIN UI ================= */}
-            {loginMethod === "phone" ? (
-              <>
-                <View style={styles.inputContainer}>
-                  <Phone size={20} color={COLORS.textLight} />
-                  <Text style={{ marginLeft: 10, fontSize: 16, color: COLORS.text, fontWeight: '600' }}>+91</Text>
-                  <View style={{ width: 1, height: 20, backgroundColor: COLORS.inputBorder, marginHorizontal: 10 }} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter Phone Number"
-                    placeholderTextColor={COLORS.placeholder}
-                    value={phone}
-                    onChangeText={(text) => {
-                      // Strip all non-digits
-                      let cleaned = text.replace(/\D/g, '');
-                      // If it starts with 91 and is longer than 10 digits, strip the 91
-                      if (cleaned.startsWith('91') && cleaned.length > 10) {
-                        cleaned = cleaned.slice(2);
-                      }
-                      setPhone(cleaned.slice(0, 10));
-                    }}
-                    keyboardType="phone-pad"
-                    maxLength={10}
-                    editable={!otpSent} // Lock if OTP sent
-                  />
-                  {otpSent && (
-                    <TouchableOpacity onPress={() => { setOtpSent(false); setOtp(""); }}>
-                      <Text style={{ color: COLORS.saffron, fontWeight: "700", fontSize: 12 }}>Change</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {otpSent && (
-                  <View style={styles.inputContainer}>
-                    <Lock size={20} color={COLORS.textLight} />
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Enter 6-digit OTP"
-                      placeholderTextColor={COLORS.placeholder}
-                      value={otp}
-                      onChangeText={(text) => setOtp(text.replace(/\D/g, '').slice(0, 6))}
-                      keyboardType="number-pad"
-                    />
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={otpSent ? handleVerifyOtp : handleSendOtp}
-                  disabled={phoneLoading}
-                >
-                  {phoneLoading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryText}>
-                      {otpSent ? "Verify OTP" : "Get OTP"}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </>
-            ) : (
-              /* ================= EMAIL LOGIN UI ================= */
-              <>
-                {!isLogin && (
-                  <Input
-                    icon={<User size={20} />}
-                    placeholder={t("login.fullName")}
-                    value={fullName}
-                    onChange={setFullName}
-                  />
-                )}
-
-                <Input
-                  icon={<Mail size={20} />}
-                  placeholder={t("login.email")}
-                  value={email}
-                  onChange={setEmail}
-                />
-
-                {!isLogin && (
-                  <Input
-                    icon={<Phone size={20} />}
-                    placeholder={t("login.phone")}
-                    value={phone}
-                    onChange={setPhone}
-                  />
-                )}
-
-                {/* PASSWORD */}
-                <View style={styles.inputContainer}>
-                  <Lock size={20} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder={t("login.password")}
-                    placeholderTextColor={COLORS.placeholder}
-                    secureTextEntry={!showPassword}
-                    value={password}
-                    onChangeText={setPassword}
-                  />
-                  <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                  </TouchableOpacity>
-                </View>
-
-                {/* FORGOT PASSWORD */}
-                {isLogin && (
-                  <TouchableOpacity
-                    style={{ alignSelf: "flex-end" }}
-                    onPress={() => navigation.navigate("ResetPassword" as never)}
-                  >
-                    <Text style={styles.link}>Forgot Password?</Text>
-                  </TouchableOpacity>
-                )}
-
-                {/* SUBMIT */}
-                <TouchableOpacity
-                  style={styles.primaryBtn}
-                  onPress={handleSubmit}
-                  disabled={loading}
-                >
-                  {loading ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.primaryText}>
-                      {isLogin ? t("login.loginBtn") : t("login.signupBtn")}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              </>
+            {/* SIGNUP: Full Name */}
+            {!isLogin && (
+              <Input
+                icon={<User size={20} />}
+                placeholder={t("login.fullName")}
+                value={fullName}
+                onChange={setFullName}
+              />
             )}
 
-            {/* GOOGLE - Available for both methods logic or just separate? Keep it here */}
+            {/* Email */}
+            <Input
+              icon={<Mail size={20} />}
+              placeholder={t("login.email")}
+              value={email}
+              onChange={setEmail}
+            />
+
+            {/* SIGNUP: Phone Number (no verification) */}
+            {!isLogin && (
+              <View style={styles.inputContainer}>
+                <Phone size={20} color={COLORS.textLight} />
+                <Text style={{ marginLeft: 10, fontSize: 16, color: COLORS.text, fontWeight: '600' }}>+91</Text>
+                <View style={{ width: 1, height: 20, backgroundColor: COLORS.inputBorder, marginHorizontal: 10 }} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t("login.phone")}
+                  placeholderTextColor={COLORS.placeholder}
+                  value={phone}
+                  onChangeText={(text) => {
+                    // Strip all non-digits
+                    let cleaned = text.replace(/\D/g, '');
+                    // If it starts with 91 and is longer than 10 digits, strip the 91
+                    if (cleaned.startsWith('91') && cleaned.length > 10) {
+                      cleaned = cleaned.slice(2);
+                    }
+                    setPhone(cleaned.slice(0, 10));
+                  }}
+                  keyboardType="phone-pad"
+                  maxLength={10}
+                />
+              </View>
+            )}
+
+            {/* PASSWORD */}
+            <View style={styles.inputContainer}>
+              <Lock size={20} />
+              <TextInput
+                style={styles.input}
+                placeholder={t("login.password")}
+                placeholderTextColor={COLORS.placeholder}
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </TouchableOpacity>
+            </View>
+
+            {/* FORGOT PASSWORD */}
+            {isLogin && (
+              <TouchableOpacity
+                style={{ alignSelf: "flex-end" }}
+                onPress={() => navigation.navigate("ResetPassword" as never)}
+              >
+                <Text style={styles.link}>Forgot Password?</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* SUBMIT */}
+            <TouchableOpacity
+              style={styles.primaryBtn}
+              onPress={handleSubmit}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.primaryText}>
+                  {isLogin ? t("login.loginBtn") : t("login.signupBtn")}
+                </Text>
+              )}
+            </TouchableOpacity>
+
+            {/* GOOGLE */}
             <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: COLORS.inputBorder }} />
               <Text style={{ marginHorizontal: 10, color: COLORS.textLight, fontSize: 12 }}>OR</Text>
@@ -475,20 +363,18 @@ export default function LoginScreen(props: any) {
             </TouchableOpacity>
 
             {/* FOOTER */}
-            {loginMethod === "email" && (
-              <View style={styles.footer}>
-                <Text>
-                  {isLogin
-                    ? t("login.noAccount")
-                    : t("login.hasAccount")}
+            <View style={styles.footer}>
+              <Text>
+                {isLogin
+                  ? t("login.noAccount")
+                  : t("login.hasAccount")}
+              </Text>
+              <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
+                <Text style={styles.link}>
+                  {isLogin ? ` ${t("login.switchSignup")}` : ` ${t("login.switchLogin")}`}
                 </Text>
-                <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-                  <Text style={styles.link}>
-                    {isLogin ? ` ${t("login.switchSignup")}` : ` ${t("login.switchLogin")}`}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -532,41 +418,6 @@ const styles = StyleSheet.create({
 
   title: { fontSize: 28, fontWeight: "800", color: COLORS.text },
   subtitle: { color: COLORS.textLight },
-
-  // Method Toggle
-  methodToggleContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    padding: 4,
-    marginBottom: 20,
-  },
-  methodToggle: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 8,
-  },
-  methodToggleActive: {
-    backgroundColor: '#FFFFFF',
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  methodText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textLight,
-  },
-  methodTextActive: {
-    color: COLORS.text,
-    fontWeight: '700',
-  },
 
   form: { gap: 12 },
   inputContainer: {

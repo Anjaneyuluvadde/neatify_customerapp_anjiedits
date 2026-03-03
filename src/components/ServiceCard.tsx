@@ -1,5 +1,6 @@
+import { Image } from "expo-image";
 import React, { memo } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useLanguage } from "../context/LanguageContext";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
@@ -62,7 +63,7 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
         {/* ✅ Pricing Display */}
         <View style={{ marginTop: 6, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6 }}>
           {/* Original Price (strikethrough) */}
-          {service.original_price && Number(service.original_price) > 0 ? (
+          {service.original_price && Number(String(service.original_price).replace(/[^\d.]/g, '')) > 0 ? (
             <Text
               style={{
                 fontSize: 13,
@@ -70,7 +71,7 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
                 textDecorationLine: "line-through",
               }}
             >
-              ₹{Number(service.original_price).toLocaleString("en-IN")}
+              {service.original_price}
             </Text>
           ) : null}
 

@@ -4,6 +4,7 @@ import React from "react";
 import BookingDetailsScreen from "../screens/BookingDetailsScreen";
 import BookingScreen from "../screens/BookingScreen";
 import CheckoutScreen from "../screens/CheckoutScreen";
+import CompleteProfileScreen from "../screens/CompleteProfileScreen";
 import HomeScreen from "../screens/HomeScreen";
 import LoginScreen from "../screens/LoginScreen";
 import MyBookingsScreen from "../screens/MyBookingsScreen";
@@ -11,7 +12,6 @@ import ProfileScreen from "../screens/ProfileScreen";
 import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
-import CompleteProfileScreen from "../screens/CompleteProfileScreen";
 
 import { Service } from "../types/service";
 
@@ -31,7 +31,7 @@ export type SelectedService = {
   image?: string;
 
   // pricing fields
-  original_price?: number | null;
+  original_price?: string | null;
   discount_percent?: number | null;
   discount_label?: string | null;
   tax_percent?: number | null;

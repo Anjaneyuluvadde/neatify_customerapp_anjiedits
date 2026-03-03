@@ -41,7 +41,7 @@ export interface Service {
   /**
    * Original price before discount
    */
-  original_price?: number | null;
+  original_price?: string | null;
 
   /**
    * Discount percentage (e.g., 20 for 20% off)
@@ -62,6 +62,11 @@ export interface Service {
    * Description of what the service includes
    */
   work_includes?: string | null;
+
+  /**
+   * Description of what the service does NOT include
+   */
+  work_not_included?: string | null;
 
   /**
    * Tax percentage to apply (e.g., 5 for 5% tax)

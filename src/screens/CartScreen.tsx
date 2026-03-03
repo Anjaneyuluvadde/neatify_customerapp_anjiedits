@@ -1,9 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { Image } from "expo-image";
 import React, { useMemo } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   Text,
