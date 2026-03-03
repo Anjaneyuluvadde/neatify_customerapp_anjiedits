@@ -172,7 +172,7 @@ export default function HomeScreen({ navigation }: any) {
       .from("hero_banners")
       .select("image_path")
       .eq("is_active", true)
-      .order("display_order", { ascending: true });
+      .order("priority", { ascending: true });
 
     // ✅ Fallback images
     const fallbackBanners: ImageSourcePropType[] = [

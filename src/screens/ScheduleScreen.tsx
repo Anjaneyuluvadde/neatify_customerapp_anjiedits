@@ -548,22 +548,29 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                 ))}
               </ScrollView>
 
-              <Pressable
-                onPress={() => {
-                  setShowSummary(false);
-                  setShowAddonsModal(true);
-                }}
-                style={{
-                  borderWidth: 1,
-                  borderColor: "#000",
-                  paddingVertical: 12,
-                  alignItems: "center",
-                  marginTop: 16,
-                  borderRadius: 10,
-                }}
-              >
-                <Text style={{ fontWeight: "800" }}>+ Addons</Text>
-              </Pressable>
+              {/* Only show + Addons for non-Deep Cleaning services */}
+              {(() => {
+                const mainService = allServices.find((s) => s.id === editServices[0]?.id);
+                const serviceType = mainService?.service_type || '';
+                return serviceType !== 'DEEP CLEANING' && serviceType !== 'Deep Cleaning';
+              })() && (
+                  <Pressable
+                    onPress={() => {
+                      setShowSummary(false);
+                      setShowAddonsModal(true);
+                    }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: "#000",
+                      paddingVertical: 12,
+                      alignItems: "center",
+                      marginTop: 16,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "800" }}>+ Addons</Text>
+                  </Pressable>
+                )}
 
               <Pressable
                 onPress={() => {
