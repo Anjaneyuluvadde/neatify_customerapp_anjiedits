@@ -1,8 +1,8 @@
-import { Picker } from "@react-native-picker/picker";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  FlatList,
   Modal,
   Pressable,
   ScrollView,
@@ -198,6 +198,8 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
   const [showSummary, setShowSummary] = useState(false);
   const [showAddService, setShowAddService] = useState(false);
+  const [showMonthPicker, setShowMonthPicker] = useState(false);
+  const [showYearPicker, setShowYearPicker] = useState(false);
 
   // Addons-related state
   const [showAddonsModal, setShowAddonsModal] = useState(false);
@@ -301,18 +303,56 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
         {/* MONTH / YEAR */}
         <View style={styles.dropdownRow}>
-          <Picker selectedValue={month} onValueChange={setMonth} style={styles.picker} dropdownIconColor="#000">
-            {MONTHS.map((m, i) => (
-              <Picker.Item key={m} label={m} value={i} color="#000" />
-            ))}
-          </Picker>
+          <Pressable style={styles.pickerBtn} onPress={() => setShowMonthPicker(true)}>
+            <Text style={styles.pickerBtnText}>{MONTHS[month]}</Text>
+            <Text style={styles.pickerArrow}>▼</Text>
+          </Pressable>
 
-          <Picker selectedValue={year} onValueChange={setYear} style={styles.picker} dropdownIconColor="#000">
-            {YEARS.map((y) => (
-              <Picker.Item key={y} label={String(y)} value={y} color="#000" />
-            ))}
-          </Picker>
+          <Pressable style={styles.pickerBtn} onPress={() => setShowYearPicker(true)}>
+            <Text style={styles.pickerBtnText}>{String(year)}</Text>
+            <Text style={styles.pickerArrow}>▼</Text>
+          </Pressable>
         </View>
+
+        {/* Month Picker Modal */}
+        <Modal visible={showMonthPicker} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowMonthPicker(false)}>
+          <Pressable style={styles.pickerOverlay} onPress={() => setShowMonthPicker(false)}>
+            <View style={styles.pickerModal}>
+              <FlatList
+                data={MONTHS}
+                keyExtractor={(item) => item}
+                renderItem={({ item, index }) => (
+                  <Pressable
+                    style={[styles.pickerItem, month === index && styles.pickerItemSelected]}
+                    onPress={() => { setMonth(index); setShowMonthPicker(false); }}
+                  >
+                    <Text style={[styles.pickerItemText, month === index && styles.pickerItemTextSelected]}>{item}</Text>
+                  </Pressable>
+                )}
+              />
+            </View>
+          </Pressable>
+        </Modal>
+
+        {/* Year Picker Modal */}
+        <Modal visible={showYearPicker} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowYearPicker(false)}>
+          <Pressable style={styles.pickerOverlay} onPress={() => setShowYearPicker(false)}>
+            <View style={styles.pickerModal}>
+              <FlatList
+                data={YEARS}
+                keyExtractor={(item) => String(item)}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={[styles.pickerItem, year === item && styles.pickerItemSelected]}
+                    onPress={() => { setYear(item); setShowYearPicker(false); }}
+                  >
+                    <Text style={[styles.pickerItemText, year === item && styles.pickerItemTextSelected]}>{String(item)}</Text>
+                  </Pressable>
+                )}
+              />
+            </View>
+          </Pressable>
+        </Modal>
 
         {/* CALENDAR */}
         <View style={styles.calendar}>
@@ -1018,8 +1058,54 @@ const styles = StyleSheet.create({
   container: { padding: 20 },
   pageTitle: { fontSize: 26, fontWeight: "700" },
 
-  dropdownRow: { flexDirection: "row", gap: 10 },
-  picker: { flex: 1, color: "#000", backgroundColor: "#fff" },
+  dropdownRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  pickerBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  pickerBtnText: { fontSize: 16, fontWeight: "600", color: "#000" },
+  pickerArrow: { fontSize: 10, color: "#666", marginLeft: 6 },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pickerModal: {
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    width: "80%",
+    maxHeight: "60%",
+    paddingVertical: 8,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  pickerItem: {
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+  },
+  pickerItemSelected: {
+    backgroundColor: "#FFF8E1",
+  },
+  pickerItemText: {
+    fontSize: 16,
+    color: "#000",
+  },
+  pickerItemTextSelected: {
+    fontWeight: "700",
+    color: "#000",
+  },
 
   calendar: { marginTop: 15 },
   dayCol: { alignItems: "center", width: 45 },
