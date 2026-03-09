@@ -47,6 +47,7 @@ type AddOn = {
   discount_label?: string | null;
   tax_percent?: number | null;
   max_quantity?: number | null; // max times this addon can be added (from db)
+  is_active?: boolean; // only show addon if true
 };
 
 /**
@@ -96,9 +97,9 @@ const MONTHS = [
   "December",
 ];
 
-const YEARS = [2026, 2027, 2028];
-
-const TIMES = [
+// Fallback defaults (used if schedule_config table fetch fails)
+const DEFAULT_YEARS = [2026, 2027, 2028];
+const DEFAULT_TIMES = [
   "9:00 am",
   "9:30 am",
   "10:00 am",
@@ -206,6 +207,10 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const [selectedAddonDetail, setSelectedAddonDetail] = useState<AddOn | null>(null);
   const [addons, setAddons] = useState<AddOn[]>([]);
 
+  // Dynamic schedule config from Supabase
+  const [timeSlots, setTimeSlots] = useState<string[]>(DEFAULT_TIMES);
+  const [availableYears, setAvailableYears] = useState<number[]>(DEFAULT_YEARS);
+
   const calendar = useMemo(() => getCalendarMatrix(year, month), [year, month]);
 
   const selectedDayName =
@@ -224,16 +229,47 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         if (data) setAllServices(data);
       });
 
-    // Fetch addons
+    // Fetch addons (only active ones)
     supabase
       .from("add_ons")
       .select("*")
+      .eq("is_active", true)
       .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
         if (error) console.error("Error fetching addons:", error);
         if (data) setAddons(data as AddOn[]);
       });
+
+    // Fetch schedule config (time_slots, years)
+    supabase
+      .from("schedule_config")
+      .select("config_key, config_value")
+      .then(({ data, error }) => {
+        if (error) {
+          console.error("Error fetching schedule config:", error);
+          return;
+        }
+        if (data) {
+          data.forEach((row: { config_key: string; config_value: any }) => {
+            if (row.config_key === "time_slots" && Array.isArray(row.config_value)) {
+              setTimeSlots(row.config_value as string[]);
+            }
+            if (row.config_key === "years" && Array.isArray(row.config_value)) {
+              setAvailableYears(row.config_value as number[]);
+            }
+          });
+        }
+      });
   }, []);
+
+  // ✅ Filter addons to match the main service's service_type (case-insensitive)
+  const filteredAddons = useMemo(() => {
+    const mainService = allServices.find((s) => s.id === editServices[0]?.id);
+    const mainServiceType = mainService?.service_type?.toUpperCase() || '';
+    return addons.filter(
+      (addon) => addon.service_type?.toUpperCase() === mainServiceType
+    );
+  }, [addons, allServices, editServices]);
 
   /* ================= HELPERS ================= */
 
@@ -339,7 +375,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
           <Pressable style={styles.pickerOverlay} onPress={() => setShowYearPicker(false)}>
             <View style={styles.pickerModal}>
               <FlatList
-                data={YEARS}
+                data={availableYears}
                 keyExtractor={(item) => String(item)}
                 renderItem={({ item }) => (
                   <Pressable
@@ -400,7 +436,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
             <Text style={styles.section}>{t("schedule.selectTime")}</Text>
 
             <View style={styles.timeGrid}>
-              {TIMES.map((time) => {
+              {timeSlots.map((time) => {
                 const valid = isTimeSlotValid(year, month, selectedDate, time);
                 return (
                   <Pressable
@@ -588,12 +624,8 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                 ))}
               </ScrollView>
 
-              {/* Only show + Addons for non-Deep Cleaning services */}
-              {(() => {
-                const mainService = allServices.find((s) => s.id === editServices[0]?.id);
-                const serviceType = mainService?.service_type || '';
-                return serviceType !== 'DEEP CLEANING' && serviceType !== 'Deep Cleaning';
-              })() && (
+              {/* ✅ ADDONS BUTTON — only show if there are matching addons for this service_type */}
+              {filteredAddons.length > 0 && (
                   <Pressable
                     onPress={() => {
                       setShowSummary(false);
@@ -724,12 +756,12 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
               </View>
 
               <ScrollView contentContainerStyle={{ padding: 16 }}>
-                {addons.length === 0 ? (
+                {filteredAddons.length === 0 ? (
                   <Text style={{ textAlign: "center", marginTop: 20, color: "#888" }}>
                     No extra add-ons available.
                   </Text>
                 ) : (
-                  addons.map((addon) => {
+                  filteredAddons.map((addon) => {
                     const isAdded = editServices.some(
                       (s) => s.id === addon.id
                     );

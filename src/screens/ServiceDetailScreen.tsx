@@ -60,6 +60,7 @@ type AddOn = {
   discount_label?: string | null;
   tax_percent?: number | null;
   max_quantity?: number | null; // max times this addon can be added (from db)
+  is_active?: boolean; // only show addon if true
 };
 
 /**
@@ -149,10 +150,11 @@ export default function ServiceDetailScreen({ route }: Props) {
         if (data) setAvailableServices(data as Service[]);
       });
 
-    // Fetch Add-ons
+    // Fetch Add-ons (only active ones)
     supabase
       .from("add_ons")
       .select("*")
+      .eq("is_active", true)
       .order("sort_order", { ascending: true })
       .then(({ data, error }) => {
         if (error) console.error("Error fetching addons:", error);
@@ -362,11 +364,13 @@ export default function ServiceDetailScreen({ route }: Props) {
     setSelectedServices((prev) => prev.filter((s) => s.id !== id));
   };
 
-  // Filter out addons that are already selected
-  // ✅ CHANGED: We now show ALL addons, but mark selected ones as "Added"
+  // ✅ Filter addons to match the main service's service_type (case-insensitive)
   const availableAddons = useMemo(() => {
-    return addons;
-  }, [addons]);
+    const mainServiceType = service?.service_type?.toUpperCase() || '';
+    return addons.filter(
+      (addon) => addon.service_type?.toUpperCase() === mainServiceType
+    );
+  }, [addons, service]);
 
   const descriptionLines = useMemo(() => {
     return (service?.description || "")
@@ -838,11 +842,8 @@ export default function ServiceDetailScreen({ route }: Props) {
                 ))}
               </ScrollView>
 
-              {/* ✅ ADDONS BUTTON (Replaces Add Another Service) */}
-              {/* ✅ ADDONS BUTTON (Replaces Add Another Service) */}
-              {/* Only show for services that are NOT Deep Cleaning */}
-              {service.service_type !== "DEEP CLEANING" &&
-                service.service_type !== "Deep Cleaning" && (
+              {/* ✅ ADDONS BUTTON — only show if there are matching addons for this service_type */}
+              {availableAddons.length > 0 && (
                   <Pressable
                     onPress={() => {
                       setShowSummary(false);
