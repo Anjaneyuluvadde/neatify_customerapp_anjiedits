@@ -123,6 +123,7 @@ export const translations = {
             redirecting: "Redirecting to My Bookings...",
             policies: "User Policies",
             terms: "Terms & Conditions",
+            fullAddress: "Full Address (House No, Building, Area, City) *",
         },
         bookings: {
             title: "My Bookings",
@@ -327,6 +328,7 @@ export const translations = {
             redirecting: "నా బుకింగ్‌లకి మళ్లిస్తోంది...",
             policies: "వినియోగదారు విధానాలు",
             terms: "నిబంధనలు & షరతులు",
+            fullAddress: "పూర్తి చిరునామా (ఇల్లు, భవనం, ప్రాంతం, నగరం) *",
         },
         bookings: {
             title: "నా బుకింగ్‌లు",
@@ -544,6 +546,7 @@ export const translations = {
             redirecting: "मेरी बुकिंग पर रीडायरेक्ट किया जा रहा है...",
             policies: "उपयोगकर्ता नीतियां",
             terms: "नियम और शर्तें",
+            fullAddress: "पूरा पता (मकान, भवन, क्षेत्र, शहर) *",
         },
         bookings: {
             title: "मेरी बुकिंग",

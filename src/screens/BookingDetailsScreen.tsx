@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
@@ -251,6 +251,7 @@ export default function BookingDetailsScreen({ route }: Props) {
   /* ================= STAFF DETAILS ================= */
 
   const [staffName, setStaffName] = useState<string | null>(null);
+  const [staffPhone, setStaffPhone] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchStaffDetails = async () => {
@@ -258,12 +259,13 @@ export default function BookingDetailsScreen({ route }: Props) {
 
       const { data, error } = await supabase
         .from("staff_profile")
-        .select("name")
+        .select("name, phone")
         .eq("email", booking.assigned_staff_email)
         .single();
 
-      if (data?.name) {
-        setStaffName(data.name);
+      if (data) {
+        if (data.name) setStaffName(data.name);
+        if (data.phone) setStaffPhone(data.phone);
       }
     };
 
@@ -385,14 +387,39 @@ export default function BookingDetailsScreen({ route }: Props) {
                     <Text style={styles.assignedLabel}>{t("bookingDetails.staffAssigned")}</Text>
                   </View>
 
-                  {/* ✅ Display Staff Name */}
+                  {/* Staff Name & Phone */}
                   {staffName ? (
-                    <Text style={{ fontSize: 16, fontWeight: "700", color: "#000", marginBottom: 4 }}>
+                    <Text style={styles.staffNameText}>
                       {staffName}
                     </Text>
                   ) : null}
 
-                  <Text style={styles.staffEmail}>{booking.assigned_staff_email}</Text>
+                  {staffPhone ? (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        const url = `tel:${staffPhone}`;
+                        Linking.canOpenURL(url).then((supported) => {
+                          if (supported) {
+                            Linking.openURL(url);
+                          }
+                        });
+                      }}
+                      style={styles.staffPhoneCard}
+                    >
+                      <View style={styles.staffPhoneIcon}>
+                        <Text style={{ fontSize: 18 }}>📞</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.staffPhoneLabel}>Call Staff</Text>
+                        <Text style={styles.staffPhoneNumber}>
+                          {staffPhone.replace(/^\+?91/, '')}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <View style={{ borderBottomWidth: 1, borderBottomColor: "#e5e7eb", marginBottom: 16, marginTop: 4 }} />
 
                   <View style={styles.otpContainer}>
                     <View style={styles.otpBox}>
@@ -618,14 +645,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#16a34a",
   },
-  staffEmail: {
-    fontSize: 14,
-    color: "#374151",
-    marginBottom: 16,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
-  },
   otpContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -808,5 +827,41 @@ const styles = StyleSheet.create({
     color: "#F59E0B",
     fontWeight: "600",
     fontSize: 14,
+  },
+  staffNameText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#000",
+    marginBottom: 8,
+  },
+  staffPhoneCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0fdf4",
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#bbf7d0",
+  },
+  staffPhoneIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  staffPhoneLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#16a34a",
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  staffPhoneNumber: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#0f172a",
   },
 });

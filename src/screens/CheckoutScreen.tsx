@@ -3,7 +3,9 @@ import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/nati
 import * as Location from "expo-location";
 import React, { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -23,6 +25,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { supabase } from "../lib/supabase";
 import { RootStackParamList, SelectedService } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
+import { processPayment } from "../lib/paymentService";
 
 /* ================= TYPES ================= */
 
@@ -106,11 +109,15 @@ export default function CheckoutScreen({ route }: Props) {
   }>({ title: '', message: '', type: 'error' });
 
   // Address Form State
-  const [houseNo, setHouseNo] = useState("");
-  const [area, setArea] = useState("");
-  const [landmark, setLandmark] = useState("");
-  const [city, setCity] = useState("");
+  const [manualAddress, setManualAddress] = useState("");
   const [pincode, setPincode] = useState("");
+
+  // Location coordinates (not displayed, only stored in booking)
+  const [bookingLatitude, setBookingLatitude] = useState<number | null>(null);
+  const [bookingLongitude, setBookingLongitude] = useState<number | null>(null);
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+  const [isAddressSummaryMode, setIsAddressSummaryMode] = useState(true);
+  const [hasUsedLocationFetch, setHasUsedLocationFetch] = useState(true);
 
   // ✅ Pincode verification state
   const [isPincodeServiceable, setIsPincodeServiceable] = useState<boolean>(false);
@@ -123,6 +130,65 @@ export default function CheckoutScreen({ route }: Props) {
   const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage: number } | null>(null);
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
+
+  // ✅ Centralized Geocoding Helper
+  const handleManualGeocode = async (addressToGeocode: string) => {
+    if (!addressToGeocode || !addressToGeocode.trim()) return null;
+    try {
+      console.log("📍 Geocoding address:", addressToGeocode);
+      const geoResults = await Location.geocodeAsync(addressToGeocode);
+      if (geoResults && geoResults.length > 0) {
+        const { latitude, longitude } = geoResults[0];
+        setBookingLatitude(latitude);
+        setBookingLongitude(longitude);
+        console.log("✅ Geocode success:", latitude, longitude);
+        return { latitude, longitude };
+      }
+    } catch (err) {
+      console.log("⚠️ Geocoding failed for:", addressToGeocode, err);
+    }
+    return null;
+  };
+
+  // ✅ Function to view coordinates on external map
+  const handleViewOnMap = async () => {
+    let currentLat = bookingLatitude;
+    let currentLng = bookingLongitude;
+
+    // Proactive geocode if coordinates are missing
+    if (!currentLat || !currentLng) {
+      console.log("📍 Proactive geocode for map view...");
+      const result = await handleManualGeocode(`${manualAddress}, ${pincode}`);
+      if (result) {
+        currentLat = result.latitude;
+        currentLng = result.longitude;
+      }
+    }
+
+    if (!currentLat || !currentLng) {
+      setAlertConfig({
+        title: "Location Missing",
+        message: "Please fetch or enter your address first.",
+        type: "warning"
+      });
+      setShowAlertModal(true);
+      return;
+    }
+
+    const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
+    const latLng = `${currentLat},${currentLng}`;
+    const label = 'Service Location';
+    const url = Platform.select({
+      ios: `${scheme}${label}@${latLng}`,
+      android: `${scheme}${latLng}(${label})`
+    });
+
+    if (url) {
+      Linking.openURL(url).catch(err => {
+        console.error("Failed to open map:", err);
+      });
+    }
+  };
 
   /* ================= PINCODE CHECK FUNCTION ================= */
 
@@ -231,37 +297,13 @@ export default function CheckoutScreen({ route }: Props) {
           const addressWithoutPincode = profileData.address
             .replace(/\s*-\s*\d{6}\s*$/, "")
             .trim();
+          
+          setManualAddress(addressWithoutPincode);
+          setIsAddressSummaryMode(true);
+          setHasUsedLocationFetch(true);
 
-          const parts = addressWithoutPincode
-            .split(",")
-            .map((p: string) => p.trim())
-            .filter((p: string) => p);
-
-          if (parts.length >= 3) {
-            setHouseNo(parts[0] || "");
-            setArea(parts[1] || "");
-
-            const lastPart = parts[parts.length - 1];
-
-            if (parts.length === 4) {
-              setLandmark(parts[2] || "");
-              setCity(lastPart);
-            } else if (parts.length === 3) {
-              setLandmark("");
-              setCity(lastPart);
-            } else {
-              const middleParts = parts.slice(2, -1).join(", ");
-              setLandmark(middleParts);
-              setCity(lastPart);
-            }
-          } else if (parts.length === 2) {
-            setHouseNo(parts[0] || "");
-            setArea("");
-            setCity(parts[1] || "");
-            setLandmark("");
-          } else if (parts.length === 1) {
-            setArea(parts[0] || "");
-          }
+          // ✅ Automatically geocode the saved profile address on load
+          handleManualGeocode(`${addressWithoutPincode}, ${profileData.pincode || ""}`);
         }
       } else {
         setAlertConfig({
@@ -307,21 +349,74 @@ export default function CheckoutScreen({ route }: Props) {
       return;
     }
 
-    const location = await Location.getCurrentPositionAsync({});
-    const addressList = await Location.reverseGeocodeAsync(location.coords);
+    setFetchingLocation(true);
 
-    if (!addressList[0]) return;
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
 
-    const addr = addressList[0];
-    const street = addr.street || "";
-    const locCity = addr.city || "";
-    const locRegion = addr.region || "";
-    const locPincode = addr.postalCode || "";
+      const { latitude, longitude } = location.coords;
 
-    setHouseNo(addr.name || "");
-    setArea(`${street}`);
-    setCity(`${locCity}, ${locRegion}`);
-    setPincode(locPincode);
+      // Store coordinates for booking
+      setBookingLatitude(latitude);
+      setBookingLongitude(longitude);
+
+      // Use Expo's native geocoder (uses Google on Android — most accurate for India)
+      try {
+        const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
+
+        if (addressList[0]) {
+          const addr: any = addressList[0];
+
+          // Debug: log ALL fields to see what's available
+          console.log("📍 Expo Geocoder raw response:", JSON.stringify(addr, null, 2));
+
+          // Try to extract area from formattedAddress (Android returns full Google address)
+          const fullAddr: string = addr.formattedAddress || "";
+          console.log("📍 formattedAddress:", fullAddr);
+
+          if (fullAddr) {
+            // Parse the formatted address: "Premises, Street, Locality, City, State, PIN, Country"
+            const parts = fullAddr.split(",").map((p: string) => p.trim()).filter((p: string) => p);
+
+            // 1. Extract Pincode (any 6 digit number)
+            let pinIdx = -1;
+            for (let i = parts.length - 1; i >= 0; i--) {
+              const pinMatch = parts[i].match(/\b(\d{6})\b/);
+              if (pinMatch) {
+                setPincode(pinMatch[1]);
+                pinIdx = i;
+                break;
+              }
+            }
+            if (pinIdx === -1 && addr.postalCode) setPincode(addr.postalCode);
+
+            // Try to extract a clean street address for the manual field
+            setManualAddress(fullAddr || "");
+            
+            setIsAddressSummaryMode(true);
+            setHasUsedLocationFetch(true);
+          } else {
+            setManualAddress(addr.street || addr.district || addr.subregion || "");
+            if (addr.postalCode) setPincode(addr.postalCode);
+            setIsAddressSummaryMode(false);
+          }
+        }
+      } catch (geoErr) {
+        console.log("Geocoding failed:", geoErr);
+      }
+    } catch (err) {
+      console.error("Location fetch error:", err);
+      setAlertConfig({
+        title: 'Location Error',
+        message: 'Could not fetch your location. Please try again or enter manually.',
+        type: 'error'
+      });
+      setShowAlertModal(true);
+    } finally {
+      setFetchingLocation(false);
+    }
   };
 
   /* ================= COUPON ================= */
@@ -440,10 +535,10 @@ export default function CheckoutScreen({ route }: Props) {
     }
 
     // ✅ Validate Address
-    if (!houseNo.trim() || !area.trim() || !landmark.trim() || !city.trim() || !pincode.trim()) {
+    if (!manualAddress.trim() || !pincode.trim()) {
       setAlertConfig({
         title: 'Missing Address',
-        message: 'Please fill in all required address fields (House, Area, Landmark, City, Pincode).',
+        message: 'Please enter your full address and pincode.',
         type: 'warning'
       });
       setShowAlertModal(true);
@@ -484,7 +579,7 @@ export default function CheckoutScreen({ route }: Props) {
 
     setIsProcessing(true);
 
-    const fullAddress = `${houseNo}, ${area}, ${landmark ? landmark + ", " : ""}${city} - ${pincode}`;
+    const fullAddress = `${manualAddress.trim()} - ${pincode.trim()}`;
 
     // ✅ Auto-save profile
     supabase
@@ -502,6 +597,27 @@ export default function CheckoutScreen({ route }: Props) {
 
     const [datePart, timePart] = bookingDateText.split(" at ");
 
+    let finalLat = bookingLatitude;
+    let finalLng = bookingLongitude;
+
+    // ✅ Silent Geocoding: If coordinates are missing (manual entry), try to geocode the address
+    if (!finalLat || !finalLng) {
+      try {
+        console.log("📍 Missing coordinates. Attempting silent geocode for:", fullAddress);
+        const geoResults = await Location.geocodeAsync(fullAddress);
+        if (geoResults && geoResults.length > 0) {
+          finalLat = geoResults[0].latitude;
+          finalLng = geoResults[0].longitude;
+          console.log("✅ Silent geocode success:", finalLat, finalLng);
+          // Also update state so it's consistent
+          setBookingLatitude(finalLat);
+          setBookingLongitude(finalLng);
+        }
+      } catch (geoErr) {
+        console.log("⚠️ Silent geocoding failed", geoErr);
+      }
+    }
+
     try {
       /* ================= 1️⃣ CREATE BOOKING (PENDING) ================= */
 
@@ -514,6 +630,8 @@ export default function CheckoutScreen({ route }: Props) {
             email: profile.email,
             phone_number: profile.phone,
             full_address: fullAddress,
+            latitude: finalLat,
+            longitude: finalLng,
             services: services,
             booking_date: datePart,
             booking_time: timePart,
@@ -540,15 +658,13 @@ export default function CheckoutScreen({ route }: Props) {
       const [firstName, ...rest] = profile.full_name.split(" ");
       const lastName = rest.join(" ");
 
-      const { processPayment } = await import("../lib/paymentService");
-
       const payment = await processPayment(Number(grandTotal.toFixed(2)), {
         firstName,
         lastName,
         email: profile.email,
         phone: profile.phone,
         address: fullAddress,
-        city: city,
+        city: "", // Consolidated into fullAddress
         region: "",
         zip: pincode,
       }, bookingId);
@@ -791,24 +907,47 @@ export default function CheckoutScreen({ route }: Props) {
             </View>
 
             {/* Address Inputs */}
-            <View>
-              <Text style={styles.label}>{t("checkout.house")}</Text>
-              <TextInput style={styles.input} value={houseNo} onChangeText={setHouseNo} placeholder="e.g. Flat 102" placeholderTextColor="#999" />
-
-              <Text style={styles.label}>{t("checkout.area")}</Text>
-              <TextInput style={styles.input} value={area} onChangeText={setArea} placeholder="e.g. Road No. 12" placeholderTextColor="#999" />
-
-              <Text style={styles.label}>{t("checkout.landmark")}</Text>
-              <TextInput style={styles.input} value={landmark} onChangeText={setLandmark} placeholder="e.g. Near Hospital" placeholderTextColor="#999" />
-
-              {/* ✅ CITY + PINCODE ROW */}
-              <View style={styles.rowInputs}>
-                <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.label}>{t("checkout.city")}</Text>
-                  <TextInput style={styles.input} value={city} onChangeText={setCity} placeholder="Hyderabad" placeholderTextColor="#999" />
+            <View style={{ marginTop: 8 }}>
+            
+            <View style={styles.addressSection}>
+              {/* ✅ SMART ADDRESS CARD (Shown after Use Location) */}
+              {isAddressSummaryMode && hasUsedLocationFetch ? (
+                <View style={styles.summaryCard}>
+                  <View style={styles.summaryContent}>
+                    <Pressable 
+                      style={styles.locationIconCircle}
+                      onPress={handleViewOnMap}
+                    >
+                      <Ionicons name="location" size={20} color="#1e293b" />
+                    </Pressable>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.summaryTitle}>Selected Location</Text>
+                      <Text style={styles.summaryText}>
+                        {`${manualAddress}${pincode ? " - " + pincode : ""}`}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={styles.editButton}
+                      onPress={() => setIsAddressSummaryMode(false)}
+                    >
+                      <Ionicons name="create-outline" size={18} color="#1e293b" />
+                      <Text style={styles.editButtonText}>Edit</Text>
+                    </Pressable>
+                  </View>
                 </View>
+              ) : (
+                <View style={{ padding: 16 }}>
+                  <Text style={styles.label}>{t("checkout.fullAddress")}</Text>
+                  <TextInput
+                    style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12 }]}
+                    value={manualAddress}
+                    onChangeText={setManualAddress}
+                    placeholder="e.g. Plot no 1821, flat no 402, Sri sai nilayam, Pragathi nagar, Hyderabad"
+                    placeholderTextColor="#999"
+                    multiline
+                    numberOfLines={4}
+                  />
 
-                <View style={{ flex: 0.8 }}>
                   <Text style={styles.label}>{t("checkout.pincode")}</Text>
                   <TextInput
                     style={styles.input}
@@ -819,67 +958,91 @@ export default function CheckoutScreen({ route }: Props) {
                     }}
                     keyboardType="numeric"
                     maxLength={6}
-                    placeholder="500033"
+                    placeholder="500090"
                     placeholderTextColor="#999"
                   />
-                </View>
-              </View>
 
-              {/* ✅ FULL WIDTH PINCODE STATUS BADGE (Horizontal) */}
-              {pincode.length === 6 && (
-                <View
-                  style={[
-                    styles.serviceStatusBox,
-                    checkingPincode
-                      ? styles.serviceCheckingBox
-                      : isPincodeServiceable
-                        ? styles.serviceAvailableBox
-                        : styles.serviceUnavailableBox,
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      checkingPincode
-                        ? "time-outline"
-                        : isPincodeServiceable
-                          ? "checkmark-circle"
-                          : "close-circle"
-                    }
-                    size={18}
-                    color={
-                      checkingPincode
-                        ? "#64748b"
-                        : isPincodeServiceable
-                          ? "#10B981"
-                          : "#EF4444"
-                    }
-                  />
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.serviceStatusText}>
-                      {checkingPincode
-                        ? t("checkout.checking")
-                        : isPincodeServiceable
-                          ? t("checkout.serviceAvailable")
-                          : t("checkout.serviceNotAvailable")}
-                    </Text>
-
-                    {!checkingPincode && (
-                      <Text style={styles.serviceSubText} numberOfLines={1}>
-                        {isPincodeServiceable
-                          ? "You can continue with booking."
-                          : "We will be available soon in your area."}
-                      </Text>
-                    )}
-                  </View>
+                  {/* ✅ DONE BUTTON (Return to summary) */}
+                  {hasUsedLocationFetch && (
+                    <Pressable
+                      style={styles.doneButton}
+                      onPress={async () => {
+                        setIsAddressSummaryMode(true);
+                        // ✅ Instantly geocode when finishing manual entry
+                        handleManualGeocode(`${manualAddress}, ${pincode}`);
+                      }}
+                    >
+                      <Ionicons name="checkmark-done" size={18} color="#fff" />
+                      <Text style={styles.doneButtonText}>Done Editing</Text>
+                    </Pressable>
+                  )}
                 </View>
               )}
-
-              <Pressable onPress={fetchCurrentLocation} style={styles.secondaryBtn}>
-                <Text style={styles.secondaryBtnText}>{t("checkout.useLocation")}</Text>
-              </Pressable>
             </View>
+
+            {/* ✅ FULL WIDTH PINCODE STATUS BADGE (Always visible or after pincode entered) */}
+            {pincode.length === 6 && (
+              <View
+                style={[
+                  styles.serviceStatusBox,
+                  checkingPincode
+                    ? styles.serviceCheckingBox
+                    : isPincodeServiceable
+                      ? styles.serviceAvailableBox
+                      : styles.serviceUnavailableBox,
+                  { marginTop: 12 }
+                ]}
+              >
+                <Ionicons
+                  name={
+                    checkingPincode
+                      ? "time-outline"
+                      : isPincodeServiceable
+                        ? "checkmark-circle"
+                        : "close-circle"
+                  }
+                  size={18}
+                  color={
+                    checkingPincode
+                      ? "#64748b"
+                      : isPincodeServiceable
+                        ? "#10B981"
+                        : "#EF4444"
+                  }
+                />
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.serviceStatusText}>
+                    {checkingPincode
+                      ? t("checkout.checking")
+                      : isPincodeServiceable
+                        ? t("checkout.serviceAvailable")
+                        : t("checkout.serviceNotAvailable")}
+                  </Text>
+
+                  {!checkingPincode && (
+                    <Text style={styles.serviceSubText} numberOfLines={1}>
+                      {isPincodeServiceable
+                        ? "You can continue with booking."
+                        : "We will be available soon in your area."}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            <Pressable onPress={fetchCurrentLocation} style={styles.secondaryBtn} disabled={fetchingLocation}>
+              {fetchingLocation ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <ActivityIndicator size="small" color={COLORS.saffron ?? "#F4C430"} />
+                  <Text style={styles.secondaryBtnText}>Fetching Location...</Text>
+                </View>
+              ) : (
+                <Text style={styles.secondaryBtnText}>{t("checkout.useLocation")}</Text>
+              )}
+            </Pressable>
           </View>
+        </View>
 
           {/* CHECKBOXES */}
           <View style={styles.checkboxContainer}>
@@ -1224,7 +1387,117 @@ const styles = StyleSheet.create({
   secondaryBtnText: {
     color: COLORS.saffron,
     fontWeight: "600",
+  },
+  addressSection: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    overflow: "hidden",
+  },
+  summaryCard: {
+    backgroundColor: "#F8FAFC",
+    padding: 16,
+  },
+  summaryContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  locationIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+  },
+  summaryTitle: {
+    fontSize: 12,
+    // fontFamily: "Outfit-Medium", // Assuming Outfit-Medium is defined elsewhere or removed
+    color: "#64748b",
+    marginBottom: 2,
+    textTransform: "uppercase",
+  },
+  summaryText: {
     fontSize: 14,
+    // fontFamily: "Outfit-Regular", // Assuming Outfit-Regular is defined elsewhere or removed
+    color: "#1e293b",
+    lineHeight: 20,
+  },
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    gap: 4,
+  },
+  editButtonText: {
+    fontSize: 12,
+    // fontFamily: "Outfit-Bold", // Assuming Outfit-Bold is defined elsewhere or removed
+    color: "#1e293b",
+  },
+  doneButton: {
+    backgroundColor: "#1e293b",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    gap: 8,
+  },
+  doneButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  pincodeStatusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  pincodeStatusAvailable: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#10B981",
+    borderWidth: 1,
+  },
+  pincodeStatusUnavailable: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#EF4444",
+    borderWidth: 1,
+  },
+  pincodeStatusText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#1e293b",
+  },
+  useLocationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: COLORS.saffron,
+    borderRadius: 8,
+    marginTop: 12,
+    gap: 8,
+  },
+  useLocationButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.buttonText,
   },
   checkboxContainer: {
     marginTop: 20,

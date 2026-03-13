@@ -155,8 +155,10 @@ const isTimeSlotValid = (
   timeString: string
 ) => {
   if (day === null) return false;
+  if (!timeString || typeof timeString !== "string") return false;
 
   const [time, modifier] = timeString.split(" ");
+  if (!time) return false;
   let [hours, minutes] = time.split(":").map(Number);
 
   if (modifier === "pm" && hours < 12) hours += 12;
@@ -252,7 +254,19 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         if (data) {
           data.forEach((row: { config_key: string; config_value: any }) => {
             if (row.config_key === "time_slots" && Array.isArray(row.config_value)) {
-              setTimeSlots(row.config_value as string[]);
+              // time_slots may be plain strings or objects {value, active}
+              const normalized = row.config_value
+                .map((slot: any) => {
+                  if (typeof slot === "string") return slot;
+                  if (slot && typeof slot === "object" && slot.value) {
+                    // Only include active slots (default to true if not specified)
+                    if (slot.active === false) return null;
+                    return String(slot.value);
+                  }
+                  return null;
+                })
+                .filter(Boolean) as string[];
+              setTimeSlots(normalized);
             }
             if (row.config_key === "years" && Array.isArray(row.config_value)) {
               setAvailableYears(row.config_value as number[]);
@@ -626,23 +640,23 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
               {/* ✅ ADDONS BUTTON — only show if there are matching addons for this service_type */}
               {filteredAddons.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      setShowSummary(false);
-                      setShowAddonsModal(true);
-                    }}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: "#000",
-                      paddingVertical: 12,
-                      alignItems: "center",
-                      marginTop: 16,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "800" }}>+ Addons</Text>
-                  </Pressable>
-                )}
+                <Pressable
+                  onPress={() => {
+                    setShowSummary(false);
+                    setShowAddonsModal(true);
+                  }}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: "#000",
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    marginTop: 16,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ fontWeight: "800" }}>+ Addons</Text>
+                </Pressable>
+              )}
 
               <Pressable
                 onPress={() => {
