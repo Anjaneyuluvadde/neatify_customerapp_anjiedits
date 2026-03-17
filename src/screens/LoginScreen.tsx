@@ -23,12 +23,14 @@ import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 
 
 export default function LoginScreen(props: any) {
   const navigation = useNavigation<any>();
   const { showAlert, showToast } = useNotification();
   const { t } = useLanguage();
+  const { theme, isDark } = useTheme();
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -72,7 +74,7 @@ export default function LoginScreen(props: any) {
         // All good → Go Home
         navigation.reset({
           index: 0,
-          routes: [{ name: "Home" }],
+          routes: [{ name: "HomeDrawer" }],
         });
       }
     } catch (err) {
@@ -225,8 +227,8 @@ export default function LoginScreen(props: any) {
 
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -244,7 +246,7 @@ export default function LoginScreen(props: any) {
               style={styles.logo}
               resizeMode="contain"
             />
-            <Text style={styles.subtitle}>{t("login.title")}</Text>
+            <Text style={[styles.subtitle, { color: theme.textLight }]}>{t("login.title")}</Text>
           </View>
 
           {/* FORM */}
@@ -253,31 +255,33 @@ export default function LoginScreen(props: any) {
             {/* SIGNUP: Full Name */}
             {!isLogin && (
               <Input
-                icon={<User size={20} />}
+                icon={<User size={20} color={theme.textLight} />}
                 placeholder={t("login.fullName")}
                 value={fullName}
                 onChange={setFullName}
+                theme={theme}
               />
             )}
 
             {/* Email */}
             <Input
-              icon={<Mail size={20} />}
+              icon={<Mail size={20} color={theme.textLight} />}
               placeholder={t("login.email")}
               value={email}
               onChange={setEmail}
+              theme={theme}
             />
 
             {/* SIGNUP: Phone Number (no verification) */}
-            {!isLogin && (
-              <View style={styles.inputContainer}>
-                <Phone size={20} color={COLORS.textLight} />
-                <Text style={{ marginLeft: 10, fontSize: 16, color: COLORS.text, fontWeight: '600' }}>+91</Text>
-                <View style={{ width: 1, height: 20, backgroundColor: COLORS.inputBorder, marginHorizontal: 10 }} />
+              {!isLogin && (
+              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Phone size={20} color={theme.textLight} />
+                <Text style={{ marginLeft: 10, fontSize: 16, color: theme.text, fontWeight: '600' }}>+91</Text>
+                <View style={{ width: 1, height: 20, backgroundColor: theme.border, marginHorizontal: 10 }} />
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { color: theme.text }]}
                   placeholder={t("login.phone")}
-                  placeholderTextColor={COLORS.placeholder}
+                  placeholderTextColor={theme.textLight}
                   value={phone}
                   onChangeText={(text) => {
                     // Strip all non-digits
@@ -295,18 +299,18 @@ export default function LoginScreen(props: any) {
             )}
 
             {/* PASSWORD */}
-            <View style={styles.inputContainer}>
-              <Lock size={20} />
+            <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <Lock size={20} color={theme.textLight} />
               <TextInput
-                style={styles.input}
+                style={[styles.input, { color: theme.text }]}
                 placeholder={t("login.password")}
-                placeholderTextColor={COLORS.placeholder}
+                placeholderTextColor={theme.textLight}
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <EyeOff size={20} color={theme.textLight} /> : <Eye size={20} color={theme.textLight} />}
               </TouchableOpacity>
             </View>
 
@@ -322,14 +326,14 @@ export default function LoginScreen(props: any) {
 
             {/* SUBMIT */}
             <TouchableOpacity
-              style={styles.primaryBtn}
+              style={[styles.primaryBtn, { backgroundColor: theme.primary }]}
               onPress={handleSubmit}
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color={theme.background} />
               ) : (
-                <Text style={styles.primaryText}>
+                <Text style={[styles.primaryText, { color: theme.background }]}>
                   {isLogin ? t("login.loginBtn") : t("login.signupBtn")}
                 </Text>
               )}
@@ -337,18 +341,18 @@ export default function LoginScreen(props: any) {
 
             {/* GOOGLE */}
             <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.inputBorder }} />
-              <Text style={{ marginHorizontal: 10, color: COLORS.textLight, fontSize: 12 }}>OR</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: COLORS.inputBorder }} />
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
+              <Text style={{ marginHorizontal: 10, color: theme.textLight, fontSize: 12 }}>OR</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
             </View>
 
             <TouchableOpacity
-              style={styles.googleBtn}
+              style={[styles.googleBtn, { backgroundColor: theme.background, borderColor: theme.border }]}
               onPress={handleGoogleSignIn}
               disabled={googleLoading}
             >
               {googleLoading ? (
-                <ActivityIndicator color={COLORS.text} />
+                <ActivityIndicator color={theme.text} />
               ) : (
                 <>
                   <Image
@@ -357,14 +361,14 @@ export default function LoginScreen(props: any) {
                     }}
                     style={styles.googleIcon}
                   />
-                  <Text style={styles.googleText}>Continue with Google</Text>
+                  <Text style={[styles.googleText, { color: theme.text }]}>Continue with Google</Text>
                 </>
               )}
             </TouchableOpacity>
 
             {/* FOOTER */}
             <View style={styles.footer}>
-              <Text>
+              <Text style={{ color: theme.text }}>
                 {isLogin
                   ? t("login.noAccount")
                   : t("login.hasAccount")}
@@ -382,14 +386,14 @@ export default function LoginScreen(props: any) {
   );
 }
 
-function Input({ icon, placeholder, value, onChange }: any) {
+function Input({ icon, placeholder, value, onChange, theme }: any) {
   return (
-    <View style={styles.inputContainer}>
+    <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
       {icon}
       <TextInput
-        style={styles.input}
+        style={[styles.input, { color: theme.text }]}
         placeholder={placeholder}
-        placeholderTextColor={COLORS.placeholder}
+        placeholderTextColor={theme.textLight}
         value={value}
         onChangeText={onChange}
       />

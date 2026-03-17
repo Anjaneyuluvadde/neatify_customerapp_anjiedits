@@ -12,12 +12,15 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Header from "../components/Header";
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
+import { COLORS } from "../theme/colors";
 
 type TabType = "current" | "completed";
 
 export default function MyBookingsScreen() {
   const navigation = useNavigation<any>();
+  const { theme, isDark } = useTheme();
   const { t } = useLanguage();
 
   const [bookings, setBookings] = useState<any[]>([]);
@@ -86,24 +89,24 @@ export default function MyBookingsScreen() {
   /* ================= UI ================= */
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
 
       {/* ── APP HEADER (logo + icons) ── */}
       <Header />
 
       {/* ── FIXED TITLE + TABS ── */}
-      <View style={styles.header}>
-        <Text style={styles.title}>{t("bookings.title")}</Text>
+      <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+        <Text style={[styles.title, { color: theme.text }]}>{t("bookings.title")}</Text>
 
         <View style={styles.tabs}>
           <Pressable
-            style={[styles.tab, activeTab === "current" && styles.activeTab]}
+            style={[styles.tab, activeTab === "current" && { borderBottomColor: theme.text }]}
             onPress={() => setActiveTab("current")}
           >
             <Text
               style={[
                 styles.tabText,
-                activeTab === "current" && styles.activeTabText,
+                { color: activeTab === "current" ? theme.text : theme.textLight },
               ]}
             >
               {t("bookings.current")} ({currentBookings.length})
@@ -111,13 +114,13 @@ export default function MyBookingsScreen() {
           </Pressable>
 
           <Pressable
-            style={[styles.tab, activeTab === "completed" && styles.activeTab]}
+            style={[styles.tab, activeTab === "completed" && { borderBottomColor: theme.text }]}
             onPress={() => setActiveTab("completed")}
           >
             <Text
               style={[
                 styles.tabText,
-                activeTab === "completed" && styles.activeTabText,
+                { color: activeTab === "completed" ? theme.text : theme.textLight },
               ]}
             >
               {t("bookings.completed")} ({completedBookings.length})
@@ -128,23 +131,28 @@ export default function MyBookingsScreen() {
 
       {/* ── SCROLLABLE LIST ── */}
       <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={theme.primary}
+            colors={[theme.primary]}
+            progressBackgroundColor={theme.background}
+          />
         }
       >
         {visibleBookings.length === 0 ? (
-          <Text style={styles.empty}>
+          <Text style={[styles.empty, { color: theme.textLight }]}>
             {activeTab === "current"
               ? t("bookings.noCurrent")
               : t("bookings.noCompleted")}
           </Text>
         ) : (
           visibleBookings.map((b) => (
-            <View key={b.id} style={styles.card}>
+            <View key={b.id} style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
               <View style={styles.cardHeader}>
-                <Text style={styles.name}>{b.customer_name}</Text>
+                <Text style={[styles.name, { color: theme.text }]}>{b.customer_name}</Text>
 
                 <View
                   style={[
@@ -174,18 +182,18 @@ export default function MyBookingsScreen() {
                 </View>
               </View>
 
-              <Text style={styles.meta}>
+              <Text style={[styles.meta, { color: theme.textLight }]}>
                 {b.booking_date} {t("bookings.at")} {b.booking_time}
               </Text>
-              <Text style={styles.meta}>{t("bookings.total")}: ₹{b.total_amount}</Text>
+              <Text style={[styles.meta, { color: theme.textLight }]}>{t("bookings.total")}: ₹{b.total_amount}</Text>
 
               <Pressable
-                style={styles.viewBtn}
+                style={[styles.viewBtn, { backgroundColor: theme.primary }]}
                 onPress={() =>
                   navigation.navigate("BookingDetails", { booking: b })
                 }
               >
-                <Text style={styles.viewText}>{t("bookings.view")}</Text>
+                <Text style={[styles.viewText, { color: isDark ? theme.background : "#000" }]}>{t("bookings.view")}</Text>
               </Pressable>
             </View>
           ))
@@ -203,11 +211,9 @@ const styles = StyleSheet.create({
 
   /* FIXED HEADER */
   header: {
-    backgroundColor: "#fff",
     paddingHorizontal: 20,
     paddingTop: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#e5e7eb",
   },
   title: { fontSize: 26, fontWeight: "800", marginBottom: 12 },
 
@@ -239,11 +245,9 @@ const styles = StyleSheet.create({
   /* CARD */
   card: {
     borderWidth: 1,
-    borderColor: "#ddd",
     padding: 16,
     marginBottom: 16,
     borderRadius: 12,
-    backgroundColor: "#fff",
   },
   cardHeader: {
     flexDirection: "row",
@@ -251,7 +255,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   name: { fontWeight: "700", fontSize: 16 },
-  meta: { marginTop: 6, color: "#374151" },
+  meta: { marginTop: 6 },
 
   /* STATUS */
   statusBadge: {
@@ -259,11 +263,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
   },
-  pending: { backgroundColor: "#FEF3C7" },
-  assigned: { backgroundColor: "#DBEAFE" },
-  cancelled: { backgroundColor: "#FEE2E2" },
-  paymentFailed: { backgroundColor: "#FEE2E2" },
-  completed: { backgroundColor: "#DCFCE7" },
+  pending: { backgroundColor: "rgba(254, 243, 199, 0.4)" },
+  assigned: { backgroundColor: "rgba(219, 234, 254, 0.4)" },
+  cancelled: { backgroundColor: "rgba(254, 226, 226, 0.4)" },
+  paymentFailed: { backgroundColor: "rgba(254, 226, 226, 0.4)" },
+  completed: { backgroundColor: "rgba(220, 252, 231, 0.4)" },
   statusText: { fontSize: 12, fontWeight: "700" },
 
   /* VIEW BTN */
@@ -271,15 +275,13 @@ const styles = StyleSheet.create({
     marginTop: 14,
     paddingVertical: 12,
     borderRadius: 10,
-    backgroundColor: "#fbbf24",
     alignItems: "center",
   },
-  viewText: { color: "#000", fontWeight: "700", fontSize: 15 },
+  viewText: { fontWeight: "700", fontSize: 15 },
 
   empty: {
     textAlign: "center",
     marginTop: 40,
-    color: "#6b7280",
     fontSize: 15,
   },
 });

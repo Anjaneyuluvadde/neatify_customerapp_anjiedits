@@ -12,11 +12,14 @@ type Props = {
 };
 
 
-import ReviewModal from "../components/ReviewModal"; // Import ReviewModal
+import ReviewModal from "../components/ReviewModal";
+import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
+import { useTheme } from "../context/ThemeContext";
 
 export default function BookingDetailsScreen({ route }: Props) {
   const { booking: initialBooking } = route.params;
   const { t } = useLanguage();
+  const { theme, isDark } = useTheme();
   const { showAlert, showToast } = useNotification();
   const [booking, setBooking] = useState(initialBooking);
   const [isEligibleToCancel, setIsEligibleToCancel] = useState(false);
@@ -303,93 +306,94 @@ export default function BookingDetailsScreen({ route }: Props) {
   };
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <ScrollView
-        style={{ flex: 1, backgroundColor: "#fff" }}
+        style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={styles.container}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#EF4444"]} // Android
-            tintColor="#EF4444" // iOS
+            colors={[theme.primary]} // Android
+            tintColor={theme.primary} // iOS
+            progressBackgroundColor={theme.background}
           />
         }
       >
         {/* HEADER */}
-        <View style={styles.header}>
-          <Text style={styles.title}>{t("bookingDetails.title")}</Text>
+        <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+          <Text style={[styles.title, { color: theme.text }]}>{t("bookingDetails.title")}</Text>
         </View>
 
-        <Text style={styles.section}>{t("bookingDetails.customerDetails")}</Text>
-        <View style={styles.card}>
-          <Text style={styles.bold}>{booking.customer_name || 'N/A'}</Text>
-          <Text>{booking.email || 'N/A'}</Text>
-          <Text>{booking.phone_number || 'N/A'}</Text>
+        <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.customerDetails")}</Text>
+        <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <Text style={[styles.bold, { color: theme.text }]}>{booking.customer_name || 'N/A'}</Text>
+          <Text style={{ color: theme.text }}>{booking.email || 'N/A'}</Text>
+          <Text style={{ color: theme.text }}>{booking.phone_number || 'N/A'}</Text>
         </View>
 
-        <Text style={styles.section}>{t("bookingDetails.serviceAddress")}</Text>
-        <View style={styles.card}>
-          <Text>{booking.full_address || 'No address provided'}</Text>
+        <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.serviceAddress")}</Text>
+        <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <Text style={{ color: theme.text }}>{booking.full_address || 'No address provided'}</Text>
         </View>
 
         {/* SERVICES */}
-        <Text style={styles.section}>{t("bookingDetails.services")}</Text>
-        <View style={styles.card}>
+        <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.services")}</Text>
+        <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
           {services.length > 0 ? (
             services.map((s: any, index: number) => (
-              <View key={s.id || index} style={styles.serviceRow}>
+              <View key={s.id || index} style={[styles.serviceRow, { borderBottomColor: theme.border }]}>
                 <View style={{ flex: 1, marginRight: 12 }}>
-                  <Text style={styles.bold}>{s.title || s.service_name || 'Service'}</Text>
-                  <Text style={{ color: "#555", marginTop: 2 }}>{s.duration || 'N/A'}</Text>
+                  <Text style={[styles.bold, { color: theme.text }]}>{s.title || s.service_name || 'Service'}</Text>
+                  <Text style={{ color: theme.textLight, marginTop: 2 }}>{s.duration || 'N/A'}</Text>
                 </View>
-                <Text style={{ fontWeight: "700", flexShrink: 0 }}>
+                <Text style={{ fontWeight: "700", flexShrink: 0, color: theme.text }}>
                   {String(s.price || '0').startsWith('₹') ? s.price : `₹${s.price || 0}`}
                 </Text>
               </View>
             ))
           ) : (
-            <Text>{t("bookingDetails.noServices")}</Text>
+            <Text style={{ color: theme.text }}>{t("bookingDetails.noServices")}</Text>
           )}
         </View>
 
-        <Text style={styles.section}>{t("bookingDetails.schedule")}</Text>
-        <View style={styles.card}>
-          <Text>
+        <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.schedule")}</Text>
+        <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          <Text style={{ color: theme.text }}>
             {booking.booking_date || 'N/A'} at {booking.booking_time || 'N/A'}
           </Text>
         </View>
 
         {/* PAYMENT */}
-        <Text style={styles.section}>{t("bookingDetails.payment")}</Text>
-        <View style={styles.card}>
+        <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.payment")}</Text>
+        <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
           <View style={styles.row}>
-            <Text style={styles.bold}>{t("bookingDetails.total")}</Text>
-            <Text style={styles.bold}>₹{booking.total_amount}</Text>
+            <Text style={[styles.bold, { color: theme.text }]}>{t("bookingDetails.total")}</Text>
+            <Text style={[styles.bold, { color: theme.text }]}>₹{booking.total_amount}</Text>
           </View>
-          <Text>{t("bookingDetails.status")}: {booking.payment_status}</Text>
+          <Text style={{ color: theme.text }}>{t("bookingDetails.status")}: {booking.payment_status}</Text>
         </View>
 
         {/* STAFF ASSIGNMENT - Only show for non-completed bookings */}
         {booking.work_status !== "COMPLETED" && booking.work_status !== "CANCELLED" && booking.payment_status !== "failed" && (
           <>
-            <Text style={styles.section}>{t("bookingDetails.staffAssignment")}</Text>
-            <View style={styles.card}>
+            <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.staffAssignment")}</Text>
+            <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
               {!booking.assigned_staff_email ? (
-                <View style={styles.pendingContainer}>
-                  <Text style={styles.pendingText}>
+                <View style={[styles.pendingContainer, { backgroundColor: theme.surfaceVariant }]}>
+                  <Text style={[styles.pendingText, { color: theme.text }]}>
                     {t("bookingDetails.staffPending")}
                   </Text>
                 </View>
               ) : (
                 <>
-                  <View style={styles.assignedHeader}>
-                    <Text style={styles.assignedLabel}>{t("bookingDetails.staffAssigned")}</Text>
+                  <View style={[styles.assignedHeader, { backgroundColor: isDark ? "rgba(34, 197, 94, 0.2)" : "#dcfce7" }]}>
+                    <Text style={[styles.assignedLabel, { color: isDark ? "#4ade80" : "#166534" }]}>{t("bookingDetails.staffAssigned")}</Text>
                   </View>
 
                   {/* Staff Name & Phone */}
                   {staffName ? (
-                    <Text style={styles.staffNameText}>
+                    <Text style={[styles.staffNameText, { color: theme.text }]}>
                       {staffName}
                     </Text>
                   ) : null}
@@ -405,32 +409,32 @@ export default function BookingDetailsScreen({ route }: Props) {
                           }
                         });
                       }}
-                      style={styles.staffPhoneCard}
+                      style={[styles.staffPhoneCard, { backgroundColor: theme.background, borderColor: theme.border }]}
                     >
-                      <View style={styles.staffPhoneIcon}>
+                      <View style={[styles.staffPhoneIcon, { backgroundColor: theme.surfaceVariant }]}>
                         <Text style={{ fontSize: 18 }}>📞</Text>
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.staffPhoneLabel}>Call Staff</Text>
-                        <Text style={styles.staffPhoneNumber}>
+                        <Text style={[styles.staffPhoneLabel, { color: theme.textLight }]}>Call Staff</Text>
+                        <Text style={[styles.staffPhoneNumber, { color: theme.text }]}>
                           {staffPhone.replace(/^\+?91/, '')}
                         </Text>
                       </View>
                     </TouchableOpacity>
                   ) : null}
 
-                  <View style={{ borderBottomWidth: 1, borderBottomColor: "#e5e7eb", marginBottom: 16, marginTop: 4 }} />
+                  <View style={{ borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 16, marginTop: 4 }} />
 
                   <View style={styles.otpContainer}>
-                    <View style={styles.otpBox}>
-                      <Text style={styles.otpLabel}>{t("bookingDetails.startOtp")}</Text>
-                      <Text style={styles.otpCode}>{booking.startotp || "N/A"}</Text>
-                      <Text style={styles.otpSubtext}>{t("bookingDetails.startOtpHelp")}</Text>
+                    <View style={[styles.otpBox, { backgroundColor: theme.surfaceVariant }]}>
+                      <Text style={[styles.otpLabel, { color: theme.textLight }]}>{t("bookingDetails.startOtp")}</Text>
+                      <Text style={[styles.otpCode, { color: theme.text }]}>{booking.startotp || "N/A"}</Text>
+                      <Text style={[styles.otpSubtext, { color: theme.textLight }]}>{t("bookingDetails.startOtpHelp")}</Text>
                     </View>
-                    <View style={styles.otpBox}>
-                      <Text style={styles.otpLabel}>{t("bookingDetails.endOtp")}</Text>
-                      <Text style={styles.otpCode}>{booking.endotp || "N/A"}</Text>
-                      <Text style={styles.otpSubtext}>{t("bookingDetails.endOtpHelp")}</Text>
+                    <View style={[styles.otpBox, { backgroundColor: theme.surfaceVariant }]}>
+                      <Text style={[styles.otpLabel, { color: theme.textLight }]}>{t("bookingDetails.endOtp")}</Text>
+                      <Text style={[styles.otpCode, { color: theme.text }]}>{booking.endotp || "N/A"}</Text>
+                      <Text style={[styles.otpSubtext, { color: theme.textLight }]}>{t("bookingDetails.endOtpHelp")}</Text>
                     </View>
                   </View>
 
@@ -444,7 +448,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         )}
 
         {/* CANCEL BUTTON */}
-        {isEligibleToCancel && booking.work_status !== 'CANCELLED' && booking.payment_status !== 'failed' ? (
+        {isEligibleToCancel && booking.work_status !== 'CANCELLED' && booking.work_status !== 'COMPLETED' && booking.payment_status !== 'failed' ? (
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={handleCancelBooking}
@@ -481,22 +485,22 @@ export default function BookingDetailsScreen({ route }: Props) {
 
         {/* REVIEW SECTION (Only if Completed) */}
         {booking.work_status === "COMPLETED" && (
-          <View style={styles.reviewContainer}>
-            <Text style={styles.section}>{t("serviceDetail.reviews")}</Text>
-            <View style={styles.card}>
+          <View style={[styles.reviewContainer, { backgroundColor: theme.background }]}>
+            <Text style={[styles.section, { color: theme.textLight }]}>{t("serviceDetail.reviews")}</Text>
+            <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
               {review ? (
                 <View>
-                  <Text style={styles.reviewLabel}>{t("review.yourRating")}</Text>
+                  <Text style={[styles.reviewLabel, { color: theme.textLight }]}>{t("review.yourRating")}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
                     <Text style={{ fontSize: 24, fontWeight: "bold", color: "#F59E0B", marginRight: 8 }}>
                       {review.rating} ★
                     </Text>
-                    <Text style={{ color: "#64748b" }}>
+                    <Text style={{ color: theme.textLight }}>
                       {review.rating >= 4 ? "Extremely Good! 🤩" : review.rating >= 3 ? "Good 🙂" : "Could be better 😐"}
                     </Text>
                   </View>
                   {review.comment ? (
-                    <Text style={{ fontStyle: "italic", color: "#334155", marginBottom: 12 }}>
+                    <Text style={{ fontStyle: "italic", color: theme.text, marginBottom: 12 }}>
                       "{review.comment}"
                     </Text>
                   ) : null}
@@ -537,43 +541,51 @@ export default function BookingDetailsScreen({ route }: Props) {
             behavior="padding"
             style={styles.modalOverlay}
           >
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{t("bookingDetails.cancelModalTitle")}</Text>
-              <Text style={styles.modalSubtitle}>
-                {t("bookingDetails.cancelModalSubtitle")}
-              </Text>
+            <AnimatedGradientBorder
+              borderRadius={20}
+              borderWidth={2}
+              animationSpeed={3}
+              style={{ width: "100%", maxWidth: 360 }}
+            >
+              <View style={[styles.modalContent, { width: "100%", borderRadius: 20, margin: 0, backgroundColor: theme.background }]}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>{t("bookingDetails.cancelModalTitle")}</Text>
+                <Text style={[styles.modalSubtitle, { color: theme.textLight }]}>
+                  {t("bookingDetails.cancelModalSubtitle")}
+                </Text>
 
-              <TextInput
-                style={styles.reasonInput}
-                placeholder={t("bookingDetails.cancelReasonPlaceholder")}
-                value={cancelReason}
-                onChangeText={setCancelReason}
-                multiline
-                textAlignVertical="top"
-              />
+                <TextInput
+                  style={[styles.reasonInput, { backgroundColor: theme.surfaceVariant, color: theme.text, borderColor: theme.border }]}
+                  placeholderTextColor={theme.textLight}
+                  placeholder={t("bookingDetails.cancelReasonPlaceholder")}
+                  value={cancelReason}
+                  onChangeText={setCancelReason}
+                  multiline
+                  textAlignVertical="top"
+                />
 
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalCancelBtn]}
-                  onPress={() => setShowCancelModal(false)}
-                  disabled={cancelling}
-                >
-                  <Text style={styles.modalCancelText}>{t("bookingDetails.dontCancel")}</Text>
-                </TouchableOpacity>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalCancelBtn]}
+                    onPress={() => setShowCancelModal(false)}
+                    disabled={cancelling}
+                  >
+                    <Text style={styles.modalCancelText}>{t("bookingDetails.dontCancel")}</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.modalBtn, styles.modalConfirmBtn]}
-                  onPress={confirmCancellation}
-                  disabled={cancelling}
-                >
-                  {cancelling ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.modalConfirmText}>{t("bookingDetails.confirmCancel")}</Text>
-                  )}
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, styles.modalConfirmBtn]}
+                    onPress={confirmCancellation}
+                    disabled={cancelling}
+                  >
+                    {cancelling ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.modalConfirmText}>{t("bookingDetails.confirmCancel")}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
+            </AnimatedGradientBorder>
           </KeyboardAvoidingView>
         </Modal>
 
@@ -606,7 +618,6 @@ const styles = StyleSheet.create({
 
   card: {
     borderWidth: 1,
-    borderColor: "#ddd",
     borderRadius: 12,
     padding: 15,
   },
@@ -628,7 +639,6 @@ const styles = StyleSheet.create({
   // Staff Assignment Styles
   pendingContainer: {
     padding: 15,
-    backgroundColor: "#f3f4f6",
     borderRadius: 8,
     alignItems: "center",
   },
@@ -653,9 +663,7 @@ const styles = StyleSheet.create({
   },
   otpBox: {
     flex: 1,
-    backgroundColor: "#fef3c7",
-    borderWidth: 2,
-    borderColor: "#fbbf24",
+    borderWidth: 1,
     borderRadius: 12,
     padding: 12,
     alignItems: "center",
@@ -732,14 +740,8 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: "100%",
-    backgroundColor: "#fff",
     borderRadius: 20,
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 10,
   },
   modalTitle: {
     fontSize: 20,
@@ -755,14 +757,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   reasonInput: {
-    backgroundColor: "#f8fafc",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
     borderRadius: 12,
     padding: 14,
     height: 100,
     fontSize: 15,
-    color: "#333",
     marginBottom: 24,
   },
   modalActions: {
@@ -777,9 +776,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   modalCancelBtn: {
-    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
   },
   modalConfirmBtn: {
     backgroundColor: "#EF4444",

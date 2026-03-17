@@ -1,6 +1,12 @@
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 import React from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../context/ThemeContext";
 
+import CustomDrawerContent from "../components/CustomDrawerContent";
 import BookingDetailsScreen from "../screens/BookingDetailsScreen";
 import BookingScreen from "../screens/BookingScreen";
 import CheckoutScreen from "../screens/CheckoutScreen";
@@ -14,6 +20,7 @@ import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
 
 import { Service } from "../types/service";
+import { COLORS } from "../theme/colors";
 
 /* ================= TYPES ================= */
 
@@ -22,51 +29,37 @@ export type SelectedService = {
   title: string;
   duration: string;
   price: string;
-
-  // optional fields from Supabase (used in ServiceDetail)
   description?: string | null;
   image_url?: string | null;
-
-  // optional (used in cart UI)
   image?: string;
-
-  // pricing fields
   original_price?: string | null;
   discount_percent?: number | null;
   discount_label?: string | null;
   tax_percent?: number | null;
-
-  // quantity (for addons, tracks how many times added, max 3)
   quantity?: number;
 };
 
 export type RootStackParamList = {
   Login: undefined;
-  Home: undefined;
-
-  // Service detail shows ONE service
+  HomeDrawer: {
+    screen?: string;
+    params?: any;
+  };
   ServiceDetail: {
     service?: Service;
     serviceId?: string;
   };
-
   Booking: {
     services: SelectedService[];
   };
-
   Schedule: {
     services: SelectedService[];
   };
-
-  // ✅ ONLY Checkout (Payment removed)
   Checkout: {
     services: SelectedService[];
     total: number;
     bookingDateText: string;
   };
-
-  Profile: undefined;
-  MyBookings: undefined;
   ResetPassword: {
     access_token?: string;
     refresh_token?: string;
@@ -77,41 +70,177 @@ export type RootStackParamList = {
   CompleteProfile: undefined;
 };
 
-/* ================= STACK ================= */
+export type HomeStackParamList = {
+  HomeMain: undefined;
+  ServiceDetail: { service?: Service; serviceId?: string };
+  Booking: { services: SelectedService[] };
+  Schedule: { services: SelectedService[] };
+  Checkout: { services: SelectedService[]; total: number; bookingDateText: string };
+};
+
+export type BookingsStackParamList = {
+  BookingsMain: undefined;
+  BookingDetails: { booking: any };
+};
+
+export type AuthenticatedStackParamList = {
+  MainTabs: undefined;
+  ResetPassword: { access_token?: string; refresh_token?: string };
+  CompleteProfile: undefined;
+};
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const AuthenticatedStack = createNativeStackNavigator<AuthenticatedStackParamList>();
+const HomeStack = createNativeStackNavigator<HomeStackParamList>();
+const BookingsStack = createNativeStackNavigator<BookingsStackParamList>();
+const Drawer = createDrawerNavigator();
+const Tab = createBottomTabNavigator();
+
+function HomeTabStack() {
+  const { theme } = useTheme();
+  return (
+    <HomeStack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        contentStyle: { backgroundColor: theme.background }
+      }}
+    >
+      <HomeStack.Screen name="HomeMain" component={HomeScreen as any} />
+      <HomeStack.Screen name="ServiceDetail" component={ServiceDetailScreen as any} />
+      <HomeStack.Screen name="Booking" component={BookingScreen as any} />
+      <HomeStack.Screen name="Schedule" component={ScheduleScreen as any} />
+      <HomeStack.Screen name="Checkout" component={CheckoutScreen as any} />
+    </HomeStack.Navigator>
+  );
+}
+
+function BookingsTabStack() {
+  const { theme } = useTheme();
+  return (
+    <BookingsStack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        contentStyle: { backgroundColor: theme.background }
+      }}
+    >
+      <BookingsStack.Screen name="BookingsMain" component={MyBookingsScreen as any} />
+      <BookingsStack.Screen name="BookingDetails" component={BookingDetailsScreen as any} />
+    </BookingsStack.Navigator>
+  );
+}
+
+function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const { theme, isDark } = useTheme();
+
+  return (
+    <Tab.Navigator
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ focused, color, size }) => {
+          let iconName: any;
+          if (route.name === "HomeTab") {
+            iconName = focused ? "home" : "home-outline";
+          } else if (route.name === "MyBookingsTab") {
+            iconName = focused ? "calendar" : "calendar-outline";
+          } else if (route.name === "ProfileTab") {
+            iconName = focused ? "person" : "person-outline";
+          }
+          return <Ionicons name={iconName} size={size} color={color} />;
+        },
+        tabBarActiveTintColor: theme.primary,
+        tabBarInactiveTintColor: isDark ? theme.textLight : "gray",
+        tabBarStyle: {
+          height: 65 + (insets.bottom > 0 ? insets.bottom : 0),
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
+          paddingTop: 8,
+          borderTopWidth: 1,
+          borderTopColor: theme.border,
+          backgroundColor: theme.background,
+          elevation: 8,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -2 },
+          shadowOpacity: isDark ? 0.3 : 0.1,
+          shadowRadius: 4,
+        },
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: "700",
+          marginBottom: insets.bottom > 0 ? -4 : 4,
+        },
+        sceneContainerStyle: { backgroundColor: theme.background }
+      })}
+    >
+      <Tab.Screen 
+        name="HomeTab" 
+        component={HomeTabStack} 
+        options={{ tabBarLabel: "Home" }} 
+      />
+      <Tab.Screen 
+        name="MyBookingsTab" 
+        component={BookingsTabStack} 
+        options={{ tabBarLabel: "Bookings" }} 
+      />
+      <Tab.Screen 
+        name="ProfileTab" 
+        component={ProfileScreen as any} 
+        options={{ tabBarLabel: "Profile" }} 
+      />
+    </Tab.Navigator>
+  );
+}
+
+function AuthenticatedScreens() {
+  const { theme } = useTheme();
+  return (
+    <AuthenticatedStack.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        contentStyle: { backgroundColor: theme.background }
+      }}
+    >
+      <AuthenticatedStack.Screen name="MainTabs" component={MainTabs} />
+      <AuthenticatedStack.Screen name="ResetPassword" component={ResetPasswordScreen as any} />
+      <AuthenticatedStack.Screen name="CompleteProfile" component={CompleteProfileScreen as any} />
+    </AuthenticatedStack.Navigator>
+  );
+}
+
+function HomeDrawer() {
+  return (
+    <Drawer.Navigator
+      id="root-drawer"
+      drawerContent={(props) => <CustomDrawerContent {...props} />}
+      screenOptions={{
+        headerShown: false,
+        drawerType: "front",
+        drawerPosition: "right",
+        drawerStyle: { width: "85%" },
+      }}
+    >
+      <Drawer.Screen name="AuthenticatedScreens" component={AuthenticatedScreens} />
+    </Drawer.Navigator>
+  );
+}
 
 type AppNavigatorProps = {
   initialRouteName: keyof RootStackParamList;
 };
 
-/* ================= NAVIGATOR ================= */
+/* ================= MAIN NAVIGATOR ================= */
 
 export default function AppNavigator({ initialRouteName }: AppNavigatorProps) {
+  const { theme } = useTheme();
   return (
     <Stack.Navigator
-      initialRouteName={initialRouteName}
-      screenOptions={{ headerShown: false }}
+      initialRouteName={initialRouteName as any}
+      screenOptions={{ 
+        headerShown: false,
+        contentStyle: { backgroundColor: theme.background }
+      }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="ServiceDetail" component={ServiceDetailScreen} />
-
-      <Stack.Screen name="Booking" component={BookingScreen} />
-      <Stack.Screen name="Schedule" component={ScheduleScreen} />
-
-      {/* ✅ Checkout is final step */}
-      <Stack.Screen name="Checkout" component={CheckoutScreen} />
-
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="MyBookings" component={MyBookingsScreen} />
-      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen} />
-      <Stack.Screen
-        name="BookingDetails"
-        component={BookingDetailsScreen}
-      />
-      {/* ✅ Complete Profile Screen */}
-      <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+      <Stack.Screen name="HomeDrawer" component={HomeDrawer} />
     </Stack.Navigator>
   );
 }

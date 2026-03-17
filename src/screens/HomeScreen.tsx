@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -9,6 +9,7 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -19,13 +20,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import CategoryTabs from "../components/CategoryTabs";
 import Header from "../components/Header";
 import ServiceCard from "../components/ServiceCard";
+import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext"; // @ts-ignore
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
 
 const { width, height } = Dimensions.get("window");
-const SLIDER_HEIGHT = height * 0.25;
+const SLIDER_HEIGHT = height * 0.22; // Slightly reduced for better fit
 
 // ✅ Fuzzy Search Helper (Levenshtein Distance)
 const getLevenshteinDistance = (a: string, b: string) => {
@@ -60,33 +63,27 @@ let hasShownPopupThisSession = false;
 
 export default function HomeScreen({ navigation }: any) {
   const { t } = useLanguage();
+  const { theme } = useTheme();
   const [services, setServices] = useState<Service[]>([]);
   const [activeCategory, setActiveCategory] = useState("BATHROOM");
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // ✅ FIX: Works for both local require + remote uri
+  // ✅ Hero banners state
   const [heroBanners, setHeroBanners] = useState<ImageSourcePropType[]>([]);
 
-  // ✅ Slider refs
+  // ✅ Refs
   const sliderRef = useRef<FlatList>(null);
+  const pagerRef = useRef<FlatList>(null);
+  const isProgrammaticScroll = useRef(false);
+  const popupSliderRef = useRef<FlatList>(null);
+
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isUserSwiping, setIsUserSwiping] = useState(false);
 
-  // ✅ Services list ref for scroll
-  const servicesListRef = useRef<FlatList>(null);
-
-  // ✅ Store slider Y layout for smooth scroll
-  const [sliderLayoutY, setSliderLayoutY] = useState(0);
-
-  // ✅ Popup slider ref
-  const popupSliderRef = useRef<FlatList>(null);
-
-  // ✅ Popup container width for paging
-  const POPUP_WIDTH = Math.min(width - 48, 360); // matches maxWidth: 360, padding: 24 each side
-
   // ✅ Popup state
+  const POPUP_WIDTH = Math.min(width - 48, 360);
   const [popupType, setPopupType] = useState<"APP_POPUP" | "OFFERS" | null>(null);
   const [appPopups, setAppPopups] = useState<{ title: string; description: string | null; image_url: string | null }[]>([]);
   const [popupIndex, setPopupIndex] = useState(0);
@@ -101,25 +98,7 @@ export default function HomeScreen({ navigation }: any) {
 
   const fetchServices = async () => {
     setLoading(true);
-
-    const { data, error } = await supabase.from("services").select(`
-        id,
-        title,
-        service_type,
-        category_order,
-        duration,
-        price,
-        image,
-        gallery_images,
-        description,
-        sort_order,
-        original_price,
-        discount_percent,
-        work_includes,
-        work_not_included,
-        discount_label,
-        tax_percent
-      `);
+    const { data, error } = await supabase.from("services").select("*");
 
     if (error) {
       console.log("Supabase error:", error);
@@ -129,7 +108,7 @@ export default function HomeScreen({ navigation }: any) {
 
     let serviceList = data || [];
 
-    // ✅ Fetch active offers and merge into services
+    // ✅ Fetch active offers
     const { data: offersData } = await supabase
       .from("offers")
       .select("title, offer_percentage")
@@ -166,15 +145,12 @@ export default function HomeScreen({ navigation }: any) {
   };
 
   const fetchHeroBanners = async () => {
-    console.log("🎯 Fetching hero banners from Supabase...");
-
     const { data, error } = await supabase
       .from("hero_banners")
       .select("image_path")
       .eq("is_active", true)
       .order("priority", { ascending: true });
 
-    // ✅ Fallback images
     const fallbackBanners: ImageSourcePropType[] = [
       require("../../assets/images/1.png"),
       require("../../assets/images/2.png"),
@@ -182,57 +158,39 @@ export default function HomeScreen({ navigation }: any) {
     ];
 
     if (error) {
-      console.error("❌ Error fetching hero banners:", error);
-      console.log("📦 Falling back to hardcoded banners");
       setHeroBanners(fallbackBanners);
       return;
     }
 
     if (data && data.length > 0) {
-      console.log("✅ Hero banners fetched successfully:", data);
-
-      // ✅ IMPORTANT FIX: Your bucket name is "hero-images"
       const bannerUrls = data.map(
-        (banner) =>
-          `${SUPABASE_URL}/storage/v1/object/public/hero-images/${banner.image_path}`
+        (banner) => ({ uri: `${SUPABASE_URL}/storage/v1/object/public/hero-images/${banner.image_path}` })
       );
-
-      console.log("🖼️ Banner URLs:", bannerUrls);
-
-      // ✅ Convert to ImageSourcePropType format
-      setHeroBanners(bannerUrls.map((url) => ({ uri: url })));
+      setHeroBanners(bannerUrls);
       return;
     }
-
-    console.log("⚠️ No hero banners found in DB, using fallback banners");
     setHeroBanners(fallbackBanners);
   };
 
-  /* ================= POPUPS ================= */
-
   const fetchPopups = async () => {
-    // ✅ Only show popup once per app session
     if (hasShownPopupThisSession) return;
 
-    // 1. Check app_popups first (priority)
     const { data: popupData } = await supabase
       .from("app_popups")
-      .select("title, description, image_url")
+      .select("*")
       .eq("is_active", true);
 
     if (popupData && popupData.length > 0) {
       setAppPopups(popupData);
-      setPopupIndex(0);
       setPopupType("APP_POPUP");
       setShowPopup(true);
       hasShownPopupThisSession = true;
       return;
     }
 
-    // 2. Fallback: Check offers
     const { data: offersData } = await supabase
       .from("offers")
-      .select("service_type, title, offer_percentage, description")
+      .select("*")
       .eq("is_offer_enabled", true);
 
     if (offersData && offersData.length > 0) {
@@ -243,600 +201,289 @@ export default function HomeScreen({ navigation }: any) {
     }
   };
 
-  const handleOfferPress = (offerTitle: string) => {
-    // Find the matching service from already-fetched services
-    const matchedService = services.find(
-      (s) => s.title.toLowerCase() === offerTitle.toLowerCase()
-    );
-    setShowPopup(false);
-    if (matchedService) {
-      navigation.navigate("ServiceDetail", { service: matchedService });
-    }
-  };
-
   const onRefresh = async () => {
     setRefreshing(true);
     await Promise.all([fetchServices(), fetchHeroBanners(), fetchPopups()]);
     setRefreshing(false);
   };
 
-  /* ✅ Tabs with dynamic order from database */
   const tabs = useMemo(() => {
-    // Extract unique service types with their category_order
     const categoryMap = new Map<string, number>();
-
-    (services || []).forEach((service) => {
-      if (service.service_type) {
-        // Store the category_order for each service_type
-        // If multiple services have the same type, they should have the same order
-        if (!categoryMap.has(service.service_type)) {
-          categoryMap.set(service.service_type, service.category_order ?? 9999);
-        }
+    services.forEach((s) => {
+      if (s.service_type && !categoryMap.has(s.service_type)) {
+        categoryMap.set(s.service_type, s.category_order ?? 999);
       }
     });
 
-    // Convert map to array and sort by category_order
-    const sortedCategories = Array.from(categoryMap.entries())
-      .sort((a, b) => a[1] - b[1]) // Sort by category_order (a[1] and b[1] are the order values)
-      .map(([type, _]) => type); // Extract just the service_type
+    const sorted = Array.from(categoryMap.entries()).sort((a, b) => a[1] - b[1]);
 
-    const finalTabs = [
-      ...sortedCategories.map((type) => ({
-        label: type
-          .toLowerCase()
-          .replace(/_/g, " ")
-          .replace(/\b\w/g, (c) => c.toUpperCase()),
+    return [
+      ...sorted.map(([type]) => ({
+        label: type.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
         value: type,
       })),
       { label: t("home.allServices"), value: "ALL" },
     ];
-
-    console.log("📋 Category Tabs Order:", finalTabs.map(t => t.label).join(", "));
-
-    return finalTabs;
   }, [services, t]);
 
-  /* ✅ Search + Filter (Fuzzy) + Sort */
-  const filteredServices = useMemo(() => {
-    const filtered = services.filter((service) => {
+  const getServicesForCategory = useCallback(
+    (categoryValue: string) => {
       const search = (searchText ?? "").trim().toLowerCase();
-      const title = (service.title ?? "").toLowerCase();
-      const serviceType = (service.service_type ?? "").toLowerCase();
+      return services.filter((service) => {
+        const matchesCategory = categoryValue === "ALL" || service.service_type === categoryValue;
+        if (!matchesCategory) return false;
+        if (search.length === 0) return true;
 
-      const matchesCategory =
-        activeCategory === "ALL" || service.service_type === activeCategory;
+        const title = (service.title ?? "").toLowerCase();
+        const type = (service.service_type ?? "").toLowerCase();
+        
+        if (title.includes(search) || type.includes(search)) return true;
+        if (search.length > 3 && getLevenshteinDistance(search, type) <= 2) return true;
+        return false;
+      }).sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
+    },
+    [services, searchText]
+  );
 
-      if (!matchesCategory) return false;
-      if (search.length === 0) return true;
-
-      // ✅ If search is very small, normal contains search
-      if (search.length < 3) {
-        return title.includes(search) || serviceType.includes(search);
+  const handleCategoryChange = useCallback(
+    (value: string) => {
+      setActiveCategory(value);
+      const idx = tabs.findIndex((t) => t.value === value);
+      if (idx >= 0 && pagerRef.current) {
+        isProgrammaticScroll.current = true;
+        pagerRef.current.scrollToIndex({ index: idx, animated: true });
+        setTimeout(() => { isProgrammaticScroll.current = false; }, 400);
       }
+    },
+    [tabs]
+  );
 
-      // ✅ Fuzzy: matches category
-      if (getLevenshteinDistance(search, serviceType) <= 2) return true;
-      if (serviceType.includes(search)) return true;
+  const onPagerScrollEnd = useCallback(
+    (e: any) => {
+      if (isProgrammaticScroll.current) return;
+      const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+      if (tabs[idx]) setActiveCategory(tabs[idx].value);
+    },
+    [tabs]
+  );
 
-      // ✅ Fuzzy: matches words in title
-      const titleWords = title.split(" ");
-      const isWordMatch = titleWords.some((word) => {
-        const cleanWord = word.replace(/[^a-z0-9]/g, "");
-        return (
-          cleanWord.includes(search) ||
-          (cleanWord.length > 3 && getLevenshteinDistance(search, cleanWord) <= 2)
-        );
-      });
+  const renderCategoryPage = useCallback(
+    ({ item: tab }: { item: { label: string; value: string } }) => {
+      const pageServices = getServicesForCategory(tab.value);
+      return (
+        <View style={{ width }}>
+          {pageServices.length === 0 ? (
+            <View style={{ marginTop: 60, alignItems: "center" }}>
+              <Ionicons name="search-outline" size={40} color={theme.textMuted} />
+              <Text style={{ marginTop: 12, color: theme.textMuted, fontSize: 16 }}>{t("home.noResults")}</Text>
+            </View>
+          ) : (
+            <FlatList
+              data={pageServices}
+              keyExtractor={(s) => s.id}
+              numColumns={2}
+              scrollEnabled={false}
+              renderItem={({ item }) => (
+                <ServiceCard service={item} onPress={() => navigation.navigate("ServiceDetail", { service: item })} />
+              )}
+              contentContainerStyle={{ padding: 8, paddingBottom: 16 }}
+            />
+          )}
+        </View>
+      );
+    },
+    [getServicesForCategory, navigation, t, theme]
+  );
 
-      if (isWordMatch) return true;
+  const activeCategoryServices = getServicesForCategory(activeCategory);
+  const CARD_ROW_HEIGHT = 350; // Better estimation for service cards
+  const serviceRows = Math.max(1, Math.ceil(activeCategoryServices.length / 2));
+  const pagerHeight = activeCategoryServices.length === 0 ? 250 : serviceRows * CARD_ROW_HEIGHT + 32;
 
-      return title.includes(search);
-    });
-
-    // ✅ Sort by sort_order
-    return filtered.sort((a, b) => {
-      const aOrder = a.sort_order ?? 9999;
-      const bOrder = b.sort_order ?? 9999;
-      return aOrder - bOrder;
-    });
-  }, [services, searchText, activeCategory]);
-
-  // ✅ Auto slide every 3 seconds
+  // Auto-slide effect
   useEffect(() => {
     if (heroBanners.length <= 1) return;
-
     const interval = setInterval(() => {
-      if (isUserSwiping) return;
-      setCurrentSlide((prev) => {
-        const next = (prev + 1) % heroBanners.length;
-        sliderRef.current?.scrollToIndex({ index: next, animated: true });
-        return next;
-      });
-    }, 3000);
-
+      if (!isUserSwiping) {
+        setCurrentSlide((prev) => {
+          const next = (prev + 1) % heroBanners.length;
+          sliderRef.current?.scrollToIndex({ index: next, animated: true });
+          return next;
+        });
+      }
+    }, 4000);
     return () => clearInterval(interval);
   }, [heroBanners.length, isUserSwiping]);
 
-  const onSlideEnd = (e: any) => {
-    const slideWidth = width - 36;
-    const index = Math.round(e.nativeEvent.contentOffset.x / slideWidth);
-    setCurrentSlide(index);
-  };
-
-  // ✅ When user clicks slider → scroll to services list
-  const scrollToServices = () => {
-    servicesListRef.current?.scrollToOffset({
-      offset: sliderLayoutY + SLIDER_HEIGHT - 10,
-      animated: true,
-    });
-  };
-
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top"]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
+      <StatusBar barStyle={theme.background === "#FFFFFF" ? "dark-content" : "light-content"} />
 
       {loading ? (
-        <ActivityIndicator size="large" style={{ marginTop: 40 }} />
+        <View style={styles.center}><ActivityIndicator size="large" color={COLORS.saffron} /></View>
       ) : (
-        <FlatList
-          ref={servicesListRef}
-          data={filteredServices}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
+        <ScrollView
+          stickyHeaderIndices={[heroBanners.length > 0 ? 2 : 1]} // Dynamic sticky index
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-          }
-          contentContainerStyle={{
-            padding: 8,
-            backgroundColor: "#fff",
-            flexGrow: 1,
-          }}
-          ListHeaderComponent={
-            <View style={{ backgroundColor: "#fff" }}>
-              {/* ✅ Search */}
-              <Header
-                searchText={searchText}
-                onSearchChange={(text) => {
-                  setSearchText(text);
-
-                  const match = tabs.find(
-                    (t) =>
-                      t.value !== "ALL" &&
-                      t.label.toLowerCase() === text.trim().toLowerCase()
-                  );
-
-                  if (match) {
-                    setActiveCategory(match.value);
-                  } else {
-                    setActiveCategory("ALL");
-                  }
-                }}
-              />
-
-              {/* ✅ Slider */}
-              {heroBanners.length > 0 && (
-                <View onLayout={(e) => setSliderLayoutY(e.nativeEvent.layout.y)}>
-                  <View
-                    style={{
-                      height: SLIDER_HEIGHT,
-                      marginHorizontal: 10,
-                      marginTop: 10,
-                      borderRadius: 16,
-                      overflow: "hidden",
-                      backgroundColor: "#f2f2f2",
-                    }}
-                  >
-                    <FlatList
-                      ref={sliderRef}
-                      data={heroBanners}
-                      keyExtractor={(_, index) => index.toString()}
-                      horizontal
-                      pagingEnabled
-                      showsHorizontalScrollIndicator={false}
-                      onMomentumScrollEnd={onSlideEnd}
-                      onScrollBeginDrag={() => setIsUserSwiping(true)}
-                      onScrollEndDrag={() => setIsUserSwiping(false)}
-                      onScrollToIndexFailed={(info) => {
-                        setTimeout(() => {
-                          sliderRef.current?.scrollToIndex({
-                            index: info.index,
-                            animated: true,
-                          });
-                        }, 300);
-                      }}
-                      renderItem={({ item }) => (
-                        <Pressable
-                          onPress={scrollToServices}
-                          style={{ width: width - 36, height: SLIDER_HEIGHT }}
-                        >
-                          <Image
-                            source={item}
-                            style={{ width: "100%", height: "100%" }}
-                            resizeMode="cover"
-                            onError={(e) =>
-                              console.log("❌ Banner load error:", e)
-                            }
-                          />
-                        </Pressable>
-                      )}
-                    />
-
-                    {/* ✅ Dots */}
-                    <View
-                      pointerEvents="none"
-                      style={{
-                        position: "absolute",
-                        bottom: 10,
-                        alignSelf: "center",
-                        flexDirection: "row",
-                        gap: 6,
-                      }}
-                    >
-                      {heroBanners.map((_, i) => (
-                        <View
-                          key={i}
-                          style={{
-                            width: currentSlide === i ? 18 : 8,
-                            height: 8,
-                            borderRadius: 20,
-                            backgroundColor:
-                              currentSlide === i
-                                ? "#fff"
-                                : "rgba(255,255,255,0.5)",
-                          }}
-                        />
-                      ))}
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* ✅ Tabs */}
-              <CategoryTabs
-                activeTab={activeCategory}
-                onChange={setActiveCategory}
-                tabs={tabs}
-              />
-            </View>
-          }
-          ListEmptyComponent={
-            <View style={{ marginTop: 60, alignItems: "center" }}>
-              <Ionicons name="search-outline" size={40} color={COLORS.gray} />
-              <Text style={{ marginTop: 12, color: COLORS.gray, fontSize: 16 }}>
-                {t("home.noResults")}
-              </Text>
-            </View>
-          }
-          renderItem={({ item }) => (
-            <ServiceCard
-              service={item}
-              onPress={() => {
-                navigation.navigate("ServiceDetail", {
-                  service: item,
-                });
-              }}
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={theme.primary}
+              colors={[theme.primary]}
+              progressBackgroundColor={theme.background}
             />
+          }
+          contentContainerStyle={{ flexGrow: 1, backgroundColor: theme.background, paddingBottom: 100 }}
+        >
+          {/* 1. Header (Logo + Search) */}
+          <Header
+            searchText={searchText}
+            onSearchChange={(text) => {
+              setSearchText(text);
+              const match = tabs.find(t => t.value !== "ALL" && t.label.toLowerCase() === text.trim().toLowerCase());
+              if (match) handleCategoryChange(match.value);
+            }}
+          />
+
+          {/* 2. Hero Slider */}
+          {heroBanners.length > 0 && (
+            <View style={{ height: SLIDER_HEIGHT, marginHorizontal: 12, marginTop: 8, borderRadius: 20, overflow: "hidden", backgroundColor: theme.surfaceVariant }}>
+              <FlatList
+                ref={sliderRef}
+                data={heroBanners}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => setCurrentSlide(Math.round(e.nativeEvent.contentOffset.x / (width - 44)))}
+                onScrollBeginDrag={() => setIsUserSwiping(true)}
+                onScrollEndDrag={() => setIsUserSwiping(false)}
+                renderItem={({ item }) => (
+                  <View style={{ width: width - 44, height: SLIDER_HEIGHT }}>
+                    <Image source={item} style={{ width: "100%", height: "100%" }} contentFit="cover" />
+                  </View>
+                )}
+              />
+              <View style={styles.dots} pointerEvents="none">
+                {heroBanners.map((_, i) => (
+                  <View key={i} style={[styles.dot, { backgroundColor: currentSlide === i ? "#fff" : "rgba(255,255,255,0.4)", width: currentSlide === i ? 20 : 8 }]} />
+                ))}
+              </View>
+            </View>
           )}
-        />
-      )}
 
-      {/* ================= POPUP MODALS ================= */}
+          {/* 3. Category Tabs (Sticky) */}
+          <CategoryTabs activeTab={activeCategory} onChange={handleCategoryChange} tabs={tabs} />
 
-      {/* App Popup (Festive/General) */}
-      <Modal
-        visible={showPopup && popupType === "APP_POPUP"}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPopup(false)}
-      >
-        <View style={popupStyles.overlay}>
-          <View style={[popupStyles.appPopupContainer, { width: POPUP_WIDTH }]}>
-            {/* Close Button */}
-            <Pressable style={popupStyles.closeBtn} onPress={() => setShowPopup(false)}>
-              <Ionicons name="close" size={22} color="#fff" />
-            </Pressable>
+          {/* 4. Title Heading */}
+          <View style={[styles.titleRow, { backgroundColor: theme.background }]}>
+            <View style={styles.titleBar} />
+            <Text style={[styles.titleText, { color: theme.text }]}>
+              {activeCategory === "ALL" ? t("home.allServices") : tabs.find(t => t.value === activeCategory)?.label ?? "Services"}
+            </Text>
+          </View>
 
-            {/* Swipeable content */}
+          {/* 5. Horizontal Pager with nested non-scrolling service lists */}
+          <View style={{ height: pagerHeight }}>
             <FlatList
-              ref={popupSliderRef}
-              data={appPopups}
-              keyExtractor={(_, i) => i.toString()}
+              ref={pagerRef}
+              data={tabs}
               horizontal
               pagingEnabled
               showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) => {
-                const idx = Math.round(e.nativeEvent.contentOffset.x / POPUP_WIDTH);
-                setPopupIndex(idx);
-              }}
-              onScrollToIndexFailed={(info) => {
-                setTimeout(() => {
-                  popupSliderRef.current?.scrollToIndex({ index: info.index, animated: true });
-                }, 300);
-              }}
-              renderItem={({ item }) => (
-                <View style={{ width: POPUP_WIDTH }}>
-                  {/* Image */}
-                  {item.image_url ? (
-                    <Image
-                      source={{ uri: item.image_url }}
-                      style={popupStyles.appPopupImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[popupStyles.appPopupImage, { backgroundColor: "#f1f5f9" }]} />
-                  )}
+              onMomentumScrollEnd={onPagerScrollEnd}
+              renderItem={renderCategoryPage}
+              initialScrollIndex={tabs.findIndex(t => t.value === activeCategory)}
+              getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+            />
+          </View>
+        </ScrollView>
+      )}
 
-                  {/* Content */}
-                  <View style={popupStyles.appPopupContent}>
-                    <Text style={popupStyles.appPopupTitle}>{item.title}</Text>
-                    {item.description ? (
-                      <Text style={popupStyles.appPopupDesc}>{item.description}</Text>
-                    ) : null}
+      {/* Popups (Festive & Offers) */}
+      <Modal visible={showPopup && !!popupType} transparent animationType="fade">
+        <View style={popupStyles.overlay}>
+          <AnimatedGradientBorder borderRadius={20} borderWidth={2} animationSpeed={3} style={{ width: popupType === "APP_POPUP" ? POPUP_WIDTH : "90%" }}>
+            <View style={[popupStyles.container, { backgroundColor: theme.background }]}>
+              <Pressable style={popupStyles.closeBtn} onPress={() => setShowPopup(false)}>
+                <Ionicons name="close" size={22} color="#fff" />
+              </Pressable>
+
+              {popupType === "APP_POPUP" ? (
+                <View>
+                  <FlatList
+                    ref={popupSliderRef}
+                    data={appPopups}
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    onMomentumScrollEnd={(e) => setPopupIndex(Math.round(e.nativeEvent.contentOffset.x / POPUP_WIDTH))}
+                    renderItem={({ item }) => (
+                      <View style={{ width: POPUP_WIDTH }}>
+                        {item.image_url ? <Image source={{ uri: item.image_url }} style={popupStyles.appImage} /> : <View style={[popupStyles.appImage, { backgroundColor: theme.surfaceVariant }]} />}
+                        <View style={popupStyles.appContent}>
+                          <Text style={[popupStyles.appTitle, { color: theme.text }]}>{item.title}</Text>
+                          {item.description && <Text style={[popupStyles.appDesc, { color: theme.textLight }]}>{item.description}</Text>}
+                        </View>
+                      </View>
+                    )}
+                  />
+                  {appPopups.length > 1 && (
+                    <View style={popupStyles.dotsRow}>
+                      {appPopups.map((_, i) => <View key={i} style={[popupStyles.pDot, i === popupIndex && { backgroundColor: theme.primary, width: 18 }]} />)}
+                    </View>
+                  )}
+                </View>
+              ) : (
+                <View style={popupStyles.offersView}>
+                  <View style={[popupStyles.offHeader, { backgroundColor: theme.primary }]}>
+                    <Text style={popupStyles.offHeaderText}>🎉 Special Offers</Text>
                   </View>
+                  {activeOffers.map((off, i) => (
+                    <Pressable key={i} style={[popupStyles.offItem, { borderBottomColor: theme.border }]} onPress={() => { setShowPopup(false); navigation.navigate("ServiceDetail", { service: services.find(s => s.title === off.title) }) }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={popupStyles.offType}>{off.service_type}</Text>
+                        <Text style={[popupStyles.offTitle, { color: theme.text }]}>{off.title}</Text>
+                      </View>
+                      <View style={[popupStyles.offBadge, { backgroundColor: theme.primary + "20", borderColor: theme.primary }]}><Text style={{ color: theme.primary, fontWeight: '800' }}>{off.offer_percentage}% OFF</Text></View>
+                    </Pressable>
+                  ))}
+                  <Pressable style={[popupStyles.footerBtn, { backgroundColor: theme.primary }]} onPress={() => setShowPopup(false)}><Text style={{ fontWeight: '700' }}>Browse Services</Text></Pressable>
                 </View>
               )}
-            />
-
-            {/* Navigation Arrows + Dots (only if multiple popups) */}
-            {appPopups.length > 1 && (
-              <View style={popupStyles.navRow}>
-                <Pressable
-                  onPress={() => {
-                    const newIdx = Math.max(0, popupIndex - 1);
-                    setPopupIndex(newIdx);
-                    popupSliderRef.current?.scrollToIndex({ index: newIdx, animated: true });
-                  }}
-                  style={[popupStyles.arrowBtn, popupIndex === 0 && { opacity: 0.3 }]}
-                  disabled={popupIndex === 0}
-                >
-                  <Ionicons name="chevron-back" size={22} color="#1e293b" />
-                </Pressable>
-
-                <View style={popupStyles.dotsRow}>
-                  {appPopups.map((_, i) => (
-                    <View
-                      key={i}
-                      style={[
-                        popupStyles.dot,
-                        i === popupIndex && popupStyles.dotActive,
-                      ]}
-                    />
-                  ))}
-                </View>
-
-                <Pressable
-                  onPress={() => {
-                    const newIdx = Math.min(appPopups.length - 1, popupIndex + 1);
-                    setPopupIndex(newIdx);
-                    popupSliderRef.current?.scrollToIndex({ index: newIdx, animated: true });
-                  }}
-                  style={[popupStyles.arrowBtn, popupIndex === appPopups.length - 1 && { opacity: 0.3 }]}
-                  disabled={popupIndex === appPopups.length - 1}
-                >
-                  <Ionicons name="chevron-forward" size={22} color="#1e293b" />
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
-
-      {/* Offers Popup */}
-      <Modal
-        visible={showPopup && popupType === "OFFERS"}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowPopup(false)}
-      >
-        <View style={popupStyles.overlay}>
-          <View style={popupStyles.offersContainer}>
-            {/* Header */}
-            <View style={popupStyles.offersHeader}>
-              <Text style={popupStyles.offersHeaderTitle}>🎉 Special Offers</Text>
-              <Pressable onPress={() => setShowPopup(false)}>
-                <Ionicons name="close-circle" size={28} color="#fff" />
-              </Pressable>
             </View>
-
-            {/* Offer Items */}
-            {activeOffers.map((offer, index) => {
-              const badgeText = `${offer.offer_percentage}% OFF`;
-
-              return (
-                <Pressable
-                  key={index}
-                  style={popupStyles.offerItem}
-                  onPress={() => handleOfferPress(offer.title)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={popupStyles.offerServiceType}>{offer.service_type}</Text>
-                    <Text style={popupStyles.offerTitle}>{offer.title}</Text>
-                    {offer.description ? (
-                      <Text style={popupStyles.offerDesc}>{offer.description}</Text>
-                    ) : null}
-                  </View>
-                  <View style={popupStyles.offerBadge}>
-                    <Text style={popupStyles.offerBadgeText}>{badgeText}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={20} color="#F59E0B" style={{ marginLeft: 6 }} />
-                </Pressable>
-              );
-            })}
-
-            {/* Footer CTA */}
-            <Pressable style={popupStyles.offersCloseBtn} onPress={() => setShowPopup(false)}>
-              <Text style={popupStyles.offersCloseBtnText}>Browse All Services</Text>
-            </Pressable>
-          </View>
+          </AnimatedGradientBorder>
         </View>
       </Modal>
     </SafeAreaView>
   );
 }
 
-/* ================= POPUP STYLES ================= */
+const styles = StyleSheet.create({
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  dots: { position: "absolute", bottom: 12, alignSelf: "center", flexDirection: "row", gap: 6 },
+  dot: { height: 8, borderRadius: 4 },
+  titleRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
+  titleBar: { width: 4, height: 22, backgroundColor: COLORS.saffron, borderRadius: 2 },
+  titleText: { fontSize: 20, fontWeight: "800" },
+});
 
 const popupStyles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24,
-  },
-  // App Popup (Festive)
-  appPopupContainer: {
-    width: "100%",
-    maxWidth: 360,
-    borderRadius: 20,
-    overflow: "hidden",
-    backgroundColor: "#fff",
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  closeBtn: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    zIndex: 10,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    borderRadius: 20,
-    width: 32,
-    height: 32,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  appPopupImage: {
-    width: "100%",
-    height: 220,
-  },
-  appPopupContent: {
-    padding: 20,
-    alignItems: "center",
-  },
-  appPopupTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#1e293b",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  appPopupDesc: {
-    fontSize: 14,
-    color: "#64748b",
-    textAlign: "center",
-    lineHeight: 20,
-  },
-  navRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    gap: 12,
-  },
-  arrowBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#f1f5f9",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dotsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#cbd5e1",
-  },
-  dotActive: {
-    width: 18,
-    backgroundColor: "#F59E0B",
-  },
-  // Offers Popup
-  offersContainer: {
-    width: "100%",
-    maxWidth: 380,
-    borderRadius: 20,
-    overflow: "hidden",
-    backgroundColor: "#fff",
-    elevation: 10,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  offersHeader: {
-    backgroundColor: "#F59E0B",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  offersHeaderTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#fff",
-  },
-  offerItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1f5f9",
-  },
-  offerServiceType: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: "#94a3b8",
-    textTransform: "uppercase",
-    letterSpacing: 1,
-  },
-  offerTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1e293b",
-    marginTop: 2,
-  },
-  offerDesc: {
-    fontSize: 12,
-    color: "#64748b",
-    marginTop: 2,
-  },
-  offerBadge: {
-    backgroundColor: "#FEF3C7",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: "#FCD34D",
-  },
-  offerBadgeText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#92400E",
-  },
-  offersCloseBtn: {
-    backgroundColor: "#F59E0B",
-    margin: 16,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  offersCloseBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "center", alignItems: "center" },
+  container: { borderRadius: 20, overflow: "hidden" },
+  closeBtn: { position: "absolute", top: 12, right: 12, zIndex: 20, backgroundColor: "rgba(0,0,0,0.4)", borderRadius: 20, padding: 4 },
+  appImage: { width: "100%", height: 200 },
+  appContent: { padding: 20, alignItems: "center" },
+  appTitle: { fontSize: 18, fontWeight: "800", textAlign: "center" },
+  appDesc: { fontSize: 13, textAlign: "center", marginTop: 6, lineHeight: 18 },
+  dotsRow: { flexDirection: "row", justifyContent: "center", paddingBottom: 16, gap: 6 },
+  pDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#ccc" },
+  offersView: { width: "100%" },
+  offHeader: { padding: 16, alignItems: "center" },
+  offHeaderText: { fontSize: 18, fontWeight: "800", color: "#000" },
+  offItem: { flexDirection: "row", padding: 16, borderBottomWidth: 1, alignItems: "center" },
+  offType: { fontSize: 10, color: "#999", fontWeight: "700" },
+  offTitle: { fontSize: 14, fontWeight: "700", marginTop: 2 },
+  offBadge: { padding: 6, borderRadius: 8, borderWidth: 1 },
+  footerBtn: { margin: 16, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
 });

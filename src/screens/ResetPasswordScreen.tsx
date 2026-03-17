@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 
 export default function ResetPasswordScreen() {
     const navigation = useNavigation<any>();
@@ -28,6 +29,7 @@ export default function ResetPasswordScreen() {
     const isSettingPassword = !!(accessToken && refreshToken);
 
     const { showAlert, showToast } = useNotification();
+    const { theme, isDark } = useTheme();
 
     const [email, setEmail] = useState("");
     const [newPassword, setNewPassword] = useState("");
@@ -90,19 +92,19 @@ export default function ResetPasswordScreen() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
-                        <Text style={styles.backText}>← Back to Login</Text>
+                        <Text style={[styles.backText, { color: theme.primary }]}>← Back to Login</Text>
                     </TouchableOpacity>
 
-                    <Text style={styles.title}>
+                    <Text style={[styles.title, { color: theme.text }]}>
                         {isSettingPassword ? "Set New Password" : "Forgot Password?"}
                     </Text>
-                    <Text style={styles.subtitle}>
+                    <Text style={[styles.subtitle, { color: theme.textLight }]}>
                         {isSettingPassword
                             ? "Enter and confirm your new password."
                             : "Enter your email and we'll send you a reset link."}
@@ -111,49 +113,49 @@ export default function ResetPasswordScreen() {
                     {isSettingPassword ? (
                         /* ── SET NEW PASSWORD ─────────────── */
                         <>
-                            <View style={styles.inputContainer}>
-                                <Lock size={20} color={COLORS.textLight} />
+                            <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                <Lock size={20} color={theme.textLight} />
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, { color: theme.text }]}
                                     placeholder="New Password"
-                                    placeholderTextColor={COLORS.placeholder}
+                                    placeholderTextColor={theme.textLight}
                                     secureTextEntry
                                     value={newPassword}
                                     onChangeText={setNewPassword}
                                 />
                             </View>
-                            <View style={styles.inputContainer}>
-                                <Lock size={20} color={COLORS.textLight} />
+                            <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                <Lock size={20} color={theme.textLight} />
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, { color: theme.text }]}
                                     placeholder="Confirm New Password"
-                                    placeholderTextColor={COLORS.placeholder}
+                                    placeholderTextColor={theme.textLight}
                                     secureTextEntry
                                     value={confirmPassword}
                                     onChangeText={setConfirmPassword}
                                 />
                             </View>
-                            <TouchableOpacity style={styles.btn} onPress={handleUpdatePassword} disabled={loading}>
-                                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Update Password</Text>}
+                            <TouchableOpacity style={[styles.btn, { backgroundColor: theme.primary }]} onPress={handleUpdatePassword} disabled={loading}>
+                                {loading ? <ActivityIndicator color={theme.background} /> : <Text style={[styles.btnText, { color: theme.background }]}>Update Password</Text>}
                             </TouchableOpacity>
                         </>
                     ) : (
                         /* ── SEND RESET EMAIL ─────────────── */
                         <>
-                            <View style={styles.inputContainer}>
-                                <Mail size={20} color={COLORS.textLight} />
+                            <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                <Mail size={20} color={theme.textLight} />
                                 <TextInput
-                                    style={styles.input}
+                                    style={[styles.input, { color: theme.text }]}
                                     placeholder="Your email address"
-                                    placeholderTextColor={COLORS.placeholder}
+                                    placeholderTextColor={theme.textLight}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                     value={email}
                                     onChangeText={setEmail}
                                 />
                             </View>
-                            <TouchableOpacity style={styles.btn} onPress={handleSendResetEmail} disabled={loading}>
-                                {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Send Reset Link</Text>}
+                            <TouchableOpacity style={[styles.btn, { backgroundColor: theme.primary }]} onPress={handleSendResetEmail} disabled={loading}>
+                                {loading ? <ActivityIndicator color={theme.background} /> : <Text style={[styles.btnText, { color: theme.background }]}>Send Reset Link</Text>}
                             </TouchableOpacity>
                         </>
                     )}

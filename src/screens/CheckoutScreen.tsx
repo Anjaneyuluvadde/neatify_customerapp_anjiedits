@@ -20,12 +20,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import Header from "../components/Header";
 import LoadingOverlay from "../components/LoadingOverlay";
+import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 
+import { useTheme } from "../context/ThemeContext";
 import { useLanguage } from "../context/LanguageContext";
+import { processPayment } from "../lib/paymentService";
 import { supabase } from "../lib/supabase";
 import { RootStackParamList, SelectedService } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
-import { processPayment } from "../lib/paymentService";
 
 /* ================= TYPES ================= */
 
@@ -85,6 +87,7 @@ const formatDisplayPhone = (phone: string | undefined | null) => {
 export default function CheckoutScreen({ route }: Props) {
   const navigation = useNavigation<any>();
   const { t } = useLanguage();
+  const { theme, isDark } = useTheme();
   const { services, bookingDateText } = route.params;
 
   const [userId, setUserId] = useState<string | null>(null);
@@ -297,7 +300,7 @@ export default function CheckoutScreen({ route }: Props) {
           const addressWithoutPincode = profileData.address
             .replace(/\s*-\s*\d{6}\s*$/, "")
             .trim();
-          
+
           setManualAddress(addressWithoutPincode);
           setIsAddressSummaryMode(true);
           setHasUsedLocationFetch(true);
@@ -312,7 +315,7 @@ export default function CheckoutScreen({ route }: Props) {
           type: 'warning'
         });
         setShowAlertModal(true);
-        navigation.navigate("Profile");
+        navigation.navigate("MainTabs", { screen: "ProfileTab" });
       }
 
       setLoadingProfile(false);
@@ -394,7 +397,7 @@ export default function CheckoutScreen({ route }: Props) {
 
             // Try to extract a clean street address for the manual field
             setManualAddress(fullAddr || "");
-            
+
             setIsAddressSummaryMode(true);
             setHasUsedLocationFetch(true);
           } else {
@@ -751,34 +754,34 @@ export default function CheckoutScreen({ route }: Props) {
   /* ================= UI ================= */
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <Header />
 
-      <View style={styles.headerContainer}>
-        <Text style={styles.headerTitle}>{t("checkout.title")}</Text>
+      <View style={[styles.headerContainer, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>{t("checkout.title")}</Text>
       </View>
 
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={styles.container}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: theme.background }}>
+        <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.container}>
           {/* ORDER SUMMARY */}
-          <View style={styles.card}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>{t("checkout.orderSummary")}</Text>
+          <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <View style={[styles.sectionHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>{t("checkout.orderSummary")}</Text>
             </View>
 
             {services.map((s: SelectedService) => (
               <View key={s.id} style={styles.row}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.serviceTitle}>
+                  <Text style={[styles.serviceTitle, { color: theme.text }]}>
                     {s.title}
                     {s.quantity && s.quantity > 1 ? ` (x${s.quantity})` : ""}
                   </Text>
-                  <Text style={styles.muted}>{s.duration}</Text>
+                  <Text style={[styles.muted, { color: theme.textLight }]}>{s.duration}</Text>
                 </View>
 
                 {/* ✅ Pricing with discount - Calculate total based on quantity */}
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.price}>
+                  <Text style={[styles.price, { color: theme.text }]}>
                     ₹{(parseFloat(s.price.replace(/[^\d]/g, "")) * (s.quantity || 1)).toLocaleString("en-IN")}
                   </Text>
                   {(s.discount_label || (s.discount_percent && Number(s.discount_percent) > 0)) ? (
@@ -790,15 +793,15 @@ export default function CheckoutScreen({ route }: Props) {
               </View>
             ))}
 
-            <View style={styles.divider} />
-            <Text style={styles.muted}>{t("checkout.totalDuration")}: {totalDuration}</Text>
+            <View style={[styles.divider, { backgroundColor: theme.border }]} />
+            <Text style={[styles.muted, { color: theme.textLight }]}>{t("checkout.totalDuration")}: {totalDuration}</Text>
 
             {/* ✅ Original Total (strikethrough if there are savings) */}
             {totalSavings > 0 ? (
               <View style={{ marginTop: 8 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-                  <Text style={{ color: "#777", fontSize: 14 }}>{t("checkout.originalTotal")}</Text>
-                  <Text style={{ color: "#777", fontSize: 14, textDecorationLine: "line-through" }}>
+                  <Text style={{ color: theme.textLight, fontSize: 14 }}>{t("checkout.originalTotal")}</Text>
+                  <Text style={{ color: theme.textLight, fontSize: 14, textDecorationLine: "line-through" }}>
                     ₹{totalOriginalPrice.toLocaleString("en-IN")}
                   </Text>
                 </View>
@@ -813,15 +816,15 @@ export default function CheckoutScreen({ route }: Props) {
 
             {/* ✅ Subtotal */}
             <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-              <Text style={{ fontSize: 15, fontWeight: "600" }}>Subtotal</Text>
-              <Text style={{ fontSize: 15, fontWeight: "600" }}>₹{totalPrice.toLocaleString("en-IN")}</Text>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>Subtotal</Text>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>₹{totalPrice.toLocaleString("en-IN")}</Text>
             </View>
 
             {/* ✅ Tax */}
             {totalTax > 0 && (
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
-                <Text style={{ fontSize: 14, color: "#666" }}>Tax</Text>
-                <Text style={{ fontSize: 14, color: "#666" }}>₹{parseFloat(totalTax.toFixed(2)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                <Text style={{ fontSize: 14, color: theme.textLight }}>Tax</Text>
+                <Text style={{ fontSize: 14, color: theme.textLight }}>₹{parseFloat(totalTax.toFixed(2)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
               </View>
             )}
 
@@ -839,7 +842,7 @@ export default function CheckoutScreen({ route }: Props) {
 
             {/* ✅ Grand Total */}
             <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>{t("checkout.totalAmount")}</Text>
+              <Text style={[styles.totalLabel, { color: theme.text }]}>{t("checkout.totalAmount")}</Text>
               <Text style={styles.totalValue}>₹{parseFloat(grandTotal.toFixed(2)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
             </View>
           </View>
@@ -876,24 +879,24 @@ export default function CheckoutScreen({ route }: Props) {
           )}
 
           {/* ADDRESS */}
-          <Text style={styles.sectionHeading}>{t("checkout.serviceAddress")}</Text>
+          <Text style={[styles.sectionHeading, { color: theme.text }]}>{t("checkout.serviceAddress")}</Text>
 
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
             {/* User Details */}
             <View style={{ marginBottom: 12 }}>
-              <Text style={styles.label}>{t("checkout.name")}</Text>
+              <Text style={[styles.label, { color: theme.text }]}>{t("checkout.name")}</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
                 value={profile?.full_name}
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.textLight}
                 onChangeText={(text) =>
                   setProfile((prev) => (prev ? { ...prev, full_name: text } : null))
                 }
               />
 
-              <Text style={styles.label}>{t("checkout.phone")}</Text>
+              <Text style={[styles.label, { color: theme.text }]}>{t("checkout.phone")}</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
                 value={profile?.phone}
                 onChangeText={(text) => {
                   const onlyDigits = text.replace(/\D/g, "");
@@ -902,158 +905,158 @@ export default function CheckoutScreen({ route }: Props) {
                 keyboardType="phone-pad"
                 maxLength={10}
                 placeholder="10-digit mobile number"
-                placeholderTextColor="#999"
+                placeholderTextColor={theme.textLight}
               />
             </View>
 
             {/* Address Inputs */}
             <View style={{ marginTop: 8 }}>
-            
-            <View style={styles.addressSection}>
-              {/* ✅ SMART ADDRESS CARD (Shown after Use Location) */}
-              {isAddressSummaryMode && hasUsedLocationFetch ? (
-                <View style={styles.summaryCard}>
-                  <View style={styles.summaryContent}>
-                    <Pressable 
-                      style={styles.locationIconCircle}
-                      onPress={handleViewOnMap}
-                    >
-                      <Ionicons name="location" size={20} color="#1e293b" />
-                    </Pressable>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.summaryTitle}>Selected Location</Text>
-                      <Text style={styles.summaryText}>
-                        {`${manualAddress}${pincode ? " - " + pincode : ""}`}
-                      </Text>
+
+              <View style={[styles.addressSection, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                {/* ✅ SMART ADDRESS CARD (Shown after Use Location) */}
+                {isAddressSummaryMode && hasUsedLocationFetch ? (
+                  <View style={[styles.summaryCard, { backgroundColor: theme.surfaceVariant }]}>
+                    <View style={styles.summaryContent}>
+                      <Pressable
+                        style={[styles.locationIconCircle, { backgroundColor: theme.background, borderColor: theme.border }]}
+                        onPress={handleViewOnMap}
+                      >
+                        <Ionicons name="location" size={20} color={theme.text} />
+                      </Pressable>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.summaryTitle, { color: theme.textLight }]}>Selected Location</Text>
+                        <Text style={[styles.summaryText, { color: theme.text }]}>
+                          {`${manualAddress}${pincode ? " - " + pincode : ""}`}
+                        </Text>
+                      </View>
+                      <Pressable
+                        style={[styles.editButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                        onPress={() => setIsAddressSummaryMode(false)}
+                      >
+                        <Ionicons name="create-outline" size={18} color={theme.text} />
+                        <Text style={[styles.editButtonText, { color: theme.text }]}>Edit</Text>
+                      </Pressable>
                     </View>
-                    <Pressable
-                      style={styles.editButton}
-                      onPress={() => setIsAddressSummaryMode(false)}
-                    >
-                      <Ionicons name="create-outline" size={18} color="#1e293b" />
-                      <Text style={styles.editButtonText}>Edit</Text>
-                    </Pressable>
+                  </View>
+                ) : (
+                  <View style={{ padding: 16 }}>
+                    <Text style={[styles.label, { color: theme.text }]}>{t("checkout.fullAddress")}</Text>
+                    <TextInput
+                      style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12, backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+                      value={manualAddress}
+                      onChangeText={setManualAddress}
+                      placeholder="e.g. Plot no 1821, flat no 402, Sri sai nilayam, Pragathi nagar, Hyderabad"
+                      placeholderTextColor={theme.textLight}
+                      multiline
+                      numberOfLines={4}
+                    />
+
+                    <Text style={[styles.label, { color: theme.text }]}>{t("checkout.pincode")}</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+                      value={pincode}
+                      onChangeText={(text) => {
+                        const onlyDigits = text.replace(/\D/g, "");
+                        setPincode(onlyDigits);
+                      }}
+                      keyboardType="numeric"
+                      maxLength={6}
+                      placeholder="500090"
+                      placeholderTextColor={theme.textLight}
+                    />
+
+                    {/* ✅ DONE BUTTON (Return to summary) */}
+                    {hasUsedLocationFetch && (
+                      <Pressable
+                        style={styles.doneButton}
+                        onPress={async () => {
+                          setIsAddressSummaryMode(true);
+                          // ✅ Instantly geocode when finishing manual entry
+                          handleManualGeocode(`${manualAddress}, ${pincode}`);
+                        }}
+                      >
+                        <Ionicons name="checkmark-done" size={18} color="#fff" />
+                        <Text style={styles.doneButtonText}>Done Editing</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+              </View>
+
+              {/* ✅ FULL WIDTH PINCODE STATUS BADGE (Always visible or after pincode entered) */}
+              {pincode.length === 6 && (
+                <View
+                  style={[
+                    styles.serviceStatusBox,
+                    checkingPincode
+                      ? styles.serviceCheckingBox
+                      : isPincodeServiceable
+                        ? styles.serviceAvailableBox
+                        : styles.serviceUnavailableBox,
+                    { marginTop: 12 }
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      checkingPincode
+                        ? "time-outline"
+                        : isPincodeServiceable
+                          ? "checkmark-circle"
+                          : "close-circle"
+                    }
+                    size={18}
+                    color={
+                      checkingPincode
+                        ? "#64748b"
+                        : isPincodeServiceable
+                          ? "#10B981"
+                          : "#EF4444"
+                    }
+                  />
+
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.serviceStatusText}>
+                      {checkingPincode
+                        ? t("checkout.checking")
+                        : isPincodeServiceable
+                          ? t("checkout.serviceAvailable")
+                          : t("checkout.serviceNotAvailable")}
+                    </Text>
+
+                    {!checkingPincode && (
+                      <Text style={styles.serviceSubText} numberOfLines={1}>
+                        {isPincodeServiceable
+                          ? "You can continue with booking."
+                          : "We will be available soon in your area."}
+                      </Text>
+                    )}
                   </View>
                 </View>
-              ) : (
-                <View style={{ padding: 16 }}>
-                  <Text style={styles.label}>{t("checkout.fullAddress")}</Text>
-                  <TextInput
-                    style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12 }]}
-                    value={manualAddress}
-                    onChangeText={setManualAddress}
-                    placeholder="e.g. Plot no 1821, flat no 402, Sri sai nilayam, Pragathi nagar, Hyderabad"
-                    placeholderTextColor="#999"
-                    multiline
-                    numberOfLines={4}
-                  />
-
-                  <Text style={styles.label}>{t("checkout.pincode")}</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={pincode}
-                    onChangeText={(text) => {
-                      const onlyDigits = text.replace(/\D/g, "");
-                      setPincode(onlyDigits);
-                    }}
-                    keyboardType="numeric"
-                    maxLength={6}
-                    placeholder="500090"
-                    placeholderTextColor="#999"
-                  />
-
-                  {/* ✅ DONE BUTTON (Return to summary) */}
-                  {hasUsedLocationFetch && (
-                    <Pressable
-                      style={styles.doneButton}
-                      onPress={async () => {
-                        setIsAddressSummaryMode(true);
-                        // ✅ Instantly geocode when finishing manual entry
-                        handleManualGeocode(`${manualAddress}, ${pincode}`);
-                      }}
-                    >
-                      <Ionicons name="checkmark-done" size={18} color="#fff" />
-                      <Text style={styles.doneButtonText}>Done Editing</Text>
-                    </Pressable>
-                  )}
-                </View>
               )}
+
+              <Pressable onPress={fetchCurrentLocation} style={[styles.secondaryBtn, { backgroundColor: theme.background, borderColor: theme.primary }]} disabled={fetchingLocation}>
+                {fetchingLocation ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <ActivityIndicator size="small" color={theme.primary} />
+                    <Text style={[styles.secondaryBtnText, { color: theme.primary }]}>Fetching Location...</Text>
+                  </View>
+                ) : (
+                  <Text style={[styles.secondaryBtnText, { color: theme.primary }]}>{t("checkout.useLocation")}</Text>
+                )}
+              </Pressable>
             </View>
-
-            {/* ✅ FULL WIDTH PINCODE STATUS BADGE (Always visible or after pincode entered) */}
-            {pincode.length === 6 && (
-              <View
-                style={[
-                  styles.serviceStatusBox,
-                  checkingPincode
-                    ? styles.serviceCheckingBox
-                    : isPincodeServiceable
-                      ? styles.serviceAvailableBox
-                      : styles.serviceUnavailableBox,
-                  { marginTop: 12 }
-                ]}
-              >
-                <Ionicons
-                  name={
-                    checkingPincode
-                      ? "time-outline"
-                      : isPincodeServiceable
-                        ? "checkmark-circle"
-                        : "close-circle"
-                  }
-                  size={18}
-                  color={
-                    checkingPincode
-                      ? "#64748b"
-                      : isPincodeServiceable
-                        ? "#10B981"
-                        : "#EF4444"
-                  }
-                />
-
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.serviceStatusText}>
-                    {checkingPincode
-                      ? t("checkout.checking")
-                      : isPincodeServiceable
-                        ? t("checkout.serviceAvailable")
-                        : t("checkout.serviceNotAvailable")}
-                  </Text>
-
-                  {!checkingPincode && (
-                    <Text style={styles.serviceSubText} numberOfLines={1}>
-                      {isPincodeServiceable
-                        ? "You can continue with booking."
-                        : "We will be available soon in your area."}
-                    </Text>
-                  )}
-                </View>
-              </View>
-            )}
-
-            <Pressable onPress={fetchCurrentLocation} style={styles.secondaryBtn} disabled={fetchingLocation}>
-              {fetchingLocation ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <ActivityIndicator size="small" color={COLORS.saffron ?? "#F4C430"} />
-                  <Text style={styles.secondaryBtnText}>Fetching Location...</Text>
-                </View>
-              ) : (
-                <Text style={styles.secondaryBtnText}>{t("checkout.useLocation")}</Text>
-              )}
-            </Pressable>
           </View>
-        </View>
 
           {/* CHECKBOXES */}
           <View style={styles.checkboxContainer}>
             <Pressable style={styles.checkboxRow} onPress={() => setAcceptedPolicies(!acceptedPolicies)}>
-              <View style={[styles.checkbox, acceptedPolicies && styles.checkboxChecked]}>
-                {acceptedPolicies && <Ionicons name="checkmark" size={16} color={COLORS.buttonText} />}
+              <View style={[styles.checkbox, acceptedPolicies && { backgroundColor: theme.primary, borderColor: theme.primary }, !acceptedPolicies && { borderColor: theme.primary, backgroundColor: theme.background }]}>
+                {acceptedPolicies && <Ionicons name="checkmark" size={16} color={theme.background} />}
               </View>
-              <Text style={[styles.checkboxLabel, { flex: 0 }]}>
+              <Text style={[styles.checkboxLabel, { flex: 0, color: theme.text }]}>
                 {t("checkout.acceptPolicies")}{" "}
                 <Text
-                  style={styles.linkText}
+                  style={[styles.linkText, { color: theme.primary }]}
                   onPress={(e) => {
                     e.stopPropagation();
                     setShowPoliciesModal(true);
@@ -1065,13 +1068,13 @@ export default function CheckoutScreen({ route }: Props) {
             </Pressable>
 
             <Pressable style={styles.checkboxRow} onPress={() => setAcceptedTerms(!acceptedTerms)}>
-              <View style={[styles.checkbox, acceptedTerms && styles.checkboxChecked]}>
-                {acceptedTerms && <Ionicons name="checkmark" size={16} color={COLORS.buttonText} />}
+              <View style={[styles.checkbox, acceptedTerms && { backgroundColor: theme.primary, borderColor: theme.primary }, !acceptedTerms && { borderColor: theme.primary, backgroundColor: theme.background }]}>
+                {acceptedTerms && <Ionicons name="checkmark" size={16} color={theme.background} />}
               </View>
-              <Text style={[styles.checkboxLabel, { flex: 0 }]}>
+              <Text style={[styles.checkboxLabel, { flex: 0, color: theme.text }]}>
                 {t("checkout.acceptTerms")}{" "}
                 <Text
-                  style={styles.linkText}
+                  style={[styles.linkText, { color: theme.primary }]}
                   onPress={(e) => {
                     e.stopPropagation();
                     setShowTermsModal(true);
@@ -1087,6 +1090,7 @@ export default function CheckoutScreen({ route }: Props) {
           <Pressable
             style={[
               styles.payBtn,
+              { backgroundColor: theme.primary },
               (isProcessing ||
                 checkingPincode ||
                 !acceptedPolicies ||
@@ -1103,7 +1107,7 @@ export default function CheckoutScreen({ route }: Props) {
               !isPincodeServiceable
             }
           >
-            <Text style={styles.payText}>
+            <Text style={[styles.payText, { color: theme.background }]}>
               {isProcessing
                 ? t("checkout.processing")
                 : checkingPincode
@@ -1127,25 +1131,25 @@ export default function CheckoutScreen({ route }: Props) {
         onRequestClose={() => setShowPoliciesModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t("checkout.policies")}</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>{t("checkout.policies")}</Text>
               <Pressable onPress={() => setShowPoliciesModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={theme.text} />
               </Pressable>
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               <Text style={styles.modalHeading}>Privacy & Data Protection</Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textLight }]}>
                 {policies?.user_policies
                   ? policies.user_policies.replace(/^- /gm, '• ')
                   : "Loading policies..."}
               </Text>
             </ScrollView>
 
-            <Pressable style={styles.modalCloseButton} onPress={() => setShowPoliciesModal(false)}>
-              <Text style={styles.modalCloseButtonText}>Close</Text>
+            <Pressable style={[styles.modalCloseButton, { backgroundColor: theme.primary }]} onPress={() => setShowPoliciesModal(false)}>
+              <Text style={[styles.modalCloseButtonText, { color: theme.background }]}>Close</Text>
             </Pressable>
           </View>
         </View>
@@ -1159,25 +1163,25 @@ export default function CheckoutScreen({ route }: Props) {
         onRequestClose={() => setShowTermsModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t("checkout.terms")}</Text>
+          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
+            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>{t("checkout.terms")}</Text>
               <Pressable onPress={() => setShowTermsModal(false)}>
-                <Ionicons name="close" size={24} color="#333" />
+                <Ionicons name="close" size={24} color={theme.text} />
               </Pressable>
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               <Text style={styles.modalHeading}>Agreement to Terms</Text>
-              <Text style={styles.modalText}>
+              <Text style={[styles.modalText, { color: theme.textLight }]}>
                 {policies?.terms_and_conditions
                   ? policies.terms_and_conditions.replace(/^- /gm, '• ')
                   : "Loading terms..."}
               </Text>
             </ScrollView>
 
-            <Pressable style={styles.modalCloseButton} onPress={() => setShowTermsModal(false)}>
-              <Text style={styles.modalCloseButtonText}>Close</Text>
+            <Pressable style={[styles.modalCloseButton, { backgroundColor: theme.primary }]} onPress={() => setShowTermsModal(false)}>
+              <Text style={[styles.modalCloseButtonText, { color: theme.background }]}>Close</Text>
             </Pressable>
           </View>
         </View>
@@ -1191,18 +1195,25 @@ export default function CheckoutScreen({ route }: Props) {
         onRequestClose={() => setShowSuccessModal(false)}
       >
         <View style={styles.successOverlay}>
-          <View style={styles.successContent}>
-            <View style={styles.successIconContainer}>
-              <Ionicons name="checkmark-circle" size={80} color={COLORS.saffron} />
+          <AnimatedGradientBorder
+            borderRadius={24}
+            borderWidth={2}
+            animationSpeed={3}
+            style={{ width: "85%", maxWidth: 400 }}
+          >
+            <View style={[styles.successContent, { width: "100%", borderRadius: 24, margin: 0, backgroundColor: theme.background }]}>
+              <View style={styles.successIconContainer}>
+                <Ionicons name="checkmark-circle" size={80} color={theme.primary} />
+              </View>
+
+              <Text style={[styles.successTitle, { color: theme.text }]}>{t("checkout.bookingConfirmed")}</Text>
+              <Text style={[styles.successMessage, { color: theme.textLight }]}>
+                {t("notifications.bookingSuccessMessage")}
+              </Text>
+
+              <Text style={[styles.redirectText, { color: theme.primary }]}>{t("checkout.redirecting")}</Text>
             </View>
-
-            <Text style={styles.successTitle}>{t("checkout.bookingConfirmed")}</Text>
-            <Text style={styles.successMessage}>
-              {t("notifications.bookingSuccessMessage")}
-            </Text>
-
-            <Text style={styles.redirectText}>{t("checkout.redirecting")}</Text>
-          </View>
+          </AnimatedGradientBorder>
         </View>
       </Modal>
 
@@ -1214,45 +1225,53 @@ export default function CheckoutScreen({ route }: Props) {
         onRequestClose={() => setShowAlertModal(false)}
       >
         <View style={styles.alertOverlay}>
-          <View style={styles.alertContent}>
-            {/* Icon based on type */}
-            <View style={styles.alertIconContainer}>
-              <Ionicons
-                name={
-                  alertConfig.type === 'error'
-                    ? 'close-circle'
-                    : alertConfig.type === 'warning'
-                      ? 'alert-circle'
-                      : 'information-circle'
-                }
-                size={64}
-                color={
-                  alertConfig.type === 'error'
-                    ? '#EF4444'
-                    : alertConfig.type === 'warning'
-                      ? '#F59E0B'
-                      : '#3B82F6'
-                }
-              />
+          <AnimatedGradientBorder
+            borderRadius={20}
+            borderWidth={2}
+            animationSpeed={3}
+            style={{ width: "100%", maxWidth: 360 }}
+          >
+            <View style={[styles.alertContent, { width: "100%", borderRadius: 20, margin: 0, backgroundColor: theme.background }]}>
+              {/* Icon based on type */}
+              <View style={styles.alertIconContainer}>
+                <Ionicons
+                  name={
+                    alertConfig.type === 'error'
+                      ? 'close-circle'
+                      : alertConfig.type === 'warning'
+                        ? 'alert-circle'
+                        : 'information-circle'
+                  }
+                  size={64}
+                  color={
+                    alertConfig.type === 'error'
+                      ? '#EF4444'
+                      : alertConfig.type === 'warning'
+                        ? '#F59E0B'
+                        : '#3B82F6'
+                  }
+                />
+              </View>
+
+              {/* Title and Message */}
+              <Text style={[styles.alertTitle, { color: theme.text }]}>{alertConfig.title}</Text>
+              <Text style={[styles.alertMessage, { color: theme.textLight }]}>{alertConfig.message}</Text>
+
+              {/* OK Button */}
+              <Pressable
+                style={[
+                  styles.alertButton,
+                  { backgroundColor: theme.primary },
+                  alertConfig.type === 'error' && styles.alertButtonError,
+                  alertConfig.type === 'warning' && styles.alertButtonWarning,
+                  alertConfig.type === 'info' && styles.alertButtonInfo,
+                ]}
+                onPress={() => setShowAlertModal(false)}
+              >
+                <Text style={styles.alertButtonText}>OK</Text>
+              </Pressable>
             </View>
-
-            {/* Title and Message */}
-            <Text style={styles.alertTitle}>{alertConfig.title}</Text>
-            <Text style={styles.alertMessage}>{alertConfig.message}</Text>
-
-            {/* OK Button */}
-            <Pressable
-              style={[
-                styles.alertButton,
-                alertConfig.type === 'error' && styles.alertButtonError,
-                alertConfig.type === 'warning' && styles.alertButtonWarning,
-                alertConfig.type === 'info' && styles.alertButtonInfo,
-              ]}
-              onPress={() => setShowAlertModal(false)}
-            >
-              <Text style={styles.alertButtonText}>OK</Text>
-            </Pressable>
-          </View>
+          </AnimatedGradientBorder>
         </View>
       </Modal>
     </SafeAreaView>
@@ -1657,13 +1676,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 32,
     alignItems: "center",
-    width: "85%",
-    maxWidth: 400,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10,
+    width: "100%",
   },
   successIconContainer: {
     marginBottom: 20,
@@ -1702,12 +1715,6 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: "center",
     width: "100%",
-    maxWidth: 360,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 12,
   },
   alertIconContainer: {
     marginBottom: 20,

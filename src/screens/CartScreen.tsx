@@ -11,11 +11,13 @@ import {
 } from "react-native";
 
 import { useCart } from "../context/CartContext";
+import { useTheme } from "../context/ThemeContext";
 import { COLORS } from "../theme/colors";
 
 export default function CartScreen() {
   const navigation = useNavigation<any>();
   const { cartItems, removeFromCart, clearCart, loadingCart } = useCart();
+  const { theme, isDark } = useTheme();
 
   const total = useMemo(() => {
     return cartItems.reduce((sum, item) => {
@@ -36,7 +38,7 @@ export default function CartScreen() {
   }, [cartItems]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       {/* HEADER */}
       <View
         style={{
@@ -44,13 +46,14 @@ export default function CartScreen() {
           paddingHorizontal: 16,
           paddingBottom: 14,
           borderBottomWidth: 1,
-          borderColor: COLORS.grayLight,
+          borderColor: theme.border,
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
+          backgroundColor: theme.background,
         }}
       >
-        <Text style={{ fontSize: 22, fontWeight: "900", color: COLORS.black }}>
+        <Text style={{ fontSize: 22, fontWeight: "900", color: theme.text }}>
           My Cart
         </Text>
 
@@ -64,30 +67,30 @@ export default function CartScreen() {
       {/* ✅ LOADING */}
       {loadingCart ? (
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color={COLORS.black} />
-          <Text style={{ marginTop: 12, color: COLORS.gray }}>
+          <ActivityIndicator size="large" color={theme.primary} />
+          <Text style={{ marginTop: 12, color: theme.textLight }}>
             Loading cart...
           </Text>
         </View>
       ) : cartItems.length === 0 ? (
         /* ✅ EMPTY CART */
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <Ionicons name="cart-outline" size={50} color={COLORS.gray} />
-          <Text style={{ marginTop: 12, fontSize: 16, color: COLORS.gray }}>
+          <Ionicons name="cart-outline" size={50} color={theme.textLight} />
+          <Text style={{ marginTop: 12, fontSize: 16, color: theme.textLight }}>
             Your cart is empty
           </Text>
 
           <Pressable
-            onPress={() => navigation.navigate("Home")}
+            onPress={() => navigation.navigate("HomeDrawer")}
             style={{
               marginTop: 16,
-              backgroundColor: COLORS.saffron,
+              backgroundColor: theme.primary,
               paddingVertical: 12,
               paddingHorizontal: 20,
               borderRadius: 12,
             }}
           >
-            <Text style={{ fontWeight: "900", color: "#000" }}>
+            <Text style={{ fontWeight: "900", color: theme.background }}>
               Browse Services
             </Text>
           </Pressable>
@@ -98,17 +101,17 @@ export default function CartScreen() {
           <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
             {/* ✅ Add more services */}
             <Pressable
-              onPress={() => navigation.navigate("Home")}
+              onPress={() => navigation.navigate("HomeDrawer")}
               style={{
                 borderWidth: 1,
-                borderColor: COLORS.grayLight,
+                borderColor: theme.border,
                 borderRadius: 14,
                 paddingVertical: 14,
                 alignItems: "center",
                 marginBottom: 14,
               }}
             >
-              <Text style={{ fontWeight: "900", color: COLORS.black }}>
+              <Text style={{ fontWeight: "900", color: theme.text }}>
                 + Add More Services
               </Text>
             </Pressable>
@@ -120,11 +123,11 @@ export default function CartScreen() {
                   flexDirection: "row",
                   gap: 12,
                   borderWidth: 1,
-                  borderColor: COLORS.grayLight,
+                  borderColor: theme.border,
                   borderRadius: 16,
                   padding: 12,
                   marginBottom: 14,
-                  backgroundColor: "#fff",
+                  backgroundColor: theme.background,
                 }}
               >
                 {/* IMAGE */}
@@ -135,7 +138,7 @@ export default function CartScreen() {
                       width: 78,
                       height: 78,
                       borderRadius: 16,
-                      backgroundColor: "#f1f5f9",
+                      backgroundColor: theme.surfaceVariant,
                     }}
                   />
                 ) : (
@@ -144,7 +147,7 @@ export default function CartScreen() {
                       width: 78,
                       height: 78,
                       borderRadius: 16,
-                      backgroundColor: "#f1f5f9",
+                      backgroundColor: theme.surfaceVariant,
                     }}
                   />
                 )}
@@ -155,14 +158,14 @@ export default function CartScreen() {
                     style={{
                       fontWeight: "900",
                       fontSize: 16,
-                      color: COLORS.black,
+                      color: theme.text,
                     }}
                     numberOfLines={2}
                   >
                     {item.title}
                   </Text>
 
-                  <Text style={{ marginTop: 5, color: COLORS.textLight }}>
+                  <Text style={{ marginTop: 5, color: theme.textLight }}>
                     {item.duration}
                   </Text>
 
@@ -171,6 +174,7 @@ export default function CartScreen() {
                       marginTop: 6,
                       fontWeight: "900",
                       fontSize: 16,
+                      color: theme.text,
                     }}
                   >
                     {item.price}
@@ -197,10 +201,10 @@ export default function CartScreen() {
               bottom: 0,
               left: 0,
               right: 0,
-              backgroundColor: "#fff",
+              backgroundColor: theme.background,
               padding: 16,
               borderTopWidth: 1,
-              borderColor: "#f1f5f9",
+              borderColor: theme.border,
             }}
           >
             <View
@@ -210,8 +214,8 @@ export default function CartScreen() {
                 marginBottom: 12,
               }}
             >
-              <Text style={{ fontWeight: "900", fontSize: 16 }}>Total</Text>
-              <Text style={{ fontWeight: "900", fontSize: 16 }}>₹{total}</Text>
+              <Text style={{ fontWeight: "900", fontSize: 16, color: theme.text }}>Total</Text>
+              <Text style={{ fontWeight: "900", fontSize: 16, color: theme.text }}>₹{total}</Text>
             </View>
 
             <Pressable
@@ -221,13 +225,13 @@ export default function CartScreen() {
                 });
               }}
               style={{
-                backgroundColor: COLORS.saffron,
+                backgroundColor: theme.primary,
                 paddingVertical: 14,
                 borderRadius: 14,
                 alignItems: "center",
               }}
             >
-              <Text style={{ color: "#000", fontWeight: "900", fontSize: 16 }}>
+              <Text style={{ color: theme.background, fontWeight: "900", fontSize: 16 }}>
                 Continue Booking
               </Text>
             </Pressable>

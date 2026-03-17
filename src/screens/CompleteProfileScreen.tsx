@@ -17,12 +17,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 
 export default function CompleteProfileScreen() {
     const navigation = useNavigation<any>();
     const route = useRoute<any>();
     const { initialData } = route.params || {};
     const { showAlert, showToast } = useNotification();
+    const { theme, isDark } = useTheme();
 
     const [fullName, setFullName] = useState(initialData?.fullName || "");
     const [email, setEmail] = useState(initialData?.email || "");
@@ -218,15 +220,15 @@ export default function CompleteProfileScreen() {
 
     if (loading) {
         return (
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#fff" }}>
-                <ActivityIndicator size="large" color={COLORS.saffron} />
+            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
+                <ActivityIndicator size="large" color={theme.primary} />
             </View>
         );
     }
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }}>
-            <StatusBar barStyle="dark-content" backgroundColor="#fff" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
 
             <KeyboardAvoidingView
                 behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -238,34 +240,34 @@ export default function CompleteProfileScreen() {
                             onPress={handleBack}
                             style={styles.backButton}
                         >
-                            <ChevronLeft size={28} color={COLORS.text} />
+                            <ChevronLeft size={28} color={theme.text} />
                         </TouchableOpacity>
-                        <Text style={styles.title}>Complete Your Profile</Text>
-                        <Text style={styles.subtitle}>
+                        <Text style={[styles.title, { color: theme.text }]}>Complete Your Profile</Text>
+                        <Text style={[styles.subtitle, { color: theme.textLight }]}>
                             Just a few details to get you started.
                         </Text>
                     </View>
 
                     <View style={styles.form}>
                         {/* FULL NAME */}
-                        <View style={styles.inputContainer}>
-                            <User size={20} color={COLORS.textLight} />
+                        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                            <User size={20} color={theme.textLight} />
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { color: theme.text }]}
                                 placeholder="Full Name"
-                                placeholderTextColor={COLORS.placeholder}
+                                placeholderTextColor={theme.textLight}
                                 value={fullName}
                                 onChangeText={setFullName}
                             />
                         </View>
 
                         {/* EMAIL */}
-                        <View style={styles.inputContainer}>
-                            <Mail size={20} color={COLORS.textLight} />
+                        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                            <Mail size={20} color={theme.textLight} />
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { color: theme.text }]}
                                 placeholder="Email Address"
-                                placeholderTextColor={COLORS.placeholder}
+                                placeholderTextColor={theme.textLight}
                                 value={email}
                                 onChangeText={setEmail}
                                 keyboardType="email-address"
@@ -274,13 +276,13 @@ export default function CompleteProfileScreen() {
                         </View>
 
                         {/* PHONE NUMBER - Simple input, no OTP verification */}
-                        <View style={styles.inputContainer}>
-                            <Phone size={20} color={COLORS.textLight} />
-                            <Text style={{ marginLeft: 10, fontSize: 16, color: COLORS.text, fontWeight: '600' }}>+91</Text>
+                        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                            <Phone size={20} color={theme.textLight} />
+                            <Text style={{ marginLeft: 10, fontSize: 16, color: theme.text, fontWeight: '600' }}>+91</Text>
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, { color: theme.text }]}
                                 placeholder="Phone Number"
-                                placeholderTextColor={COLORS.placeholder}
+                                placeholderTextColor={theme.textLight}
                                 value={phone}
                                 onChangeText={(text) => {
                                     // Strip all non-digits
@@ -299,47 +301,47 @@ export default function CompleteProfileScreen() {
                         {/* PASSWORD (Only if needed — e.g. Google users) */}
                         {needsPassword && (
                             <>
-                                <View style={styles.inputContainer}>
-                                    <Lock size={20} color={COLORS.textLight} />
+                                <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                    <Lock size={20} color={theme.textLight} />
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, { color: theme.text }]}
                                         placeholder="Create Password"
-                                        placeholderTextColor={COLORS.placeholder}
+                                        placeholderTextColor={theme.textLight}
                                         secureTextEntry={!showPassword}
                                         value={password}
                                         onChangeText={setPassword}
                                     />
                                     <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-                                        {showPassword ? <EyeOff size={20} color={COLORS.textLight} /> : <Eye size={20} color={COLORS.textLight} />}
+                                        {showPassword ? <EyeOff size={20} color={theme.textLight} /> : <Eye size={20} color={theme.textLight} />}
                                     </TouchableOpacity>
                                 </View>
 
-                                <View style={styles.inputContainer}>
-                                    <Lock size={20} color={COLORS.textLight} />
+                                <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                                    <Lock size={20} color={theme.textLight} />
                                     <TextInput
-                                        style={styles.input}
+                                        style={[styles.input, { color: theme.text }]}
                                         placeholder="Confirm Password"
-                                        placeholderTextColor={COLORS.placeholder}
+                                        placeholderTextColor={theme.textLight}
                                         secureTextEntry={!showConfirmPassword}
                                         value={confirmPassword}
                                         onChangeText={setConfirmPassword}
                                     />
                                     <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-                                        {showConfirmPassword ? <EyeOff size={20} color={COLORS.textLight} /> : <Eye size={20} color={COLORS.textLight} />}
+                                        {showConfirmPassword ? <EyeOff size={20} color={theme.textLight} /> : <Eye size={20} color={theme.textLight} />}
                                     </TouchableOpacity>
                                 </View>
                             </>
                         )}
 
                         <TouchableOpacity
-                            style={[styles.primaryBtn, saving && styles.disabledBtn]}
+                            style={[styles.primaryBtn, { backgroundColor: theme.primary }, saving && styles.disabledBtn]}
                             onPress={handleSubmit}
                             disabled={saving}
                         >
                             {saving ? (
-                                <ActivityIndicator color="#fff" />
+                                <ActivityIndicator color={theme.background} />
                             ) : (
-                                <Text style={styles.primaryText}>
+                                <Text style={[styles.primaryText, { color: theme.background }]}>
                                     Save & Continue
                                 </Text>
                             )}

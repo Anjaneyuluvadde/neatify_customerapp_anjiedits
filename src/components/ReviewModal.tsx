@@ -12,6 +12,8 @@ import {
     View,
 } from "react-native";
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
+import AnimatedGradientBorder from "./AnimatedGradientBorder";
 
 type ReviewModalProps = {
     visible: boolean;
@@ -31,6 +33,7 @@ export default function ReviewModal({
     isSubmitting = false,
 }: ReviewModalProps) {
     const { t } = useLanguage();
+    const { theme } = useTheme();
     const [rating, setRating] = useState(initialRating);
     const [comment, setComment] = useState(initialComment);
 
@@ -56,7 +59,7 @@ export default function ReviewModal({
                     >
                         <Star
                             size={32}
-                            color={star <= rating ? "#F59E0B" : "#E2E8F0"}
+                            color={star <= rating ? "#F59E0B" : theme.border}
                             fill={star <= rating ? "#F59E0B" : "none"}
                             style={{ marginHorizontal: 4 }}
                         />
@@ -78,49 +81,56 @@ export default function ReviewModal({
                 behavior={Platform.OS === "ios" ? "padding" : undefined}
                 style={styles.modalOverlay}
             >
-                <View style={styles.modalContent}>
-                    <Text style={styles.modalTitle}>{t("review.title") || "Rate Experience"}</Text>
-                    <Text style={styles.modalSubtitle}>
-                        {t("review.subtitle") || "How was the service provided?"}
-                    </Text>
+                <AnimatedGradientBorder
+                    borderRadius={20}
+                    borderWidth={2}
+                    animationSpeed={3}
+                    style={{ width: "100%", maxWidth: 360 }}
+                >
+                    <View style={[styles.modalContent, { width: "100%", maxWidth: undefined, backgroundColor: theme.background }]}>
+                        <Text style={[styles.modalTitle, { color: theme.text }]}>{t("review.title") || "Rate Experience"}</Text>
+                        <Text style={[styles.modalSubtitle, { color: theme.textLight }]}>
+                            {t("review.subtitle") || "How was the service provided?"}
+                        </Text>
 
-                    {renderStars()}
+                        {renderStars()}
 
-                    <Text style={styles.ratingLabel}>
-                        {rating}/5 {rating >= 4 ? "Extremely Good! 🤩" : rating >= 3 ? "Good 🙂" : "Could be better 😐"}
-                    </Text>
+                        <Text style={[styles.ratingLabel, { color: theme.text }]}>
+                            {rating}/5 {rating >= 4 ? "Extremely Good! 🤩" : rating >= 3 ? "Good 🙂" : "Could be better 😐"}
+                        </Text>
 
-                    <TextInput
-                        style={styles.commentInput}
-                        placeholder={t("review.placeholder") || "Share your experience..."}
-                        value={comment}
-                        onChangeText={setComment}
-                        multiline
-                        textAlignVertical="top"
-                    />
+                        <TextInput
+                            style={[styles.commentInput, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+                            placeholder={t("review.placeholder") || "Share your experience..."}
+                            value={comment}
+                            onChangeText={setComment}
+                            multiline
+                            textAlignVertical="top"
+                        />
 
-                    <View style={styles.modalActions}>
-                        <TouchableOpacity
-                            style={[styles.modalBtn, styles.modalCancelBtn]}
-                            onPress={onClose}
-                            disabled={isSubmitting}
-                        >
-                            <Text style={styles.modalCancelText}>Cancel</Text>
-                        </TouchableOpacity>
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.modalCancelBtn, { backgroundColor: theme.background, borderColor: theme.border }]}
+                                onPress={onClose}
+                                disabled={isSubmitting}
+                            >
+                                <Text style={[styles.modalCancelText, { color: theme.textLight }]}>Cancel</Text>
+                            </TouchableOpacity>
 
-                        <TouchableOpacity
-                            style={[styles.modalBtn, styles.modalSubmitBtn]}
-                            onPress={handleSubmit}
-                            disabled={isSubmitting}
-                        >
-                            {isSubmitting ? (
-                                <ActivityIndicator color="#fff" />
-                            ) : (
-                                <Text style={styles.modalSubmitText}>Submit</Text>
-                            )}
-                        </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.modalSubmitBtn, { backgroundColor: theme.primary }]}
+                                onPress={handleSubmit}
+                                disabled={isSubmitting}
+                            >
+                                {isSubmitting ? (
+                                    <ActivityIndicator color={theme.background} />
+                                ) : (
+                                    <Text style={[styles.modalSubmitText, { color: theme.background }]}>Submit</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
+                </AnimatedGradientBorder>
             </KeyboardAvoidingView>
         </Modal>
     );
@@ -139,11 +149,6 @@ const styles = StyleSheet.create({
         backgroundColor: "#fff",
         borderRadius: 20,
         padding: 24,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 10,
         alignItems: "center",
     },
     modalTitle: {

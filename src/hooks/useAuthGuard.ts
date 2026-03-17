@@ -19,7 +19,14 @@ export function useAuthGuard() {
                     message: `Please login or sign up to ${action}`,
                     showCancel: true,
                     confirmText: "Login / Sign Up",
-                    onConfirm: () => navigation.navigate("Login")
+                    onConfirm: () => {
+                        // Traverse to root and navigate to Login
+                        const parent = navigation.getParent("root-drawer") || navigation;
+                        parent.reset({
+                            index: 0,
+                            routes: [{ name: "Login" }],
+                        });
+                    }
                 });
                 return false;
             }

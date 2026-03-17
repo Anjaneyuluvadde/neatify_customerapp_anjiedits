@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { Modal, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
 import { COLORS } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
+import AnimatedGradientBorder from "./AnimatedGradientBorder";
 
 type AlertType = "success" | "error" | "warning" | "info";
 
@@ -28,6 +30,7 @@ export default function CustomAlert({
     cancelText = "Cancel",
     showCancel = false,
 }: CustomAlertProps) {
+    const { theme } = useTheme();
     const handleConfirm = () => {
         if (type === "success") {
             Vibration.vibrate(50);
@@ -83,39 +86,46 @@ export default function CustomAlert({
             onRequestClose={onClose}
         >
             <View style={styles.overlay}>
-                <View style={styles.content}>
-                    {/* Icon */}
-                    <View style={styles.iconContainer}>
-                        <Ionicons name={getIconName()} size={64} color={getIconColor()} />
-                    </View>
+                <AnimatedGradientBorder
+                    borderRadius={20}
+                    borderWidth={2}
+                    animationSpeed={3}
+                    style={{ width: "100%", maxWidth: 360 }}
+                >
+                    <View style={[styles.content, { width: "100%", maxWidth: undefined, backgroundColor: theme.background }]}>
+                        {/* Icon */}
+                        <View style={styles.iconContainer}>
+                            <Ionicons name={getIconName()} size={64} color={getIconColor()} />
+                        </View>
 
-                    {/* Title and Message */}
-                    <Text style={styles.title}>{title}</Text>
-                    <Text style={styles.message}>{message}</Text>
+                        {/* Title and Message */}
+                        <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+                        <Text style={[styles.message, { color: theme.textLight }]}>{message}</Text>
 
-                    {/* Buttons */}
-                    <View style={styles.buttonContainer}>
-                        {showCancel && (
+                        {/* Buttons */}
+                        <View style={styles.buttonContainer}>
+                            {showCancel && (
+                                <Pressable
+                                    style={[styles.button, styles.cancelButton, { backgroundColor: theme.surfaceVariant }]}
+                                    onPress={onClose}
+                                >
+                                    <Text style={[styles.cancelButtonText, { color: theme.textLight }]}>{cancelText}</Text>
+                                </Pressable>
+                            )}
                             <Pressable
-                                style={[styles.button, styles.cancelButton]}
-                                onPress={onClose}
+                                style={[
+                                    styles.button,
+                                    styles.confirmButton,
+                                    getButtonStyle(),
+                                    showCancel && { flex: 1 },
+                                ]}
+                                onPress={handleConfirm}
                             >
-                                <Text style={styles.cancelButtonText}>{cancelText}</Text>
+                                <Text style={[styles.confirmButtonText, { color: theme.background }]}>{confirmText}</Text>
                             </Pressable>
-                        )}
-                        <Pressable
-                            style={[
-                                styles.button,
-                                styles.confirmButton,
-                                getButtonStyle(),
-                                showCancel && { flex: 1 },
-                            ]}
-                            onPress={handleConfirm}
-                        >
-                            <Text style={styles.confirmButtonText}>{confirmText}</Text>
-                        </Pressable>
+                        </View>
                     </View>
-                </View>
+                </AnimatedGradientBorder>
             </View>
         </Modal>
     );
@@ -134,13 +144,7 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         padding: 24,
         width: "100%",
-        maxWidth: 360,
         alignItems: "center",
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
     },
     iconContainer: {
         marginBottom: 16,

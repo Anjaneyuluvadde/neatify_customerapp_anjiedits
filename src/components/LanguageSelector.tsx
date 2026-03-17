@@ -41,39 +41,39 @@ export default function LanguageSelector() {
                     style={styles.overlay}
                     onPress={() => setModalVisible(false)}
                 >
-                    <View style={styles.modalContent}>
-                        <Text style={styles.modalTitle}>Select Language</Text>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalTitle}>Select Language</Text>
 
-                        {languages.map((lang) => (
-                            <Pressable
-                                key={lang.code}
-                                style={[
-                                    styles.option,
-                                    language === lang.code && styles.selectedOption,
-                                ]}
-                                onPress={() => handleSelect(lang.code)}
-                            >
-                                <Text
+                            {languages.map((lang) => (
+                                <Pressable
+                                    key={lang.code}
                                     style={[
-                                        styles.optionText,
-                                        language === lang.code && styles.selectedOptionText,
+                                        styles.option,
+                                        language === lang.code && styles.selectedOption,
                                     ]}
+                                    onPress={() => handleSelect(lang.code)}
                                 >
-                                    {lang.native} ({lang.label})
-                                </Text>
-                                {language === lang.code && (
-                                    <Ionicons name="checkmark" size={20} color="#fff" />
-                                )}
-                            </Pressable>
-                        ))}
+                                    <Text
+                                        style={[
+                                            styles.optionText,
+                                            language === lang.code && styles.selectedOptionText,
+                                        ]}
+                                    >
+                                        {lang.native} ({lang.label})
+                                    </Text>
+                                    {language === lang.code && (
+                                        <Ionicons name="checkmark" size={20} color="#fff" />
+                                    )}
+                                </Pressable>
+                            ))}
 
-                        <Pressable
-                            style={styles.closeBtn}
-                            onPress={() => setModalVisible(false)}
-                        >
-                            <Text style={styles.closeText}>Cancel</Text>
-                        </Pressable>
-                    </View>
+                            <Pressable
+                                style={styles.closeBtn}
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <Text style={styles.closeText}>Cancel</Text>
+                            </Pressable>
+                        </View>
                 </Pressable>
             </Modal>
         </View>

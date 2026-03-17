@@ -1,4 +1,4 @@
-import { NavigationContainer } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import * as Linking from "expo-linking";
 import React, { useEffect, useState } from "react";
 import { StatusBar, StyleSheet } from "react-native";
@@ -6,11 +6,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { LanguageProvider } from "./src/context/LanguageContext";
 import { NotificationProvider } from "./src/context/NotificationContext";
+import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 import { supabase } from "./src/lib/supabase";
 import AppNavigator from "./src/navigation/AppNavigator";
 
 export default function App() {
-  const [initialRoute, setInitialRoute] = useState<"Login" | "Home" | "CompleteProfile">("Login");
+  const [initialRoute, setInitialRoute] = useState<"Login" | "HomeDrawer" | "CompleteProfile">("Login");
   const [loading, setLoading] = useState(true);
   const navigationRef = React.useRef<any>(null);
   const skipAuthRedirect = React.useRef(false);
@@ -70,7 +71,7 @@ export default function App() {
           return;
         }
       }
-      setInitialRoute(session ? "Home" : "Home");
+      setInitialRoute(session ? "HomeDrawer" : "HomeDrawer");
       setLoading(false);
     };
     initApp();
@@ -98,7 +99,7 @@ export default function App() {
             if (isComplete) {
               navigationRef.current?.reset({
                 index: 0,
-                routes: [{ name: "Home" }],
+                routes: [{ name: "HomeDrawer" }],
               });
             }
           }, 300);
@@ -128,7 +129,7 @@ export default function App() {
                   // Profile complete — go to Home
                   navigationRef.current?.reset({
                     index: 0,
-                    routes: [{ name: "Home" }],
+                    routes: [{ name: "HomeDrawer" }],
                   });
                 }
                 // If not complete, checkCompleteness already reset to CompleteProfile
@@ -164,7 +165,7 @@ export default function App() {
 
 
 
-  const linking = {
+  const linking: any = {
     prefixes: [
       Linking.createURL("/"),
       "neatifynation://",
@@ -173,8 +174,24 @@ export default function App() {
     ],
     config: {
       screens: {
-        ServiceDetail: "service/:serviceId",
-        Home: "*"
+        HomeDrawer: {
+          screens: {
+            AuthenticatedScreens: {
+              screens: {
+                MainTabs: {
+                  screens: {
+                    HomeTab: {
+                      screens: {
+                        ServiceDetail: "service/:serviceId",
+                        HomeMain: "*"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       },
     },
     // Handle unmatched URLs gracefully
@@ -209,15 +226,46 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NotificationProvider>
+      <ThemeProvider>
         <LanguageProvider>
-          <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-          <NavigationContainer linking={linking} ref={navigationRef}>
-            <AppNavigator initialRouteName={initialRoute} />
-          </NavigationContainer>
+          <NotificationProvider>
+            <ThemedAppContent
+              linking={linking}
+              navigationRef={navigationRef}
+              initialRoute={initialRoute}
+            />
+          </NotificationProvider>
         </LanguageProvider>
-      </NotificationProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
+  );
+}
+
+function ThemedAppContent({ linking, navigationRef, initialRoute }: any) {
+  const { theme, isDark } = useTheme();
+
+  const navTheme = {
+    ...(isDark ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
+      background: theme.background,
+      card: theme.background,
+      text: theme.text,
+      border: theme.border,
+      notification: theme.primary,
+    },
+  };
+
+  return (
+    <>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={theme.background}
+      />
+      <NavigationContainer linking={linking} ref={navigationRef} theme={navTheme}>
+        <AppNavigator initialRouteName={initialRoute} />
+      </NavigationContainer>
+    </>
   );
 }
 
@@ -227,6 +275,5 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
   },
 });

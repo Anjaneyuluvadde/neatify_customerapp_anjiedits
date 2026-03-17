@@ -18,9 +18,11 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Header from "../components/Header";
 
 // import LanguageSelector from "../components/LanguageSelector"; // REMOVED
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
@@ -54,8 +56,9 @@ const FieldCard = memo(
     placeholder,
     fallback,
   }: FieldCardProps & { fallback?: string }) => {
+    const { theme } = useTheme();
     return (
-      <View style={styles.fieldCard}>
+      <View style={[styles.fieldCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
         <Text style={styles.label}>{label}</Text>
 
         {isEditing && editable ? (
@@ -63,9 +66,10 @@ const FieldCard = memo(
             value={value}
             onChangeText={onChangeText}
             placeholder={placeholder}
-            placeholderTextColor="#94a3b8"
+            placeholderTextColor={theme.textLight}
             style={[
               styles.input,
+              { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text },
               multiline ? styles.inputMultiline : null,
             ]}
             multiline={multiline}
@@ -74,7 +78,7 @@ const FieldCard = memo(
             blurOnSubmit={!multiline}
           />
         ) : (
-          <Text style={styles.value}>
+          <Text style={[styles.value, { color: theme.text }]}>
             {value?.trim() ? value : fallback || "--"}
           </Text>
         )}
@@ -89,6 +93,7 @@ const FieldCard = memo(
 
 export default function ProfileScreen() {
   const navigation = useNavigation<any>();
+  const { theme, isDark } = useTheme();
   const { showAlert, showToast } = useNotification();
   const { t } = useLanguage();
 
@@ -280,13 +285,15 @@ export default function ProfileScreen() {
   /* ================= UI ================= */
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top"]}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
+      <Header />
       <KeyboardAvoidingView
-        style={styles.container}
+        style={[styles.container, { backgroundColor: theme.background }]}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          style={[styles.container, { backgroundColor: theme.background }]}
+          contentContainerStyle={{ paddingBottom: 100, paddingHorizontal: 16 }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={Keyboard.dismiss}
@@ -295,10 +302,10 @@ export default function ProfileScreen() {
           }
         >
           {/* HEADER */}
-          <View style={styles.headerCard}>
+          <View style={[styles.headerCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.title}>{t("profile.title")}</Text>
-              <Text style={styles.subtitle}>
+              <Text style={[styles.title, { color: theme.text }]}>{t("profile.title")}</Text>
+              <Text style={[styles.subtitle, { color: theme.textMuted }]}>
                 {t("profile.manageDetails")}
               </Text>
             </View>
@@ -314,14 +321,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {!isEditing && (
-            <TouchableOpacity
-              style={[styles.primaryBtn, { marginBottom: 16, marginTop: 0 }]}
-              onPress={() => navigation.navigate("MyBookings")}
-            >
-              <Text style={styles.primaryBtnText}>{t("profile.myBookings")}</Text>
-            </TouchableOpacity>
-          )}
+          {/* My Bookings button removed */}
 
           <FieldCard
             label={t("profile.fullName")}
@@ -335,10 +335,10 @@ export default function ProfileScreen() {
             fallback={t("profile.notProvided")}
           />
 
-          <View style={styles.fieldCard}>
-            <Text style={styles.label}>{t("profile.email")}</Text>
-            <Text style={styles.valueMuted}>{formData.email}</Text>
-            <Text style={styles.hintText}>{t("profile.emailHint")}</Text>
+          <View style={[styles.fieldCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Text style={[styles.label, { color: theme.textLight }]}>{t("profile.email")}</Text>
+            <Text style={[styles.valueMuted, { color: theme.textLight }]}>{formData.email}</Text>
+            <Text style={[styles.hintText, { color: theme.textLight }]}>{t("profile.emailHint")}</Text>
           </View>
 
           <FieldCard
@@ -390,17 +390,17 @@ export default function ProfileScreen() {
           {/* Customer Care */}
           {!isEditing && (
             <TouchableOpacity
-              style={styles.customerCareCard}
+              style={[styles.customerCareCard, { backgroundColor: theme.background, borderColor: theme.border }]}
               onPress={handleCallCustomerCare}
               activeOpacity={0.7}
             >
               <View style={styles.customerCareContent}>
-                <View style={styles.iconContainer}>
-                  <Phone size={20} color="#fff" />
+                <View style={[styles.iconContainer, { backgroundColor: theme.primary }]}>
+                  <Phone size={20} color={isDark ? theme.background : "#fff"} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.customerCareLabel}>{t("profile.customerCare")}</Text>
-                  <Text style={styles.customerCareNumber}>7617618567</Text>
+                  <Text style={[styles.customerCareLabel, { color: theme.textLight }]}>{t("profile.customerCare")}</Text>
+                  <Text style={[styles.customerCareNumber, { color: theme.text }]}>7617618567</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -409,11 +409,11 @@ export default function ProfileScreen() {
           {isEditing ? (
             <View style={styles.rowActions}>
               <TouchableOpacity
-                style={styles.cancelBtn}
+                style={[styles.cancelBtn, { backgroundColor: theme.background, borderColor: theme.border }]}
                 onPress={() => setIsEditing(false)}
               >
-                <X size={18} color="#0f172a" />
-                <Text style={styles.cancelText}>{t("profile.cancel")}</Text>
+                <X size={18} color={theme.text} />
+                <Text style={[styles.cancelText, { color: theme.text }]}>{t("profile.cancel")}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -425,8 +425,8 @@ export default function ProfileScreen() {
                   <ActivityIndicator color="#000" />
                 ) : (
                   <>
-                    <Save size={18} color="#000" />
-                    <Text style={styles.saveText}>{t("profile.save")}</Text>
+                    <Save size={18} color={isDark ? theme.background : "#000"} />
+                    <Text style={[styles.saveText, { color: isDark ? theme.background : "#000" }]}>{t("profile.save")}</Text>
                   </>
                 )}
               </TouchableOpacity>
@@ -459,12 +459,11 @@ export default function ProfileScreen() {
 /* ================= STYLES (UNCHANGED) ================= */
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1 },
   scrollContent: { padding: 18, paddingBottom: 40 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   headerCard: {
-    backgroundColor: "#fff",
     borderRadius: 18,
     padding: 18,
     flexDirection: "row",
@@ -472,11 +471,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
   },
 
-  title: { fontSize: 26, fontWeight: "800", color: "#0f172a" },
-  subtitle: { marginTop: 4, fontSize: 13, color: "#64748b" },
+  title: { fontSize: 26, fontWeight: "800" },
+  subtitle: { marginTop: 4, fontSize: 13 },
 
   editBtn: {
     flexDirection: "row",
@@ -493,18 +491,15 @@ const styles = StyleSheet.create({
   editText: { color: "#2563eb", fontWeight: "700" },
 
   fieldCard: {
-    backgroundColor: "#fff",
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
   },
 
   label: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#64748b",
     letterSpacing: 1,
   },
 
@@ -512,7 +507,6 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     fontWeight: "700",
-    color: "#0f172a",
   },
 
   valueMuted: {
@@ -526,14 +520,11 @@ const styles = StyleSheet.create({
 
   input: {
     marginTop: 10,
-    backgroundColor: "#f8fafc",
     borderWidth: 1,
-    borderColor: "#cbd5e1",
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#0f172a",
     fontWeight: "600",
   },
 
@@ -545,16 +536,14 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#e2e8f0",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
 
-  cancelText: { color: "#0f172a", fontWeight: "800", fontSize: 15 },
+  cancelText: { fontWeight: "800", fontSize: 15 },
 
   saveBtn: {
     flex: 1,
@@ -582,22 +571,22 @@ const styles = StyleSheet.create({
 
   logoutBtn: {
     marginTop: 12,
-    paddingVertical: 16,
+    paddingVertical: 15,
     borderRadius: 16,
-    backgroundColor: "#0f172a",
+    backgroundColor: "rgba(211, 47, 47, 0.1)",
     alignItems: "center",
     justifyContent: "center",
+    width: "70%",
+    alignSelf: "center",
   },
 
-  logoutText: { color: "#fff", fontSize: 16, fontWeight: "900" },
+  logoutText: { color: "#D32F2F", fontSize: 15, fontWeight: "800" },
 
   customerCareCard: {
-    backgroundColor: "#fff",
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#e2e8f0",
   },
 
   customerCareContent: {
@@ -626,6 +615,5 @@ const styles = StyleSheet.create({
   customerCareNumber: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#0f172a",
   },
 });

@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, DrawerActions } from "@react-navigation/native";
 import { Image } from "expo-image";
-import { TextInput, TouchableOpacity, View } from "react-native";
+import { TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
 
 import { useLanguage } from "../context/LanguageContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
+import { useTheme } from "../context/ThemeContext";
 import { COLORS } from "../theme/colors";
 
 type HeaderProps = {
@@ -16,113 +17,67 @@ export default function Header({ searchText, onSearchChange }: HeaderProps) {
   const navigation = useNavigation<any>();
   const { checkAuth } = useAuthGuard();
   const { t } = useLanguage();
+  const { theme, isDark } = useTheme();
 
-  const handleMyBookingsPress = async () => {
-    const isAuth = await checkAuth("view your bookings");
-    if (isAuth) {
-      navigation.navigate("MyBookings");
-    }
+  const handleNotificationsPress = () => {
+    console.log("Notifications pressed");
   };
 
-  const handleProfilePress = async () => {
-    const isAuth = await checkAuth("access your profile");
-    if (isAuth) {
-      navigation.navigate("Profile");
-    }
+  const handleMenuPress = () => {
+    const drawerNav = navigation.getParent("root-drawer") || navigation;
+    drawerNav.dispatch(DrawerActions.toggleDrawer());
   };
 
   return (
-    <View
-      style={{
-        backgroundColor: "#fff",
-        paddingTop: 10,
-        paddingHorizontal: 16,
-        paddingBottom: 12,
-      }}
-    >
+    <View style={[styles.container, { backgroundColor: theme.background }]} pointerEvents="box-none">
       {/* ✅ TOP ROW */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
+      <View style={styles.topRow} pointerEvents="box-none">
         {/* ✅ LOGO LEFT */}
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1 }} pointerEvents="box-none">
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => navigation.reset({ index: 0, routes: [{ name: "Home" }] })}
+            onPress={() => navigation.reset({ index: 0, routes: [{ name: "HomeDrawer" }] })}
           >
             <Image
               source={require("../../assets/images/neatifylogo.png")}
               contentFit="contain"
-              style={{
-                width: 160,
-                height: 40,
-                marginLeft: "-8%",
-              }}
+              style={styles.logo}
+              pointerEvents="none"
             />
           </TouchableOpacity>
         </View>
 
         {/* ✅ ICONS RIGHT */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 16,
-          }}
-        >
-          {/* <View style={{ transform: [{ scale: 0.9 }] }}>
-            <LanguageSelector />
-          </View> */}
-
+        <View style={styles.iconContainer}>
           <TouchableOpacity
-            onPress={handleMyBookingsPress}
+            onPress={handleNotificationsPress}
             activeOpacity={0.8}
-            style={{ position: "relative" }}
+            style={styles.iconButton}
           >
-            <Ionicons name="calendar-outline" size={24} color={COLORS.black} />
+            <Ionicons name="notifications-outline" size={26} color={theme.text} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            onPress={handleProfilePress}
+            onPress={handleMenuPress}
             activeOpacity={0.8}
+            style={styles.iconButton}
           >
-            <Ionicons name="person-outline" size={24} color={COLORS.black} />
+            <Ionicons name="menu-outline" size={30} color={theme.text} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ✅ SEARCH BOX (RENDER ONLY IF SEARCH FUNCTION PROVIDED) */}
+      {/* ✅ SEARCH BOX */}
       {onSearchChange && (
-        <View
-          style={{
-            marginTop: 10,
-            backgroundColor: "#F8FAFC",
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-            borderRadius: 14,
-            paddingHorizontal: 12,
-            height: 46,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          <Ionicons name="search-outline" size={18} color={COLORS.gray} />
+        <View style={[styles.searchContainer, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
+          <Ionicons name="search" size={20} color={theme.textLight} />
 
           <TextInput
             value={searchText}
             onChangeText={onSearchChange}
-            placeholder={t("home.searchPlaceholder")}
-            placeholderTextColor={COLORS.gray}
-            style={{
-              flex: 1,
-              fontSize: 14,
-              color: COLORS.black,
-            }}
+            placeholder={t("home.searchPlaceholder") || "Search for services..."}
+            placeholderTextColor={theme.textLight}
+            style={[styles.searchInput, { color: theme.text }]}
             returnKeyType="search"
           />
         </View>
@@ -130,3 +85,46 @@ export default function Header({ searchText, onSearchChange }: HeaderProps) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    paddingTop: 10,
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  logo: {
+    width: 160,
+    height: 40,
+    marginLeft: "-8%",
+  },
+  iconContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  iconButton: {
+    padding: 6,
+    borderRadius: 12,
+    backgroundColor: "transparent",
+  },
+  searchContainer: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "500",
+  },
+});

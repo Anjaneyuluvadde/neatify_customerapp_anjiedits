@@ -7,6 +7,7 @@ import {
     View,
 } from "react-native";
 import { COLORS } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 
 type Props = {
     visible: boolean;
@@ -18,12 +19,13 @@ type Props = {
  * Prevents user interaction while loading
  */
 export default function LoadingOverlay({ visible, message }: Props) {
+    const { theme } = useTheme();
     return (
         <Modal visible={visible} transparent animationType="fade">
             <View style={styles.overlay}>
-                <View style={styles.container}>
-                    <ActivityIndicator size="large" color={COLORS.saffron} />
-                    {message && <Text style={styles.message}>{message}</Text>}
+                <View style={[styles.container, { backgroundColor: theme.background }]}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                    {message && <Text style={[styles.message, { color: theme.text }]}>{message}</Text>}
                 </View>
             </View>
         </Modal>
