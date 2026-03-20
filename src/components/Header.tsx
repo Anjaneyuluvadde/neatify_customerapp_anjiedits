@@ -19,9 +19,6 @@ export default function Header({ searchText, onSearchChange }: HeaderProps) {
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
 
-  const handleNotificationsPress = () => {
-    console.log("Notifications pressed");
-  };
 
   const handleMenuPress = () => {
     const drawerNav = navigation.getParent("root-drawer") || navigation;
@@ -49,14 +46,6 @@ export default function Header({ searchText, onSearchChange }: HeaderProps) {
 
         {/* ✅ ICONS RIGHT */}
         <View style={styles.iconContainer}>
-          <TouchableOpacity
-            onPress={handleNotificationsPress}
-            activeOpacity={0.8}
-            style={styles.iconButton}
-          >
-            <Ionicons name="notifications-outline" size={26} color={theme.text} />
-          </TouchableOpacity>
-
           <TouchableOpacity
             onPress={handleMenuPress}
             activeOpacity={0.8}

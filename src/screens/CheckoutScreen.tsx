@@ -628,23 +628,27 @@ export default function CheckoutScreen({ route }: Props) {
         .from("bookings")
         .insert([
           {
-            user_id: userId,
-            customer_name: profile.full_name,
-            email: profile.email,
-            phone_number: profile.phone,
-            full_address: fullAddress,
-            latitude: finalLat,
-            longitude: finalLng,
-            services: services,
-            booking_date: datePart,
-            booking_time: timePart,
-            total_amount: Number(grandTotal.toFixed(2)),
-            payment_status: "pending",
-            payment_method: "razorpay",
-            coupon_code: couponApplied && coupon ? coupon.coupon_code : null,
-            coupon_discount_percentage: couponApplied && coupon ? couponDiscount : 0,
-            coupon_discount_amount: couponApplied && coupon ? Number(((totalPrice + totalTax) * couponDiscount / 100).toFixed(2)) : 0,
-          },
+  user_id: userId,
+  customer_name: profile.full_name,
+  email: profile.email,
+  phone_number: profile.phone,
+  full_address: fullAddress,
+  latitude: finalLat,
+  longitude: finalLng,
+  services: services,
+  booking_date: datePart,
+  booking_time: timePart,
+  total_amount: Number(grandTotal.toFixed(2)),
+  payment_status: "pending",
+  payment_method: "razorpay",
+
+  // ✅🔥 ADD THIS LINE (IMPORTANT)
+  platform: Platform.OS === "ios" ? "ios" : "android",
+
+  coupon_code: couponApplied && coupon ? coupon.coupon_code : null,
+  coupon_discount_percentage: couponApplied && coupon ? couponDiscount : 0,
+  coupon_discount_amount: couponApplied && coupon ? Number(((totalPrice + totalTax) * couponDiscount / 100).toFixed(2)) : 0,
+}
         ])
         .select("id")
         .single();
