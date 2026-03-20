@@ -38,6 +38,7 @@ type SelectedService = {
   title: string;
   duration: string;
   price: string;
+  service_type?: string; // Add this
   original_price?: string | null;
   discount_percent?: number | null;
   image?: string | null;
@@ -267,6 +268,7 @@ export default function ServiceDetailScreen({ route }: Props) {
           title: service.title,
           duration: service.duration,
           price: effectivePrice,
+          service_type: service.service_type,
           original_price: effectiveOriginalPrice,
           discount_percent: effectiveDiscountPercent,
           discount_label: effectiveLabel,

@@ -154,7 +154,9 @@ const isTimeSlotValid = (
   year: number,
   month: number,
   day: number | null,
-  timeString: string
+  timeString: string,
+  selectedServices: SelectedService[],
+  serviceTimeRules: any[]
 ) => {
   if (day === null) return false;
   if (!timeString || typeof timeString !== "string") return false;
@@ -170,7 +172,69 @@ const isTimeSlotValid = (
   const now = new Date();
   const cutoff = new Date(now.getTime() + 90 * 60000); // Now + 1 hour 30 mins
 
-  return slotDate > cutoff;
+  // 1. Basic delay check (Now + 90 mins)
+  if (slotDate <= cutoff) return false;
+
+  // 2. Service-specific last booking time check
+  if (serviceTimeRules.length > 0 && selectedServices.length > 0) {
+    const selectedServiceNames = selectedServices.map(s => s.title.toLowerCase().trim());
+    const selectedServiceTypes = selectedServices.map(s => (s.service_type || "").toLowerCase().trim());
+    const matchingRules = serviceTimeRules.filter(rule => {
+      const ruleServiceName = String(rule.service_name || rule.service || "").toLowerCase().trim();
+      if (!ruleServiceName) return false;
+      
+      // Match against service_type (category) first — this is the primary match
+      if (selectedServiceTypes.some(type => type && (type === ruleServiceName || type.includes(ruleServiceName) || ruleServiceName.includes(type)))) return true;
+      
+      // Fallback: match against title
+      const ruleKeywords = ruleServiceName.split(" ").filter(k => k.length > 3);
+      return selectedServiceNames.some(name => {
+        if (name.includes(ruleServiceName) || ruleServiceName.includes(name)) return true;
+        return ruleKeywords.some(kw => name.includes(kw));
+      });
+    });
+
+    if (matchingRules.length > 0) {
+      let earliestLimitInMinutes: number | null = null;
+
+      matchingRules.forEach(rule => {
+        const lbTimeRaw = rule.last_booking_time;
+        if (!lbTimeRaw) return;
+
+        const normalized = String(lbTimeRaw).toLowerCase().trim();
+        const lbModifier = normalized.includes("pm") ? "pm" : "am";
+        const timePart = normalized.replace(/[ap]m/g, "").trim();
+        
+        let lbHours = 0;
+        let lbMinutes = 0;
+
+        if (timePart.includes(":")) {
+          const parts = timePart.split(":").map(Number);
+          lbHours = parts[0] || 0;
+          lbMinutes = parts[1] || 0;
+        } else {
+          lbHours = Number(timePart) || 0;
+        }
+
+        if (lbModifier === "pm" && lbHours < 12) lbHours += 12;
+        if (lbModifier === "am" && lbHours === 12) lbHours = 0;
+
+        const limitInMinutes = lbHours * 60 + lbMinutes;
+        if (earliestLimitInMinutes === null || limitInMinutes < earliestLimitInMinutes) {
+          earliestLimitInMinutes = limitInMinutes;
+        }
+      });
+
+      if (earliestLimitInMinutes !== null) {
+        const slotMinutesTotal = hours * 60 + minutes;
+        if (slotMinutesTotal > earliestLimitInMinutes) {
+          return false;
+        }
+      }
+    }
+  }
+
+  return true;
 };
 
 /* ================= COMPONENT ================= */
@@ -215,6 +279,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   // Dynamic schedule config from Supabase
   const [timeSlots, setTimeSlots] = useState<string[]>(DEFAULT_TIMES);
   const [availableYears, setAvailableYears] = useState<number[]>(DEFAULT_YEARS);
+  const [serviceTimeRules, setServiceTimeRules] = useState<any[]>([]);
 
   const calendar = useMemo(() => getCalendarMatrix(year, month), [year, month]);
 
@@ -248,7 +313,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
     // Fetch schedule config (time_slots, years)
     supabase
       .from("schedule_config")
-      .select("config_key, config_value")
+      .select("*")
       .then(({ data, error }) => {
         if (error) {
           console.error("Error fetching schedule config:", error);
@@ -260,11 +325,11 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
               // time_slots may be plain strings or objects {value, active}
               const normalized = row.config_value
                 .map((slot: any) => {
-                  if (typeof slot === "string") return slot;
+                  if (typeof slot === "string") return slot.trim();
                   if (slot && typeof slot === "object" && slot.value) {
-                    // Only include active slots (default to true if not specified)
                     if (slot.active === false) return null;
-                    return String(slot.value);
+                    const val = String(slot.value).trim();
+                    return val || null;
                   }
                   return null;
                 })
@@ -274,10 +339,28 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
             if (row.config_key === "years" && Array.isArray(row.config_value)) {
               setAvailableYears(row.config_value as number[]);
             }
+            // Check both config_key and config_keys as per user requirement
+            const key = (row as any).config_key || (row as any).config_keys || (row as any).config_id;
+            if (key === "service_time_rules") {
+              let rules = [];
+              if (typeof row.config_value === "string") {
+                try { rules = JSON.parse(row.config_value); } catch(e) { rules = []; }
+              } else {
+                rules = row.config_value;
+              }
+              const finalRules = Array.isArray(rules) ? rules : (rules ? [rules] : []);
+              setServiceTimeRules(finalRules);
+            }
           });
         }
       });
   }, []);
+
+
+  // Reset selectedTime when date, month, or year changes
+  useEffect(() => {
+    setSelectedTime(null);
+  }, [selectedDate, month, year]);
 
   // ✅ Filter addons to match the main service's service_type (case-insensitive)
   const filteredAddons = useMemo(() => {
@@ -455,7 +538,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
             <View style={styles.timeGrid}>
               {timeSlots.map((time) => {
-                const valid = isTimeSlotValid(year, month, selectedDate, time);
+                const valid = isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules);
                 return (
                   <Pressable
                     key={time}
@@ -1199,7 +1282,8 @@ const styles = StyleSheet.create({
   timeGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
+    columnGap: 12,
     marginTop: 10,
   },
 

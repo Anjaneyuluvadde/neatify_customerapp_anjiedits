@@ -29,6 +29,7 @@ export type SelectedService = {
   title: string;
   duration: string;
   price: string;
+  service_type?: string;
   description?: string | null;
   image_url?: string | null;
   image?: string;
