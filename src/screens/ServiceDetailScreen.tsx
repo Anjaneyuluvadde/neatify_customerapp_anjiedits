@@ -839,15 +839,32 @@ export default function ServiceDetailScreen({ route }: Props) {
                           </View>
                         </View>
 
-                        {/* Show remove only if it's NOT the main service */}
+                        {/* Show View and remove only if it's NOT the main service */}
                         {s.id !== service.id && (
-                          <Pressable onPress={() => removeService(s.id)}>
-                            <Text
-                              style={{ marginTop: 8, color: "red", fontSize: 12 }}
+                          <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
+                            <Pressable 
+                              onPress={() => setSelectedAddonDetail(s as any)}
+                              style={{
+                                paddingVertical: 6,
+                                paddingHorizontal: 12,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: theme.border,
+                                backgroundColor: theme.surfaceVariant
+                              }}
                             >
-                              {t("schedule.remove")}
-                            </Text>
-                          </Pressable>
+                              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "600" }}>
+                                {t("schedule.view")}
+                              </Text>
+                            </Pressable>
+                            <Pressable onPress={() => removeService(s.id)} style={{ paddingVertical: 6 }}>
+                              <Text
+                                style={{ color: "red", fontSize: 12 }}
+                              >
+                                {t("schedule.remove")}
+                              </Text>
+                            </Pressable>
+                          </View>
                         )}
                       </View>
                     ))}
@@ -902,13 +919,14 @@ export default function ServiceDetailScreen({ route }: Props) {
 
         {/* ================= ADDONS LIST MODAL ================= */}
         <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); setShowSummary(true); }}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top", "bottom"]}>
-            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10 }}>
+          <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]}>
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}>
               <AnimatedGradientBorder
                 borderRadius={20}
                 borderWidth={2}
                 animationSpeed={3}
-                style={{ flex: 1 }}
+                style={{ width: "100%", alignSelf: "stretch", flex: 1 }}
+                flex={1}
               >
                 <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20 }}>
                   {/* Header */}
@@ -952,46 +970,48 @@ export default function ServiceDetailScreen({ route }: Props) {
                             style={({ pressed }) => ({
                               flexDirection: "row",
                               backgroundColor: theme.background,
-                              borderRadius: 12,
+                              borderRadius: 14,
                               marginBottom: 16,
                               borderWidth: 1,
                               borderColor: theme.border,
                               overflow: "hidden",
                               opacity: pressed ? 0.7 : 1,
-                              transform: [{ scale: pressed ? 0.98 : 1 }],
+                              padding: 10,
                             })}
                           >
                             {/* Left Side: Image */}
-                            {addon.image && addon.image.trim() !== '' ? (
-                              <Image
-                                source={{ uri: addon.image }}
-                                style={{ width: 100, height: 120 }}
-                                resizeMode="cover"
-                              />
-                            ) : (
-                              <View
-                                style={{
-                                  width: 100,
-                                  height: 120,
-                                  backgroundColor: theme.surfaceVariant,
-                                  alignItems: "center",
-                                  justifyContent: "center",
-                                }}
-                              >
-                                <Text style={{ color: theme.textLight }}>{t("serviceDetail.noImage")}</Text>
-                              </View>
-                            )}
+                            <View style={{ width: 100, height: 100, borderRadius: 10, overflow: 'hidden' }}>
+                              {addon.image && addon.image.trim() !== '' ? (
+                                <Image
+                                  source={{ uri: addon.image }}
+                                  style={{ width: '100%', height: '100%' }}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View
+                                  style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    backgroundColor: theme.surfaceVariant,
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                  }}
+                                >
+                                  <Text style={{ color: theme.textLight, fontSize: 10 }}>{t("serviceDetail.noImage")}</Text>
+                                </View>
+                              )}
+                            </View>
 
                             {/* Right Side: Details */}
                             <View
                               style={{
                                 flex: 1,
-                                padding: 12,
-                                justifyContent: "space-between",
+                                paddingLeft: 12,
+                                justifyContent: "center",
                               }}
                             >
                               <View>
-                                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>
+                                <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }} numberOfLines={1}>
                                   {addon.title}
                                 </Text>
                                 <Text
@@ -1004,12 +1024,9 @@ export default function ServiceDetailScreen({ route }: Props) {
                                   {addon.duration} mins
                                 </Text>
 
-                                <PriceRow
-                                  price={addon.price}
-                                  original_price={addon.original_price}
-                                  discount_percent={addon.discount_percent}
-                                  size="small"
-                                />
+                                <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text, marginTop: 2 }}>
+                                  ₹{addon.price}
+                                </Text>
                               </View>
 
                               {/* Action Buttons */}
@@ -1017,38 +1034,40 @@ export default function ServiceDetailScreen({ route }: Props) {
                                 style={{
                                   flexDirection: "row",
                                   gap: 8,
-                                  marginTop: 8,
+                                  marginTop: 10,
                                 }}
                               >
-                                  <Pressable
+                                <Pressable
                                   onPress={(e) => {
-                                    e.stopPropagation(); // Prevent card click
+                                    e.stopPropagation();
                                     setSelectedAddonDetail(addon);
                                   }}
                                   style={{
                                     flex: 1,
+                                    paddingVertical: 10,
+                                    borderRadius: 10,
                                     borderWidth: 1,
-                                    borderColor: theme.border,
-                                    paddingVertical: 6,
-                                    borderRadius: 6,
-                                    alignItems: "center",
+                                    borderColor: "#E5E7EB",
+                                    backgroundColor: "#F9FAFB",
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
                                   }}
                                 >
-                                  <Text style={{ fontSize: 13, fontWeight: "600", color: theme.text }}>
-                                    View
+                                  <Text style={{ fontSize: 13, fontWeight: "700", color: "#374151" }}>
+                                    {t("schedule.view")}
                                   </Text>
                                 </Pressable>
 
                                 {isAdded ? (
                                   <View
                                     style={{
-                                      flex: 1,
+                                      flex: 1.2,
                                       flexDirection: "row",
                                       alignItems: "center",
-                                      justifyContent: "space-between",
+                                      justifyContent: 'space-between',
                                       backgroundColor: theme.surfaceVariant,
-                                      borderRadius: 6,
-                                      paddingHorizontal: 4,
+                                      borderRadius: 10,
+                                      paddingHorizontal: 8,
                                     }}
                                   >
                                     <Pressable
@@ -1057,16 +1076,16 @@ export default function ServiceDetailScreen({ route }: Props) {
                                         decrementAddon(addon.id);
                                       }}
                                       style={{
-                                        paddingHorizontal: 12,
-                                        paddingVertical: 6,
+                                        paddingHorizontal: 10,
+                                        paddingVertical: 8,
                                       }}
                                     >
-                                      <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
+                                      <Text style={{ fontSize: 20, fontWeight: "700", color: theme.text }}>
                                         -
                                       </Text>
                                     </Pressable>
 
-                                    <Text style={{ fontSize: 14, fontWeight: "700", color: theme.text }}>
+                                    <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>
                                       {selectedServices.find((s) => s.id === addon.id)?.quantity || 1}
                                     </Text>
 
@@ -1076,14 +1095,14 @@ export default function ServiceDetailScreen({ route }: Props) {
                                         addAddonToCart(addon);
                                       }}
                                       style={{
-                                        paddingHorizontal: 12,
-                                        paddingVertical: 6,
+                                        paddingHorizontal: 10,
+                                        paddingVertical: 8,
                                       }}
                                       disabled={(selectedServices.find((s) => s.id === addon.id)?.quantity || 1) >= (addon.max_quantity || 3)}
                                     >
                                       <Text
                                         style={{
-                                          fontSize: 18,
+                                          fontSize: 20,
                                           fontWeight: "700",
                                           color: (selectedServices.find((s) => s.id === addon.id)?.quantity || 1) >= (addon.max_quantity || 3) ? theme.textLight : theme.text
                                         }}
@@ -1095,15 +1114,16 @@ export default function ServiceDetailScreen({ route }: Props) {
                                 ) : (
                                   <Pressable
                                     onPress={(e) => {
-                                      e.stopPropagation(); // Prevent card click
+                                      e.stopPropagation(); 
                                       addAddonToCart(addon);
                                     }}
                                     style={{
-                                      flex: 1,
+                                      flex: 1.2,
                                       backgroundColor: COLORS.saffron,
-                                      paddingVertical: 6,
-                                      borderRadius: 6,
+                                      paddingVertical: 10,
+                                      borderRadius: 10,
                                       alignItems: "center",
+                                      justifyContent: 'center'
                                     }}
                                   >
                                     <Text
@@ -1113,7 +1133,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                                         color: "#000",
                                       }}
                                     >
-                                      + Add
+                                      + {t("schedule.add")}
                                     </Text>
                                   </Pressable>
                                 )}
@@ -1139,182 +1159,189 @@ export default function ServiceDetailScreen({ route }: Props) {
             onRequestClose={() => setSelectedAddonDetail(null)}
             statusBarTranslucent={true}
           >
-              <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10 }}>
-                <AnimatedGradientBorder
-                  borderRadius={20}
-                  borderWidth={2}
-                  animationSpeed={3}
-                  style={{ flex: 1 }}
-                >
-                  <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20 }}>
-                    {/* Close Button absolute top right */}
-                    <Pressable
-                      onPress={() => setSelectedAddonDetail(null)}
-                      style={{
-                        position: 'absolute',
-                        top: 20,
-                        right: 20,
-                        zIndex: 10,
-                        backgroundColor: 'rgba(0,0,0,0.5)',
-                        borderRadius: 20,
-                        width: 36,
-                        height: 36,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
-                    >
-                      <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
-                    </Pressable>
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10 }}>
+              <AnimatedGradientBorder
+                borderRadius={20}
+                borderWidth={2}
+                animationSpeed={3}
+                style={{ flex: 1 }}
+              >
+                <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20, overflow: 'hidden' }}>
+                  {/* Close Button absolute top right */}
+                  <Pressable
+                    onPress={() => setSelectedAddonDetail(null)}
+                    style={{
+                      position: 'absolute',
+                      top: 20,
+                      right: 20,
+                      zIndex: 10,
+                      backgroundColor: 'rgba(0,0,0,0.5)',
+                      borderRadius: 20,
+                      width: 36,
+                      height: 36,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
+                  </Pressable>
 
-                    <ScrollView>
-                      {/* Full Image */}
-                      <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-                        {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (
-                          <Image
-                            source={{ uri: selectedAddonDetail.image }}
-                            style={{ width: "100%", height: 280, borderRadius: 16 }}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View
-                            style={{
-                              width: "100%",
-                              height: 200,
-                              backgroundColor: theme.surfaceVariant,
-                              alignItems: "center",
-                              justifyContent: "center",
-                              borderRadius: 16,
-                            }}
-                          >
-                            <Text style={{ color: theme.textLight }}>{t("serviceDetail.noImage")}</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      <View style={{ padding: 20 }}>
-                        <Text style={{ fontSize: 24, fontWeight: "800", color: theme.text }}>{selectedAddonDetail.title}</Text>
-                        <Text style={{ fontSize: 14, color: theme.textLight, marginTop: 4 }}>{selectedAddonDetail.duration} mins • {selectedAddonDetail.service_type || 'Add-on'}</Text>
-
-                        <View style={{ marginTop: 10 }}>
-                          <PriceRow
-                            price={selectedAddonDetail.price}
-                            original_price={selectedAddonDetail.original_price}
-                            discount_percent={selectedAddonDetail.discount_percent}
-                          />
+                  <ScrollView style={{ flex: 1 }}>
+                    {/* Full Image */}
+                    <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+                      {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (
+                        <Image
+                          source={{ uri: selectedAddonDetail.image }}
+                          style={{ width: "100%", height: 280, borderRadius: 16 }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: "100%",
+                            height: 200,
+                            backgroundColor: theme.surfaceVariant,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: 16,
+                          }}
+                        >
+                          <Text style={{ color: theme.textLight }}>{t("serviceDetail.noImage")}</Text>
                         </View>
+                      )}
+                    </View>
 
-                        {/* Action Button */}
-                        {selectedServices.find(
-                          (s) => s.id === selectedAddonDetail.id
-                        ) ? (
-                          <View
+                    <View style={{ padding: 20 }}>
+                      <Text style={{ fontSize: 24, fontWeight: "800", color: theme.text }}>{selectedAddonDetail.title}</Text>
+                      <Text style={{ fontSize: 14, color: theme.textLight, marginTop: 4 }}>{selectedAddonDetail.duration} mins • {selectedAddonDetail.service_type || 'Add-on'}</Text>
+
+                      {/* Description */}
+                      {selectedAddonDetail.description && (
+                        <>
+                          <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: theme.text }}>Description</Text>
+                          <Text style={{ fontSize: 15, lineHeight: 22, marginTop: 8, color: theme.text }}>{selectedAddonDetail.description}</Text>
+                        </>
+                      )}
+
+                      {/* Work Includes */}
+                      {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.trim() ? (
+                        <>
+                          <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: COLORS.saffron }}>Work Includes</Text>
+                          {parseTextList(selectedAddonDetail.work_includes).map((line, idx) => (
+                            <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
+                              <Text style={{ marginRight: 8, fontSize: 15 }}>•</Text>
+                              <Text style={{ fontSize: 15, flex: 1, lineHeight: 22 }}>{line}</Text>
+                            </View>
+                          ))}
+                        </>
+                      ) : null}
+
+                      {/* Work Not Includes */}
+                      {selectedAddonDetail.work_not_included && selectedAddonDetail.work_not_included.trim() ? (
+                        <>
+                          <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: "#D32F2F" }}>Work Not Includes</Text>
+                          {parseTextList(selectedAddonDetail.work_not_included).map((line, idx) => (
+                            <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
+                              <Text style={{ marginRight: 8, fontSize: 15, color: theme.textLight }}>•</Text>
+                              <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: theme.textLight }}>{line}</Text>
+                            </View>
+                          ))}
+                        </>
+                      ) : null}
+                    </View>
+                  </ScrollView>
+
+                  {/* Pinned Bottom Area: Price and Add Button */}
+                  <View style={{
+                    padding: 20,
+                    paddingBottom: Math.max(insets.bottom, 20),
+                    borderTopWidth: 1,
+                    borderTopColor: theme.border,
+                    backgroundColor: theme.background
+                  }}>
+                    <PriceRow
+                      price={selectedAddonDetail.price}
+                      original_price={selectedAddonDetail.original_price}
+                      discount_percent={selectedAddonDetail.discount_percent}
+                    />
+
+                    {/* Action Button */}
+                    {selectedServices.find(
+                      (s) => s.id === selectedAddonDetail.id
+                    ) ? (
+                      <View
+                        style={{
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          backgroundColor: theme.surfaceVariant,
+                          borderRadius: 10,
+                          paddingHorizontal: 20,
+                          paddingVertical: 14,
+                          marginTop: 15,
+                        }}
+                      >
+                        <Pressable
+                          onPress={() => decrementAddon(selectedAddonDetail.id)}
+                          style={{
+                            paddingHorizontal: 20,
+                            paddingVertical: 8,
+                          }}
+                        >
+                          <Text style={{ fontSize: 24, fontWeight: "700", color: theme.text }}>
+                            -
+                          </Text>
+                        </Pressable>
+
+                        <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
+                          {selectedServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1}
+                        </Text>
+
+                        <Pressable
+                          onPress={() => addAddonToCart(selectedAddonDetail)}
+                          style={{
+                            paddingHorizontal: 20,
+                            paddingVertical: 8,
+                          }}
+                          disabled={(selectedServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1) >= 3}
+                        >
+                          <Text
                             style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              justifyContent: "space-between",
-                              backgroundColor: theme.surfaceVariant,
-                              borderRadius: 10,
-                              paddingHorizontal: 20,
-                              paddingVertical: 14,
-                              marginTop: 20,
+                              fontSize: 24,
+                              fontWeight: "700",
+                              color: (selectedServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1) >= 3 ? theme.textLight : theme.text
                             }}
                           >
-                            <Pressable
-                              onPress={() => decrementAddon(selectedAddonDetail.id)}
-                              style={{
-                                paddingHorizontal: 20,
-                                paddingVertical: 8,
-                              }}
-                            >
-                              <Text style={{ fontSize: 24, fontWeight: "700", color: theme.text }}>
-                                -
-                              </Text>
-                            </Pressable>
-
-                            <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
-                              {selectedServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1}
-                            </Text>
-
-                            <Pressable
-                              onPress={() => addAddonToCart(selectedAddonDetail)}
-                              style={{
-                                paddingHorizontal: 20,
-                                paddingVertical: 8,
-                              }}
-                              disabled={(selectedServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1) >= 3}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 24,
-                                  fontWeight: "700",
-                                  color: (selectedServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1) >= 3 ? theme.textLight : theme.text
-                                }}
-                              >
-                                +
-                              </Text>
-                            </Pressable>
-                          </View>
-                        ) : (
-                          <Pressable
-                            onPress={() => addAddonToCart(selectedAddonDetail)}
-                            style={{
-                              backgroundColor: COLORS.saffron,
-                              paddingVertical: 14,
-                              borderRadius: 10,
-                              alignItems: "center",
-                              marginTop: 20,
-                            }}
-                          >
-                            <Text
-                              style={{
-                                color: "#000",
-                                fontWeight: "700",
-                                fontSize: 16,
-                              }}
-                            >
-                              + Add to Booking
-                            </Text>
-                          </Pressable>
-                        )}
-
-                        {/* Description */}
-                        {selectedAddonDetail.description && (
-                          <>
-                            <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: theme.text }}>Description</Text>
-                            <Text style={{ fontSize: 15, lineHeight: 22, marginTop: 8, color: theme.text }}>{selectedAddonDetail.description}</Text>
-                          </>
-                        )}
-
-                        {/* Work Includes */}
-                        {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.trim() ? (
-                          <>
-                            <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: COLORS.saffron }}>Work Includes</Text>
-                            {parseTextList(selectedAddonDetail.work_includes).map((line, idx) => (
-                              <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
-                                <Text style={{ marginRight: 8, fontSize: 15 }}>•</Text>
-                                <Text style={{ fontSize: 15, flex: 1, lineHeight: 22 }}>{line}</Text>
-                              </View>
-                            ))}
-                          </>
-                        ) : null}
-
-                        {/* Work Not Includes */}
-                        {selectedAddonDetail.work_not_included && selectedAddonDetail.work_not_included.trim() ? (
-                          <>
-                            <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: "#D32F2F" }}>Work Not Includes</Text>
-                            {parseTextList(selectedAddonDetail.work_not_included).map((line, idx) => (
-                              <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
-                                <Text style={{ marginRight: 8, fontSize: 15, color: theme.textLight }}>•</Text>
-                                <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: theme.textLight }}>{line}</Text>
-                              </View>
-                            ))}
-                          </>
-                        ) : null}
+                            +
+                          </Text>
+                        </Pressable>
                       </View>
-                    </ScrollView>
+                    ) : (
+                      <Pressable
+                        onPress={() => addAddonToCart(selectedAddonDetail)}
+                        style={{
+                          backgroundColor: COLORS.saffron,
+                          paddingVertical: 14,
+                          borderRadius: 10,
+                          alignItems: "center",
+                          marginTop: 15,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#000",
+                            fontWeight: "800",
+                            fontSize: 16,
+                          }}
+                        >
+                          + Add
+                        </Text>
+                      </Pressable>
+                    )}
                   </View>
-                </AnimatedGradientBorder>
-              </View>
+                </View>
+              </AnimatedGradientBorder>
+            </View>
           </Modal>
         )}
 

@@ -736,8 +736,21 @@ export default function CheckoutScreen({ route }: Props) {
       setTimeout(() => {
         setShowSuccessModal(false);
         navigation.reset({
-          index: 1,
-          routes: [{ name: "Home" }, { name: "MyBookings" }],
+          index: 0,
+          routes: [
+            {
+              name: "HomeDrawer",
+              params: {
+                screen: "AuthenticatedScreens",
+                params: {
+                  screen: "MainTabs",
+                  params: {
+                    screen: "MyBookingsTab",
+                  },
+                },
+              },
+            },
+          ],
         });
       }, 2500);
 
@@ -949,7 +962,7 @@ export default function CheckoutScreen({ route }: Props) {
                       style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12, backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
                       value={manualAddress}
                       onChangeText={setManualAddress}
-                      placeholder="e.g. Plot no 1821, flat no 402, Sri sai nilayam, Pragathi nagar, Hyderabad"
+                      placeholder="Plot No, Flat No, Building Name, Area, City"
                       placeholderTextColor={theme.textLight}
                       multiline
                       numberOfLines={4}
@@ -1251,7 +1264,7 @@ export default function CheckoutScreen({ route }: Props) {
                     alertConfig.type === 'error'
                       ? '#EF4444'
                       : alertConfig.type === 'warning'
-                        ? '#F59E0B'
+                        ? '#F4C430'
                         : '#3B82F6'
                   }
                 />
@@ -1748,7 +1761,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#EF4444",
   },
   alertButtonWarning: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#F4C430",
   },
   alertButtonInfo: {
     backgroundColor: "#3B82F6",
@@ -1794,7 +1807,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   couponApplyBtn: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#F4C430",
     borderRadius: 8,
     paddingVertical: 10,
     paddingHorizontal: 20,

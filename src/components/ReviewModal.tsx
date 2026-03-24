@@ -59,8 +59,8 @@ export default function ReviewModal({
                     >
                         <Star
                             size={32}
-                            color={star <= rating ? "#F59E0B" : theme.border}
-                            fill={star <= rating ? "#F59E0B" : "none"}
+                            color={star <= rating ? "#F4C430" : theme.border}
+                            fill={star <= rating ? "#F4C430" : "none"}
                             style={{ marginHorizontal: 4 }}
                         />
                     </TouchableOpacity>

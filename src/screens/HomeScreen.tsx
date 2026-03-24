@@ -355,11 +355,11 @@ export default function HomeScreen({ navigation }: any) {
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => setCurrentSlide(Math.round(e.nativeEvent.contentOffset.x / (width - 44)))}
+                onMomentumScrollEnd={(e) => setCurrentSlide(Math.round(e.nativeEvent.contentOffset.x / (width - 24)))}
                 onScrollBeginDrag={() => setIsUserSwiping(true)}
                 onScrollEndDrag={() => setIsUserSwiping(false)}
                 renderItem={({ item }) => (
-                  <View style={{ width: width - 44, height: SLIDER_HEIGHT }}>
+                  <View style={{ width: width - 24, height: SLIDER_HEIGHT }}>
                     <Image source={item} style={{ width: "100%", height: "100%" }} contentFit="cover" />
                   </View>
                 )}

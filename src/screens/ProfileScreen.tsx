@@ -59,7 +59,7 @@ const FieldCard = memo(
     const { theme } = useTheme();
     return (
       <View style={[styles.fieldCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, { color: theme.textMuted }]}>{label}</Text>
 
         {isEditing && editable ? (
           <TextInput
@@ -336,9 +336,9 @@ export default function ProfileScreen() {
           />
 
           <View style={[styles.fieldCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            <Text style={[styles.label, { color: theme.textLight }]}>{t("profile.email")}</Text>
-            <Text style={[styles.valueMuted, { color: theme.textLight }]}>{formData.email}</Text>
-            <Text style={[styles.hintText, { color: theme.textLight }]}>{t("profile.emailHint")}</Text>
+            <Text style={[styles.label, { color: theme.textMuted }]}>{t("profile.email")}</Text>
+            <Text style={[styles.valueMuted, { color: theme.textMuted }]}>{formData.email}</Text>
+            <Text style={[styles.hintText, { color: theme.textMuted }]}>{t("profile.emailHint")}</Text>
           </View>
 
           <FieldCard
@@ -399,7 +399,7 @@ export default function ProfileScreen() {
                   <Phone size={20} color={isDark ? theme.background : "#fff"} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.customerCareLabel, { color: theme.textLight }]}>{t("profile.customerCare")}</Text>
+                  <Text style={[styles.customerCareLabel, { color: theme.textMuted }]}>{t("profile.customerCare")}</Text>
                   <Text style={[styles.customerCareNumber, { color: theme.text }]}>7617618567</Text>
                 </View>
               </View>

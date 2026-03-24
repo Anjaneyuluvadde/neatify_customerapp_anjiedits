@@ -36,7 +36,7 @@ export default function Header({ searchText, onSearchChange }: HeaderProps) {
             onPress={() => navigation.reset({ index: 0, routes: [{ name: "HomeDrawer" }] })}
           >
             <Image
-              source={require("../../assets/images/neatifylogo.png")}
+              source={isDark ? require("../../assets/images/Dark Theme logo.png") : require("../../assets/images/neatifylogo.png")}
               contentFit="contain"
               style={styles.logo}
               pointerEvents="none"

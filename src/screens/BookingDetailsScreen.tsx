@@ -492,7 +492,7 @@ export default function BookingDetailsScreen({ route }: Props) {
                 <View>
                   <Text style={[styles.reviewLabel, { color: theme.textLight }]}>{t("review.yourRating")}</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
-                    <Text style={{ fontSize: 24, fontWeight: "bold", color: "#F59E0B", marginRight: 8 }}>
+                    <Text style={{ fontSize: 24, fontWeight: "bold", color: "#F4C430", marginRight: 8 }}>
                       {review.rating} ★
                     </Text>
                     <Text style={{ color: theme.textLight }}>
@@ -715,8 +715,8 @@ const styles = StyleSheet.create({
     elevation: 0,
   },
   refundPendingButton: {
-    backgroundColor: "#F59E0B", // Orange for pending refund
-    shadowColor: "#F59E0B",
+    backgroundColor: "#F4C430", // Orange for pending refund
+    shadowColor: "#F4C430",
     elevation: 4,
   },
   refundCompletedButton: {
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   rateButton: {
-    backgroundColor: "#F59E0B",
+    backgroundColor: "#F4C430",
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
@@ -814,14 +814,14 @@ const styles = StyleSheet.create({
   editReviewBtn: {
     marginTop: 8,
     borderWidth: 1,
-    borderColor: "#F59E0B",
+    borderColor: "#F4C430",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 8,
     alignSelf: "flex-start",
   },
   editReviewText: {
-    color: "#F59E0B",
+    color: "#F4C430",
     fontWeight: "600",
     fontSize: 14,
   },

@@ -70,9 +70,8 @@
         }
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground1.png",
-        "backgroundImage": "./assets/images/android-icon-background1.png",
-        "backgroundColor": "#E6F4FE"
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#FFFFFF"
       }
     },
     "plugins": [
@@ -91,9 +90,8 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f18007ff-3f70-4132-9459-4fbd872d281d"
+        "projectId": "523831f4-d3aa-4083-aa07-9536fdf96aef"
       }
-    },
-    "owner": "vijayadurga_03"
+    }
   }
 }

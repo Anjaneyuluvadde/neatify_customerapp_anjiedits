@@ -122,15 +122,16 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
           <Text style={[styles.sectionTitle, { color: theme.textLight }]}>PREFERENCES</Text>
 
           <View style={styles.preferenceItem}>
-            <View style={[styles.modeToggleRow, { backgroundColor: theme.surfaceVariant }]}>
-              <Text style={[styles.modeText, !isDark && { color: theme.text }]}>LIGHT MODE</Text>
+            <View style={[styles.modeToggleRow, { backgroundColor: isDark ? "#1F2937" : "#F1F5F9" }]}>
+              <Text style={[styles.modeText, !isDark ? { color: theme.text, opacity: 1 } : { color: theme.textMuted, opacity: 0.5 }]}>LIGHT MODE</Text>
               <Switch
                 value={isDark}
                 onValueChange={toggleTheme}
-                trackColor={{ false: theme.border, true: theme.border }}
+                trackColor={{ false: isDark ? "#374151" : "#CBD5E1", true: isDark ? "#374151" : "#CBD5E1" }}
                 thumbColor={isDark ? theme.primary : "#fff"}
+                ios_backgroundColor={isDark ? "#374151" : "#CBD5E1"}
               />
-              <Text style={[styles.modeText, isDark && { color: theme.text }]}>DARK MODE</Text>
+              <Text style={[styles.modeText, isDark ? { color: theme.text, opacity: 1 } : { color: theme.textMuted, opacity: 0.5 }]}>DARK MODE</Text>
             </View>
           </View>
         </View>
@@ -275,7 +276,6 @@ const styles = StyleSheet.create({
   modeText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#94A3B8',
   },
   activeModeText: {
     color: '#475569',

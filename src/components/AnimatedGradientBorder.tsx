@@ -8,6 +8,7 @@ interface AnimatedGradientBorderProps {
   borderWidth?: number;
   animationSpeed?: number;
   style?: ViewStyle;
+  flex?: number;
 }
 
 const AnimatedGradient = Animated.createAnimatedComponent(LinearGradient);
@@ -18,6 +19,7 @@ export default function AnimatedGradientBorder({
   borderWidth = 2,
   animationSpeed = 4, // Higher is slower (duration in seconds)
   style,
+  flex,
 }: AnimatedGradientBorderProps) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
 
@@ -50,7 +52,7 @@ export default function AnimatedGradientBorder({
           ]}
         >
           <LinearGradient
-            colors={["#F59E0B", "#FCD34D", "#FFFFFF", "#FCD34D", "#F59E0B"]}
+            colors={["#F4C430", "#FCD34D", "#FFFFFF", "#FCD34D", "#F4C430"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.gradient}
@@ -65,6 +67,7 @@ export default function AnimatedGradientBorder({
           {
             margin: borderWidth,
             borderRadius: Math.max(0, borderRadius - borderWidth),
+            flex: flex,
           },
         ]}
       >

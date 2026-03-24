@@ -58,7 +58,7 @@ export default function CustomAlert({
             case "error":
                 return COLORS.error;
             case "warning":
-                return "#F59E0B";
+                return "#F4C430";
             default:
                 // Use app theme color (Saffron) for info
                 return COLORS.saffron;
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
         backgroundColor: COLORS.error,
     },
     confirmButtonWarning: {
-        backgroundColor: "#F59E0B",
+        backgroundColor: "#F4C430",
     },
     confirmButtonInfo: {
         // Use app theme color (Saffron)
