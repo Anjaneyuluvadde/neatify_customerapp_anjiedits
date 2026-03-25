@@ -1025,7 +1025,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                                 </Text>
 
                                 <Text style={{ fontSize: 15, fontWeight: "700", color: theme.text, marginTop: 2 }}>
-                                  ₹{addon.price}
+                                  {addon.price}
                                 </Text>
                               </View>
 
@@ -1159,7 +1159,7 @@ export default function ServiceDetailScreen({ route }: Props) {
             onRequestClose={() => setSelectedAddonDetail(null)}
             statusBarTranslucent={true}
           >
-            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10 }}>
+            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}>
               <AnimatedGradientBorder
                 borderRadius={20}
                 borderWidth={2}
@@ -1186,7 +1186,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                     <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
                   </Pressable>
 
-                  <ScrollView style={{ flex: 1 }}>
+                  <ScrollView style={{ flex: 1 }} scrollEventThrottle={16} showsVerticalScrollIndicator={false} decelerationRate="normal">
                     {/* Full Image */}
                     <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
                       {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (
@@ -1229,8 +1229,8 @@ export default function ServiceDetailScreen({ route }: Props) {
                           <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: COLORS.saffron }}>Work Includes</Text>
                           {parseTextList(selectedAddonDetail.work_includes).map((line, idx) => (
                             <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
-                              <Text style={{ marginRight: 8, fontSize: 15 }}>•</Text>
-                              <Text style={{ fontSize: 15, flex: 1, lineHeight: 22 }}>{line}</Text>
+                              <Text style={{ marginRight: 8, fontSize: 15, color: theme.text }}>•</Text>
+                              <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: theme.text }}>{line}</Text>
                             </View>
                           ))}
                         </>

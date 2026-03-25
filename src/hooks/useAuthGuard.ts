@@ -22,10 +22,7 @@ export function useAuthGuard() {
                     onConfirm: () => {
                         // Traverse to root and navigate to Login
                         const parent = navigation.getParent("root-drawer") || navigation;
-                        parent.reset({
-                            index: 0,
-                            routes: [{ name: "Login" }],
-                        });
+                        parent.navigate("Login");
                     }
                 });
                 return false;

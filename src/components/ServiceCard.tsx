@@ -57,9 +57,13 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
 
         <View style={styles.priceRow}>
           {service.original_price && Number(String(service.original_price).replace(/[^\d.]/g, '')) > 0 ? (
-            <Text style={styles.originalPrice}>₹{service.original_price}</Text>
+            <Text style={styles.originalPrice}>
+              {String(service.original_price).startsWith('₹') ? service.original_price : `₹${service.original_price}`}
+            </Text>
           ) : null}
-          <Text style={[styles.currentPrice, { color: theme.text }]}>{service.price}</Text>
+          <Text style={[styles.currentPrice, { color: theme.text }]}>
+            {String(service.price).startsWith('₹') ? service.price : `₹${service.price}`}
+          </Text>
         </View>
 
         <View style={styles.button}>

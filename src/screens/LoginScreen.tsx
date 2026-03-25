@@ -1,4 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { Eye, EyeOff, Lock, Mail, Phone, User } from "lucide-react-native";
 import React, { useState } from "react";
@@ -15,9 +16,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import NeatifyLogo from "../../assets/images/neatifylogo.png";
+import DarkThemeLogo from "../../assets/images/Dark Theme logo.png";
 import { signInWithGoogle } from "../auth/useGoogleAuth";
 import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
@@ -31,6 +33,7 @@ export default function LoginScreen(props: any) {
   const { showAlert, showToast } = useNotification();
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -230,6 +233,28 @@ export default function LoginScreen(props: any) {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={theme.background} />
 
+      {/* BACK BUTTON */}
+      <TouchableOpacity
+        onPress={() => {
+          if (navigation.canGoBack()) {
+            navigation.goBack();
+          } else {
+            navigation.replace("HomeDrawer");
+          }
+        }}
+        style={{
+          position: "absolute",
+          top: Math.max(insets.top, 20), // Use safe inset or at least 20px
+          left: 15,
+          zIndex: 100,
+          padding: 8,
+          borderRadius: 25,
+          backgroundColor: isDark ? "rgba(255, 255, 255, 0.15)" : "rgba(0,0,0,0.08)",
+        }}
+      >
+        <Ionicons name="arrow-back" size={26} color={theme.text} />
+      </TouchableOpacity>
+
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -242,9 +267,9 @@ export default function LoginScreen(props: any) {
           {/* HEADER */}
           <View style={styles.header}>
             <Image
-              source={NeatifyLogo}
+              source={isDark ? DarkThemeLogo : NeatifyLogo}
               style={styles.logo}
-              resizeMode="contain"
+              contentFit="contain"
             />
             <Text style={[styles.subtitle, { color: theme.textLight }]}>{t("login.title")}</Text>
           </View>

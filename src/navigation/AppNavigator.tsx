@@ -1,6 +1,7 @@
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -21,6 +22,7 @@ import ServiceDetailScreen from "../screens/ServiceDetailScreen";
 
 import { Service } from "../types/service";
 import { COLORS } from "../theme/colors";
+import { useAuthGuard } from "../hooks/useAuthGuard";
 
 /* ================= TYPES ================= */
 
@@ -133,6 +135,7 @@ function BookingsTabStack() {
 function MainTabs() {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
+  const { checkAuth } = useAuthGuard();
 
   return (
     <Tab.Navigator
@@ -181,11 +184,29 @@ function MainTabs() {
         name="MyBookingsTab" 
         component={BookingsTabStack} 
         options={{ tabBarLabel: "Bookings" }} 
+        listeners={({ navigation }) => ({
+          tabPress: async (e) => {
+            e.preventDefault();
+            const isAuth = await checkAuth("view your bookings");
+            if (isAuth) {
+              navigation.navigate("MyBookingsTab");
+            }
+          },
+        })}
       />
       <Tab.Screen 
         name="ProfileTab" 
         component={ProfileScreen as any} 
         options={{ tabBarLabel: "Profile" }} 
+        listeners={({ navigation }) => ({
+          tabPress: async (e) => {
+            e.preventDefault();
+            const isAuth = await checkAuth("view your profile");
+            if (isAuth) {
+              navigation.navigate("ProfileTab");
+            }
+          },
+        })}
       />
     </Tab.Navigator>
   );

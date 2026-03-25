@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useEffect, useMemo, useState } from "react";
@@ -237,6 +238,22 @@ const isTimeSlotValid = (
   return true;
 };
 
+/* ================= PRICE HELPERS ================= */
+
+const formatPrice = (value: any) => {
+  if (value === null || value === undefined) return "";
+  return value
+    .toString()
+    .replace(/^₹\s*/, "")
+    .replace(/,/g, "");
+};
+
+const displayRupee = (value: any) => {
+  const cleaned = formatPrice(value);
+  if (!cleaned) return "";
+  return `₹${Number(cleaned).toLocaleString("en-IN")}`;
+};
+
 /* ================= COMPONENT ================= */
 
 type ScheduleScreenProps = {
@@ -249,6 +266,14 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
+
+  const offerBadgeText = (discount_percent: any, percentText?: any) => {
+    if (percentText) return percentText;
+    if (discount_percent && Number(discount_percent) > 0) {
+      return `${discount_percent}% off`;
+    }
+    return t("serviceDetail.specialOffer");
+  };
 
   const services = route.params?.services || [];
 
@@ -438,6 +463,92 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
     }
   };
 
+  /* ================= REUSABLE PRICE ROW ================= */
+
+  const PriceRow = ({
+    price,
+    original_price,
+    discount_percent,
+    percentText,
+    size = "normal",
+  }: {
+    price: any;
+    original_price?: any;
+    discount_percent?: any;
+    percentText?: any;
+    size?: "normal" | "small";
+  }) => {
+    const cleanPrice = formatPrice(price);
+    const cleanOriginal = formatPrice(original_price);
+
+    const hasOld =
+      original_price !== null &&
+      original_price !== undefined &&
+      cleanOriginal &&
+      Number(cleanOriginal) > Number(cleanPrice);
+
+    const fontSize = size === "small" ? 16 : 22;
+    const oldPriceSize = size === "small" ? 12 : 15;
+    const badgePaddingV = size === "small" ? 4 : 8;
+
+    return (
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          marginTop: size === "small" ? 6 : 10,
+          gap: 8,
+          flexWrap: "wrap",
+        }}
+      >
+        {hasOld && (
+          <Text
+            style={{
+              fontSize: oldPriceSize,
+              color: theme.textLight,
+              textDecorationLine: "line-through",
+              textDecorationStyle: "solid",
+              marginTop: 2,
+            }}
+          >
+            {displayRupee(original_price)}
+          </Text>
+        )}
+
+        <Text
+          style={{
+            fontSize: fontSize,
+            fontWeight: "800",
+            color: theme.text,
+          }}
+        >
+          {displayRupee(price)}
+        </Text>
+
+        {(percentText || (discount_percent && discount_percent > 0)) && (
+          <View
+            style={{
+              backgroundColor: isDark ? "rgba(22, 163, 74, 0.2)" : "#E9F7EF",
+              paddingHorizontal: 10,
+              paddingVertical: badgePaddingV,
+              borderRadius: 22,
+            }}
+          >
+            <Text
+              style={{
+                color: isDark ? "#4ade80" : "#1E7E34",
+                fontWeight: "700",
+                fontSize: size === "small" ? 11 : 14,
+              }}
+            >
+              {percentText || offerBadgeText(discount_percent)}
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   /* ================= UI ================= */
 
   return (
@@ -581,7 +692,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         <View style={styles.headerRow}>
           <Text style={[styles.section, { color: theme.text }]}>{t("schedule.serviceDetails")}</Text>
           <Pressable onPress={() => setShowSummary(true)}>
-            <Text style={styles.edit}>{t("schedule.edit")}</Text>
+            <Text style={[styles.edit, { color: theme.text }]}>{t("schedule.edit")}</Text>
           </Pressable>
         </View>
 
@@ -784,7 +895,11 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                     {index !== 0 && (
                       <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
                         <Pressable 
-                          onPress={() => setSelectedAddonDetail(s as any)}
+                          onPress={() => {
+                            const fullAddon = addons.find(a => a.id === s.id);
+                            setShowSummary(false);
+                            setSelectedAddonDetail(fullAddon || (s as any));
+                          }}
                           style={{
                             paddingVertical: 6,
                             paddingHorizontal: 12,
@@ -988,6 +1103,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                               <Pressable
                                 onPress={(e) => {
                                   e.stopPropagation();
+                                  setShowAddonsModal(false);
                                   setSelectedAddonDetail(addon);
                                 }}
                                 style={{
@@ -1100,112 +1216,142 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
       {/* ================= ADDON DETAIL MODAL ================= */}
       {selectedAddonDetail && (
-        <Modal visible={!!selectedAddonDetail} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => setSelectedAddonDetail(null)}>
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, justifyContent: "flex-end" }}>
+        <Modal
+          visible={!!selectedAddonDetail}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setSelectedAddonDetail(null)}
+          statusBarTranslucent={true}
+        >
+          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}>
             <AnimatedGradientBorder
               borderRadius={20}
               borderWidth={2}
               animationSpeed={3}
-              style={{ width: "100%", maxHeight: "85%" }}
+              style={{ flex: 1 }}
+              flex={1}
             >
-              <View style={{
-                backgroundColor: theme.background,
-                borderRadius: 20,
-                flex: 1,
-                overflow: 'hidden',
-                width: "100%"
-              }}>
-                {/* Header */}
-                <View style={{ flexDirection: "row", justifyContent: "space-between", padding: 16, borderBottomWidth: 1, borderBottomColor: theme.border }}>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: theme.text }}>{selectedAddonDetail.title}</Text>
-                  <Pressable onPress={() => setSelectedAddonDetail(null)}>
-                    <Text style={{ fontSize: 20, color: theme.text }}>✕</Text>
-                  </Pressable>
-                </View>
+              <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20, overflow: 'hidden' }}>
+                {/* Close Button absolute top right */}
+                <Pressable
+                  onPress={() => setSelectedAddonDetail(null)}
+                  style={{
+                    position: 'absolute',
+                    top: 20,
+                    right: 20,
+                    zIndex: 10,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    borderRadius: 20,
+                    width: 36,
+                    height: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
+                </Pressable>
 
-                <ScrollView contentContainerStyle={{ padding: 20 }}>
-                  {/* addon image */}
-                  {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (
-                    <Image
-                      source={{ uri: selectedAddonDetail.image }}
-                      style={{ width: "100%", height: 280, borderRadius: 8 }}
-                      contentFit="cover"
-                    />
-                  ) : (
-                    <View
-                      style={{
-                        width: "100%",
-                        height: 200,
-                        backgroundColor: theme.surfaceVariant,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        borderRadius: 8,
-                      }}
-                    >
-                      <Text style={{ color: theme.textLight }}>No Image Available</Text>
-                    </View>
-                  )}
+                <ScrollView style={{ flex: 1 }} scrollEventThrottle={16} showsVerticalScrollIndicator={false} decelerationRate="normal">
+                  {/* Full Image */}
+                  <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+                    {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (
+                      <Image
+                        source={{ uri: selectedAddonDetail.image }}
+                        style={{ width: "100%", height: 280, borderRadius: 16 }}
+                        contentFit="cover"
+                      />
+                    ) : (
+                      <View
+                        style={{
+                          width: "100%",
+                          height: 200,
+                          backgroundColor: theme.surfaceVariant,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderRadius: 16,
+                        }}
+                      >
+                        <Text style={{ color: theme.textLight }}>No Image Available</Text>
+                      </View>
+                    )}
+                  </View>
 
-                  {/* Duration */}
-                  <Text style={{ fontSize: 15, color: theme.textLight, marginBottom: 8, marginTop: 10 }}>
-                    {selectedAddonDetail.duration} mins
-                  </Text>
+                  <View style={{ padding: 20 }}>
+                    <Text style={{ fontSize: 24, fontWeight: "800", color: theme.text }}>{selectedAddonDetail.title}</Text>
+                    <Text style={{ fontSize: 14, color: theme.textLight, marginTop: 4 }}>{selectedAddonDetail.duration} mins • {selectedAddonDetail.service_type || 'Add-on'}</Text>
 
-                  {/* Price */}
-                  <Text style={{ fontSize: 20, fontWeight: "800", marginBottom: 16, color: theme.text }}>
-                    {String(selectedAddonDetail.price).startsWith('₹') ? selectedAddonDetail.price : `₹${selectedAddonDetail.price}`}
-                  </Text>
+                    {/* Description */}
+                    {selectedAddonDetail.description && (
+                      <>
+                        <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: theme.text }}>Description</Text>
+                        <Text style={{ fontSize: 15, lineHeight: 22, marginTop: 8, color: theme.text }}>{selectedAddonDetail.description}</Text>
+                      </>
+                    )}
 
-                  {/* Description */}
-                  {selectedAddonDetail.description && (
-                    <>
-                      <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: theme.text }}>Description</Text>
-                      <Text style={{ fontSize: 15, lineHeight: 22, marginTop: 8, color: theme.textLight }}>{selectedAddonDetail.description}</Text>
-                    </>
-                  )}
+                    {/* Work Includes */}
+                    {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.trim() ? (
+                      <>
+                        <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: COLORS.saffron }}>Work Includes</Text>
+                        {parseTextList(selectedAddonDetail.work_includes).map((line, idx) => (
+                          <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
+                            <Text style={{ marginRight: 8, fontSize: 15, color: theme.text }}>•</Text>
+                            <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: theme.text }}>{line}</Text>
+                          </View>
+                        ))}
+                      </>
+                    ) : null}
 
-                  {/* Work Includes */}
-                  {selectedAddonDetail.work_includes && selectedAddonDetail.work_includes.trim() ? (
-                    <>
-                      <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: COLORS.saffron }}>Work Includes</Text>
-                      {parseTextList(selectedAddonDetail.work_includes).map((line, idx) => (
-                        <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
-                          <Text style={{ marginRight: 8, fontSize: 15, color: theme.text }}>•</Text>
-                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: theme.text }}>{line}</Text>
-                        </View>
-                      ))}
-                    </>
-                  ) : null}
-
-                  {/* Work Not Includes */}
-                  {selectedAddonDetail.work_not_included && selectedAddonDetail.work_not_included.trim() ? (
-                    <>
-                      <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: "#D32F2F" }}>Work Not Includes</Text>
-                      {parseTextList(selectedAddonDetail.work_not_included).map((line, idx) => (
-                        <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
-                          <Text style={{ marginRight: 8, fontSize: 15, color: theme.textLight }}>•</Text>
-                          <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: theme.textLight }}>{line}</Text>
-                        </View>
-                      ))}
-                    </>
-                  ) : null}
+                    {/* Work Not Includes */}
+                    {selectedAddonDetail.work_not_included && selectedAddonDetail.work_not_included.trim() ? (
+                      <>
+                        <Text style={{ fontSize: 18, fontWeight: "700", marginTop: 24, color: "#D32F2F" }}>Work Not Includes</Text>
+                        {parseTextList(selectedAddonDetail.work_not_included).map((line, idx) => (
+                          <View key={idx} style={{ flexDirection: "row", marginTop: 8 }}>
+                            <Text style={{ marginRight: 8, fontSize: 15, color: theme.textLight }}>•</Text>
+                            <Text style={{ fontSize: 15, flex: 1, lineHeight: 22, color: theme.textLight }}>{line}</Text>
+                          </View>
+                        ))}
+                      </>
+                    ) : null}
+                  </View>
                 </ScrollView>
 
-                {/* Add Button */}
+                {/* Pinned Bottom Area: Price and Add Button */}
                 <View style={{
-                  padding: 16,
-                  paddingBottom: Math.max(insets.bottom, 16),
+                  padding: 20,
+                  paddingBottom: Math.max(insets.bottom, 20),
                   borderTopWidth: 1,
                   borderTopColor: theme.border,
                   backgroundColor: theme.background
                 }}>
-                  {editServices.some((s) => s.id === selectedAddonDetail.id) ? (
-                    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 6 }}>
+                  <PriceRow
+                    price={selectedAddonDetail.price}
+                    original_price={selectedAddonDetail.original_price}
+                    discount_percent={selectedAddonDetail.discount_percent}
+                    percentText={(selectedAddonDetail as any).discount_label}
+                  />
+
+                  {/* Action Button */}
+                  {editServices.find(
+                    (s) => s.id === selectedAddonDetail.id
+                  ) ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0',
+                        borderRadius: 10,
+                        paddingHorizontal: 20,
+                        paddingVertical: 14,
+                        marginTop: 15,
+                      }}
+                    >
                       <Pressable
                         onPress={() => decrementAddon(selectedAddonDetail.id)}
                         style={{ paddingHorizontal: 20, paddingVertical: 8 }}
                       >
-                        <Text style={{ fontSize: 22, fontWeight: "700", color: theme.text }}>-</Text>
+                        <Text style={{ fontSize: 24, fontWeight: "700", color: theme.text }}>-</Text>
                       </Pressable>
 
                       <Text style={{ fontSize: 18, fontWeight: "700", color: theme.text }}>
@@ -1219,7 +1365,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                       >
                         <Text
                           style={{
-                            fontSize: 22,
+                            fontSize: 24,
                             fontWeight: "700",
                             color: (editServices.find((s) => s.id === selectedAddonDetail.id)?.quantity || 1) >= (selectedAddonDetail.max_quantity || 3) ? theme.textLight : theme.text
                           }}
@@ -1231,7 +1377,13 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                   ) : (
                     <Pressable
                       onPress={() => addAddonToCart(selectedAddonDetail)}
-                      style={{ backgroundColor: COLORS.saffron, paddingVertical: 14, borderRadius: 10, alignItems: "center" }}
+                      style={{
+                        backgroundColor: COLORS.saffron,
+                        paddingVertical: 14,
+                        borderRadius: 10,
+                        alignItems: "center",
+                        marginTop: 15,
+                      }}
                     >
                       <Text style={{ color: "#000", fontWeight: "800", fontSize: 16 }}>+ Add</Text>
                     </Pressable>
@@ -1404,7 +1556,7 @@ const styles = StyleSheet.create({
   },
 
   remove: { color: "#000" },
-  edit: { color: "#000", fontWeight: "600" },
+  edit: { fontWeight: "600" },
 
   outlineBtn: {
     borderWidth: 1,

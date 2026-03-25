@@ -96,19 +96,44 @@ export default function BookingDetailsScreen({ route }: Props) {
     const checkEligibility = async () => {
       if (!booking.id) return;
 
-      const { data, error } = await supabase.rpc('check_cancellation_eligibility', {
+      // 1. Server-side check (Primary source of truth)
+      const { data: serverEligible, error } = await supabase.rpc('check_cancellation_eligibility', {
         booking_uuid: booking.id,
       });
 
-      if (!error && data) {
-        setIsEligibleToCancel(data);
+      // 2. Client-side verification as backup (6 hours from created_at)
+      let clientEligible = true;
+      if (booking.created_at) {
+        const createdAt = new Date(booking.created_at);
+        const now = new Date();
+        const diffMs = now.getTime() - createdAt.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        
+        // Check if more than 6 hours since creation OR already completed/cancelled
+        if (diffHours > 6 || ['COMPLETED', 'CANCELLED'].includes(booking.work_status)) {
+          clientEligible = false;
+        }
+      }
+
+      if (!error && serverEligible !== null) {
+        setIsEligibleToCancel(!!serverEligible);
+      } else {
+        setIsEligibleToCancel(clientEligible);
       }
     };
 
     checkEligibility();
-  }, [booking, booking.id]);
+  }, [booking]);
 
   const handleCancelBooking = () => {
+    if (!isEligibleToCancel) {
+      showAlert({
+        type: "info",
+        title: t("notifications.cancellationClosed"),
+        message: "Cancellation is only available within 6 hours of booking creation."
+      });
+      return;
+    }
     setShowCancelModal(true);
   };
 
@@ -448,7 +473,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         )}
 
         {/* CANCEL BUTTON */}
-        {isEligibleToCancel && booking.work_status !== 'CANCELLED' && booking.work_status !== 'COMPLETED' && booking.payment_status !== 'failed' ? (
+        {isEligibleToCancel && booking.work_status !== 'CANCELLED' && booking.work_status !== 'COMPLETED' ? (
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={handleCancelBooking}
@@ -605,7 +630,7 @@ export default function BookingDetailsScreen({ route }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, paddingBottom: 40 },
+  container: { padding: 20, paddingBottom: 100 },
   header: { marginBottom: 20 },
   title: { fontSize: 26, fontWeight: "800" },
 

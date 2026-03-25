@@ -76,11 +76,13 @@ export default function HomeScreen({ navigation }: any) {
   // ✅ Refs
   const sliderRef = useRef<FlatList>(null);
   const pagerRef = useRef<FlatList>(null);
+  const scrollRef = useRef<ScrollView>(null); // Main ScrollView ref
   const isProgrammaticScroll = useRef(false);
   const popupSliderRef = useRef<FlatList>(null);
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isUserSwiping, setIsUserSwiping] = useState(false);
+  const [servicesY, setServicesY] = useState(0); // Store Y position of services section
 
   // ✅ Popup state
   const POPUP_WIDTH = Math.min(width - 48, 360);
@@ -323,6 +325,7 @@ export default function HomeScreen({ navigation }: any) {
         <View style={styles.center}><ActivityIndicator size="large" color={COLORS.saffron} /></View>
       ) : (
         <ScrollView
+          ref={scrollRef}
           stickyHeaderIndices={[heroBanners.length > 0 ? 2 : 1]} // Dynamic sticky index
           showsVerticalScrollIndicator={false}
           refreshControl={
@@ -348,7 +351,10 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* 2. Hero Slider */}
           {heroBanners.length > 0 && (
-            <View style={{ height: SLIDER_HEIGHT, marginHorizontal: 12, marginTop: 8, borderRadius: 20, overflow: "hidden", backgroundColor: theme.surfaceVariant }}>
+            <Pressable 
+              onPress={() => scrollRef.current?.scrollTo({ y: servicesY, animated: true })}
+              style={{ height: SLIDER_HEIGHT, marginHorizontal: 12, marginTop: 8, borderRadius: 20, overflow: "hidden", backgroundColor: theme.surfaceVariant }}
+            >
               <FlatList
                 ref={sliderRef}
                 data={heroBanners}
@@ -369,11 +375,13 @@ export default function HomeScreen({ navigation }: any) {
                   <View key={i} style={[styles.dot, { backgroundColor: currentSlide === i ? "#fff" : "rgba(255,255,255,0.4)", width: currentSlide === i ? 20 : 8 }]} />
                 ))}
               </View>
-            </View>
+            </Pressable>
           )}
 
           {/* 3. Category Tabs (Sticky) */}
-          <CategoryTabs activeTab={activeCategory} onChange={handleCategoryChange} tabs={tabs} />
+          <View onLayout={(e) => setServicesY(e.nativeEvent.layout.y)}>
+            <CategoryTabs activeTab={activeCategory} onChange={handleCategoryChange} tabs={tabs} />
+          </View>
 
           {/* 4. Title Heading */}
           <View style={[styles.titleRow, { backgroundColor: theme.background }]}>

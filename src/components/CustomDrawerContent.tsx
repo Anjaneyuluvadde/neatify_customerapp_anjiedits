@@ -6,10 +6,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
+import { useAuthGuard } from "../hooks/useAuthGuard";
 
 export default function CustomDrawerContent(props: DrawerContentComponentProps) {
   const insets = useSafeAreaInsets();
   const { theme, isDark, toggleTheme } = useTheme();
+  const { checkAuth } = useAuthGuard();
 
   // Auth State
   const [session, setSession] = useState<any>(null);
@@ -96,7 +98,11 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
 
           <Pressable
             style={styles.navItem}
-            onPress={() => props.navigation.navigate("AuthenticatedScreens", { screen: "MainTabs", params: { screen: "MyBookingsTab" } })}
+            onPress={async () => {
+              if (await checkAuth("view your bookings")) {
+                props.navigation.navigate("AuthenticatedScreens", { screen: "MainTabs", params: { screen: "MyBookingsTab" } });
+              }
+            }}
           >
             <View style={[styles.navIconContainer, { backgroundColor: theme.surfaceVariant }]}>
               <Ionicons name="calendar-outline" size={22} color={theme.text} />
@@ -107,7 +113,11 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
 
           <Pressable
             style={styles.navItem}
-            onPress={() => props.navigation.navigate("AuthenticatedScreens", { screen: "MainTabs", params: { screen: "ProfileTab" } })}
+            onPress={async () => {
+              if (await checkAuth("view your profile")) {
+                props.navigation.navigate("AuthenticatedScreens", { screen: "MainTabs", params: { screen: "ProfileTab" } });
+              }
+            }}
           >
             <View style={[styles.navIconContainer, { backgroundColor: theme.surfaceVariant }]}>
               <Ionicons name="person-outline" size={22} color={theme.text} />
