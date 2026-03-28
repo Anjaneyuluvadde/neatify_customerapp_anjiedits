@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useCallback, useEffect, useRef } from "react";
 import {
   Animated,
+  Dimensions,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -75,14 +76,24 @@ const getIconForCategory = (value: string) => {
 export default function CategoryTabs({ activeTab, onChange, tabs }: CategoryTabsProps) {
   const { theme } = useTheme();
   const scrollRef = useRef<ScrollView>(null);
+  const tabLayouts = useRef<Record<number, { width: number; x: number }>>({});
+  const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-  // ✅ Auto-scroll to center the active tab
+  // ✅ Auto-scroll to center the active tab precisely
   useEffect(() => {
     const idx = tabs.findIndex((t) => t.value === activeTab);
     if (idx >= 0 && scrollRef.current) {
-      const estimatedTabWidth = 110; // approximate width of a tab
-      const scrollX = Math.max(0, idx * estimatedTabWidth - 100);
-      scrollRef.current.scrollTo({ x: scrollX, animated: true });
+      setTimeout(() => {
+        if (tabLayouts.current[idx] && scrollRef.current) {
+          const layout = tabLayouts.current[idx];
+          const scrollX = Math.max(0, layout.x - (SCREEN_WIDTH / 2) + (layout.width / 2));
+          scrollRef.current.scrollTo({ x: scrollX, animated: true });
+        } else if (scrollRef.current) {
+          const estimatedTabWidth = 140;
+          const scrollX = Math.max(0, idx * estimatedTabWidth - 100);
+          scrollRef.current.scrollTo({ x: scrollX, animated: true });
+        }
+      }, 50);
     }
   }, [activeTab, tabs]);
 
@@ -94,19 +105,25 @@ export default function CategoryTabs({ activeTab, onChange, tabs }: CategoryTabs
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = tab.value === activeTab;
           const icon = getIconForCategory(tab.value);
 
           return (
-            <TabItem
+            <View 
               key={tab.value}
-              tab={tab}
-              icon={icon}
-              isActive={isActive}
-              theme={theme}
-              onPress={() => onChange(tab.value)}
-            />
+              onLayout={(e) => {
+                tabLayouts.current[index] = e.nativeEvent.layout;
+              }}
+            >
+              <TabItem
+                tab={tab}
+                icon={icon}
+                isActive={isActive}
+                theme={theme}
+                onPress={() => onChange(tab.value)}
+              />
+            </View>
           );
         })}
       </ScrollView>

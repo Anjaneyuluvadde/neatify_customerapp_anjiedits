@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   FlatList,
   Modal,
@@ -298,6 +298,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
   // Addons-related state
   const [showAddonsModal, setShowAddonsModal] = useState(false);
+  const addonsTouchY = useRef(0);
   const [selectedAddonDetail, setSelectedAddonDetail] = useState<AddOn | null>(null);
   const [addons, setAddons] = useState<AddOn[]>([]);
 
@@ -983,7 +984,16 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
       {/* ================= ADDONS LIST MODAL ================= */}
       <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); setShowSummary(true); }}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]}>
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}>
+          <View 
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}
+            onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
+            onTouchEnd={(e) => {
+              if (e.nativeEvent.pageY - addonsTouchY.current > 80) {
+                setShowAddonsModal(false);
+                setShowSummary(true);
+              }
+            }}
+          >
             <AnimatedGradientBorder
               borderRadius={20}
               borderWidth={2}
@@ -1015,7 +1025,22 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                   </Pressable>
                 </View>
 
-                <ScrollView contentContainerStyle={{ padding: 16 }}>
+                <ScrollView 
+                  contentContainerStyle={{ padding: 16 }}
+                  onScroll={(e) => {
+                    if (e.nativeEvent.contentOffset.y < -60) {
+                      setShowAddonsModal(false);
+                      setShowSummary(true);
+                    }
+                  }}
+                  onScrollEndDrag={(e) => {
+                    if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
+                      setShowAddonsModal(false);
+                      setShowSummary(true);
+                    }
+                  }}
+                  scrollEventThrottle={16}
+                >
                   {filteredAddons.length === 0 ? (
                     <Text style={{ textAlign: "center", marginTop: 20, color: "#888" }}>
                       No extra add-ons available.
@@ -1223,7 +1248,15 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
           onRequestClose={() => setSelectedAddonDetail(null)}
           statusBarTranslucent={true}
         >
-          <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}>
+          <View 
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}
+            onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
+            onTouchEnd={(e) => {
+              if (e.nativeEvent.pageY - addonsTouchY.current > 80) {
+                setSelectedAddonDetail(null);
+              }
+            }}
+          >
             <AnimatedGradientBorder
               borderRadius={20}
               borderWidth={2}
@@ -1251,7 +1284,22 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                   <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
                 </Pressable>
 
-                <ScrollView style={{ flex: 1 }} scrollEventThrottle={16} showsVerticalScrollIndicator={false} decelerationRate="normal">
+                <ScrollView 
+                  style={{ flex: 1 }} 
+                  scrollEventThrottle={16} 
+                  showsVerticalScrollIndicator={false} 
+                  decelerationRate="normal"
+                  onScroll={(e) => {
+                    if (e.nativeEvent.contentOffset.y < -60) {
+                      setSelectedAddonDetail(null);
+                    }
+                  }}
+                  onScrollEndDrag={(e) => {
+                    if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
+                      setSelectedAddonDetail(null);
+                    }
+                  }}
+                >
                   {/* Full Image */}
                   <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
                     {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (

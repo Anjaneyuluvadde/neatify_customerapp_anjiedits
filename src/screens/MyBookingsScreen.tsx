@@ -1,7 +1,9 @@
 import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
+  FlatList,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -27,6 +29,14 @@ export default function MyBookingsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("current");
+
+  const pagerRef = useRef<FlatList>(null);
+  const width = Dimensions.get("window").width;
+
+  const handleTabPress = (tab: TabType, index: number) => {
+    setActiveTab(tab);
+    pagerRef.current?.scrollToIndex({ index, animated: true });
+  };
 
   useEffect(() => {
     fetchMyBookings();
@@ -101,104 +111,109 @@ export default function MyBookingsScreen() {
         <View style={styles.tabs}>
           <Pressable
             style={[styles.tab, activeTab === "current" && { borderBottomColor: theme.text }]}
-            onPress={() => setActiveTab("current")}
+            onPress={() => handleTabPress("current", 0)}
           >
-            <Text
-              style={[
-                styles.tabText,
-                { color: activeTab === "current" ? theme.text : theme.textLight },
-              ]}
-            >
+            <Text style={[styles.tabText, { color: activeTab === "current" ? theme.text : theme.textLight }]}>
               {t("bookings.current")} ({currentBookings.length})
             </Text>
           </Pressable>
 
           <Pressable
             style={[styles.tab, activeTab === "completed" && { borderBottomColor: theme.text }]}
-            onPress={() => setActiveTab("completed")}
+            onPress={() => handleTabPress("completed", 1)}
           >
-            <Text
-              style={[
-                styles.tabText,
-                { color: activeTab === "completed" ? theme.text : theme.textLight },
-              ]}
-            >
+            <Text style={[styles.tabText, { color: activeTab === "completed" ? theme.text : theme.textLight }]}>
               {t("bookings.completed")} ({completedBookings.length})
             </Text>
           </Pressable>
         </View>
       </View>
 
-      {/* ── SCROLLABLE LIST ── */}
-      <ScrollView
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={theme.primary}
-            colors={[theme.primary]}
-            progressBackgroundColor={theme.background}
-          />
-        }
-      >
-        {visibleBookings.length === 0 ? (
-          <Text style={[styles.empty, { color: theme.textLight }]}>
-            {activeTab === "current"
-              ? t("bookings.noCurrent")
-              : t("bookings.noCompleted")}
-          </Text>
-        ) : (
-          visibleBookings.map((b) => (
-            <View key={b.id} style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
-              <View style={styles.cardHeader}>
-                <Text style={[styles.name, { color: theme.text }]}>{b.customer_name}</Text>
-
-                <View
-                  style={[
-                    styles.statusBadge,
-                    b.work_status === "COMPLETED"
-                      ? styles.completed
-                      : b.work_status === "CANCELLED"
-                        ? styles.cancelled
-                        : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
-                          ? styles.paymentFailed
-                          : b.assigned_staff_email
-                            ? styles.assigned
-                            : styles.pending,
-                  ]}
-                >
-                  <Text style={styles.statusText}>
-                    {b.work_status === "COMPLETED"
-                      ? t("bookings.status.completed")
-                      : b.work_status === "CANCELLED"
-                        ? t("bookings.status.cancelled")
-                        : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
-                          ? "PAYMENT FAILED"
-                          : b.assigned_staff_email
-                            ? t("bookings.status.assigned")
-                            : t("bookings.status.pending")}
+      {/* ── SLIDEABLE LISTS ── */}
+      <FlatList
+        ref={pagerRef}
+        data={[
+          { key: "current", data: currentBookings, emptyKey: "bookings.noCurrent" },
+          { key: "completed", data: completedBookings, emptyKey: "bookings.noCompleted" },
+        ]}
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onScroll={(e) => {
+          const idx = Math.round(e.nativeEvent.contentOffset.x / width);
+          const newTab = idx === 0 ? "current" : "completed";
+          if (activeTab !== newTab) {
+            setActiveTab(newTab);
+          }
+        }}
+        scrollEventThrottle={16}
+        renderItem={({ item }) => (
+          <View style={{ width }}>
+            <FlatList
+              data={item.data}
+              keyExtractor={(b) => b.id}
+              contentContainerStyle={{ padding: 16, paddingBottom: 100, flexGrow: 1 }}
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor={theme.primary}
+                  colors={[theme.primary]}
+                  progressBackgroundColor={theme.background}
+                />
+              }
+              ListEmptyComponent={
+                <Text style={[styles.empty, { color: theme.textLight }]}>
+                  {t(item.emptyKey)}
+                </Text>
+              }
+              renderItem={({ item: b }) => (
+                <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                  <View style={styles.cardHeader}>
+                    <Text style={[styles.name, { color: theme.text }]}>{b.customer_name}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        b.work_status === "COMPLETED"
+                          ? styles.completed
+                          : b.work_status === "CANCELLED"
+                            ? styles.cancelled
+                            : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
+                              ? styles.paymentFailed
+                              : b.assigned_staff_email
+                                ? styles.assigned
+                                : styles.pending,
+                      ]}
+                    >
+                      <Text style={styles.statusText}>
+                        {b.work_status === "COMPLETED"
+                          ? t("bookings.status.completed")
+                          : b.work_status === "CANCELLED"
+                            ? t("bookings.status.cancelled")
+                            : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
+                              ? "PAYMENT FAILED"
+                              : b.assigned_staff_email
+                                ? t("bookings.status.assigned")
+                                : t("bookings.status.pending")}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.meta, { color: theme.textLight }]}>
+                    {b.booking_date} {t("bookings.at")} {b.booking_time}
                   </Text>
+                  <Text style={[styles.meta, { color: theme.textLight }]}>{t("bookings.total")}: ₹{b.total_amount}</Text>
+                  <Pressable
+                    style={[styles.viewBtn, { backgroundColor: theme.primary }]}
+                    onPress={() => navigation.navigate("BookingDetails", { booking: b })}
+                  >
+                    <Text style={[styles.viewText, { color: isDark ? theme.background : "#000" }]}>{t("bookings.view")}</Text>
+                  </Pressable>
                 </View>
-              </View>
-
-              <Text style={[styles.meta, { color: theme.textLight }]}>
-                {b.booking_date} {t("bookings.at")} {b.booking_time}
-              </Text>
-              <Text style={[styles.meta, { color: theme.textLight }]}>{t("bookings.total")}: ₹{b.total_amount}</Text>
-
-              <Pressable
-                style={[styles.viewBtn, { backgroundColor: theme.primary }]}
-                onPress={() =>
-                  navigation.navigate("BookingDetails", { booking: b })
-                }
-              >
-                <Text style={[styles.viewText, { color: isDark ? theme.background : "#000" }]}>{t("bookings.view")}</Text>
-              </Pressable>
-            </View>
-          ))
+              )}
+            />
+          </View>
         )}
-      </ScrollView>
+      />
     </SafeAreaView>
   );
 }

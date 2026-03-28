@@ -28,7 +28,7 @@ import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
 
 const { width, height } = Dimensions.get("window");
-const SLIDER_HEIGHT = height * 0.22; // Slightly reduced for better fit
+const SLIDER_HEIGHT = height * 0.25; // Increased height to reduce empty space
 
 // ✅ Fuzzy Search Helper (Levenshtein Distance)
 const getLevenshteinDistance = (a: string, b: string) => {
@@ -351,9 +351,8 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* 2. Hero Slider */}
           {heroBanners.length > 0 && (
-            <Pressable 
-              onPress={() => scrollRef.current?.scrollTo({ y: servicesY, animated: true })}
-              style={{ height: SLIDER_HEIGHT, marginHorizontal: 12, marginTop: 8, borderRadius: 20, overflow: "hidden", backgroundColor: theme.surfaceVariant }}
+            <View 
+              style={{ height: SLIDER_HEIGHT, marginHorizontal: 12, marginTop: 4, borderRadius: 20, overflow: "hidden", backgroundColor: theme.surfaceVariant }}
             >
               <FlatList
                 ref={sliderRef}
@@ -365,9 +364,12 @@ export default function HomeScreen({ navigation }: any) {
                 onScrollBeginDrag={() => setIsUserSwiping(true)}
                 onScrollEndDrag={() => setIsUserSwiping(false)}
                 renderItem={({ item }) => (
-                  <View style={{ width: width - 24, height: SLIDER_HEIGHT }}>
+                  <Pressable 
+                    onPress={() => scrollRef.current?.scrollTo({ y: servicesY, animated: true })}
+                    style={{ width: width - 24, height: SLIDER_HEIGHT }}
+                  >
                     <Image source={item} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-                  </View>
+                  </Pressable>
                 )}
               />
               <View style={styles.dots} pointerEvents="none">
@@ -375,7 +377,7 @@ export default function HomeScreen({ navigation }: any) {
                   <View key={i} style={[styles.dot, { backgroundColor: currentSlide === i ? "#fff" : "rgba(255,255,255,0.4)", width: currentSlide === i ? 20 : 8 }]} />
                 ))}
               </View>
-            </Pressable>
+            </View>
           )}
 
           {/* 3. Category Tabs (Sticky) */}

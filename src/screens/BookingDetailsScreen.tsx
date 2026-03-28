@@ -15,6 +15,7 @@ type Props = {
 import ReviewModal from "../components/ReviewModal";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import { useTheme } from "../context/ThemeContext";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function BookingDetailsScreen({ route }: Props) {
   const { booking: initialBooking } = route.params;
@@ -96,15 +97,14 @@ export default function BookingDetailsScreen({ route }: Props) {
     const checkEligibility = async () => {
       if (!booking.id) return;
 
-      // 1. Server-side check (Primary source of truth)
-      const { data: serverEligible, error } = await supabase.rpc('check_cancellation_eligibility', {
-        booking_uuid: booking.id,
-      });
-
-      // 2. Client-side verification as backup (6 hours from created_at)
+      // Ensure timezone is treated as UTC if omitted by Supabase (fixes 5.5hr IST offset bug)
       let clientEligible = true;
       if (booking.created_at) {
-        const createdAt = new Date(booking.created_at);
+        let dateStr = booking.created_at;
+        if (!dateStr.includes('Z') && !dateStr.includes('+')) {
+          dateStr = dateStr.replace(' ', 'T') + 'Z';
+        }
+        const createdAt = new Date(dateStr);
         const now = new Date();
         const diffMs = now.getTime() - createdAt.getTime();
         const diffHours = diffMs / (1000 * 60 * 60);
@@ -115,11 +115,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         }
       }
 
-      if (!error && serverEligible !== null) {
-        setIsEligibleToCancel(!!serverEligible);
-      } else {
-        setIsEligibleToCancel(clientEligible);
-      }
+      setIsEligibleToCancel(clientEligible);
     };
 
     checkEligibility();
@@ -150,11 +146,21 @@ export default function BookingDetailsScreen({ route }: Props) {
     setCancelling(true);
 
     try {
-      // 🔐 Re-check eligibility (6-hour rule)
-      const { data: eligible } = await supabase.rpc(
-        "check_cancellation_eligibility",
-        { booking_uuid: booking.id }
-      );
+      // 🔐 Re-check eligibility (6-hour rule) using fixed client logic
+      let eligible = true;
+      if (booking.created_at) {
+        let dateStr = booking.created_at;
+        if (!dateStr.includes('Z') && !dateStr.includes('+')) {
+          dateStr = dateStr.replace(' ', 'T') + 'Z';
+        }
+        const createdAt = new Date(dateStr);
+        const now = new Date();
+        const diffHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+        
+        if (diffHours > 6 || ['COMPLETED', 'CANCELLED'].includes(booking.work_status)) {
+          eligible = false;
+        }
+      }
 
       if (!eligible) {
         showAlert({
@@ -347,7 +353,21 @@ export default function BookingDetailsScreen({ route }: Props) {
       >
         {/* HEADER */}
         <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-          <Text style={[styles.title, { color: theme.text }]}>{t("bookingDetails.title")}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={[styles.title, { color: theme.text }]}>{t("bookingDetails.title")}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                const phoneNumber = "tel:7617618567";
+                Linking.canOpenURL(phoneNumber).then(supported => {
+                  if (supported) Linking.openURL(phoneNumber);
+                });
+              }}
+              style={[styles.helpBtn, { borderColor: theme.border }]}
+            >
+              <Ionicons name="help-circle-outline" size={20} color={theme.primary} />
+              <Text style={[styles.helpText, { color: theme.primary }]}>Help</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.customerDetails")}</Text>
@@ -473,18 +493,28 @@ export default function BookingDetailsScreen({ route }: Props) {
         )}
 
         {/* CANCEL BUTTON */}
-        {isEligibleToCancel && booking.work_status !== 'CANCELLED' && booking.work_status !== 'COMPLETED' ? (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={handleCancelBooking}
-            disabled={cancelling}
-          >
-            {cancelling ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.cancelButtonText}>{t("bookingDetails.cancelBooking")}</Text>
+        {booking.work_status !== 'CANCELLED' && booking.work_status !== 'COMPLETED' && booking.payment_status !== 'failed' && booking.work_status !== 'PAYMENT FAILED' ? (
+          <View>
+            <TouchableOpacity
+              style={[
+                styles.cancelButton,
+                !isEligibleToCancel ? styles.disabledCancelButton : null
+              ]}
+              onPress={handleCancelBooking}
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.cancelButtonText}>{t("bookingDetails.cancelBooking")}</Text>
+              )}
+            </TouchableOpacity>
+            {!isEligibleToCancel && (
+              <Text style={[styles.expiryNote, { color: theme.error || '#ef4444' }]}>
+                {t("bookingDetails.cancellationExpired")}
+              </Text>
             )}
-          </TouchableOpacity>
+          </View>
         ) : null}
 
         {/* CANCELLED STATUS */}
@@ -733,6 +763,31 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4.65,
     elevation: 8,
+  },
+  disabledCancelButton: {
+    backgroundColor: "#94a3b8",
+    shadowColor: "transparent",
+    elevation: 0,
+  },
+  expiryNote: {
+    textAlign: 'center',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: -10,
+    marginBottom: 20,
+  },
+  helpBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 4,
+  },
+  helpText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   disabledButton: {
     backgroundColor: "#94a3b8", // Gray for cancelled

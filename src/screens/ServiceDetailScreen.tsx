@@ -2,7 +2,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   Modal,
   Pressable,
@@ -100,6 +100,7 @@ export default function ServiceDetailScreen({ route }: Props) {
 
   const [service, setService] = useState<Service | null>(paramService || null);
   const [loadingService, setLoadingService] = useState(!paramService && !!serviceId);
+  const addonsTouchY = useRef(0);
 
   const [showSummary, setShowSummary] = useState(false);
   // const [showAddService, setShowAddService] = useState(false); // Removed as per request to replace
@@ -771,7 +772,8 @@ export default function ServiceDetailScreen({ route }: Props) {
 
         {/* ================= SUMMARY MODAL ================= */}
           <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
-            <View
+            <Pressable
+              onPress={() => setShowSummary(false)}
               style={{
                 flex: 1,
                 backgroundColor: "rgba(0,0,0,0.55)",
@@ -785,7 +787,8 @@ export default function ServiceDetailScreen({ route }: Props) {
                 animationSpeed={3}
                 style={{ width: "100%", maxHeight: "80%" }}
               >
-                <View
+                <Pressable
+                  onPress={(e) => e.stopPropagation()}
                   style={{
                     backgroundColor: theme.background,
                     borderRadius: 14,
@@ -912,15 +915,24 @@ export default function ServiceDetailScreen({ route }: Props) {
                       {t("serviceDetail.scheduleAppointment")}
                     </Text>
                   </Pressable>
-                </View>
+                </Pressable>
               </AnimatedGradientBorder>
-            </View>
+            </Pressable>
         </Modal>
 
         {/* ================= ADDONS LIST MODAL ================= */}
         <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); setShowSummary(true); }}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]}>
-            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}>
+            <View 
+              style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}
+              onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
+              onTouchEnd={(e) => {
+                if (e.nativeEvent.pageY - addonsTouchY.current > 80) {
+                  setShowAddonsModal(false);
+                  setShowSummary(true);
+                }
+              }}
+            >
               <AnimatedGradientBorder
                 borderRadius={20}
                 borderWidth={2}
@@ -952,7 +964,22 @@ export default function ServiceDetailScreen({ route }: Props) {
                     </Pressable>
                   </View>
 
-                  <ScrollView contentContainerStyle={{ padding: 16 }}>
+                  <ScrollView 
+                    contentContainerStyle={{ padding: 16 }}
+                    onScroll={(e) => {
+                      if (e.nativeEvent.contentOffset.y < -60) {
+                        setShowAddonsModal(false);
+                        setShowSummary(true);
+                      }
+                    }}
+                    onScrollEndDrag={(e) => {
+                      if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
+                        setShowAddonsModal(false);
+                        setShowSummary(true);
+                      }
+                    }}
+                    scrollEventThrottle={16}
+                  >
                     {availableAddons.length === 0 ? (
                       <Text style={{ textAlign: "center", marginTop: 20, color: theme.textLight }}>
                         {t("serviceDetail.noAddons")}
@@ -1159,7 +1186,15 @@ export default function ServiceDetailScreen({ route }: Props) {
             onRequestClose={() => setSelectedAddonDetail(null)}
             statusBarTranslucent={true}
           >
-            <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}>
+            <View 
+              style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}
+              onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
+              onTouchEnd={(e) => {
+                if (e.nativeEvent.pageY - addonsTouchY.current > 80) {
+                  setSelectedAddonDetail(null);
+                }
+              }}
+            >
               <AnimatedGradientBorder
                 borderRadius={20}
                 borderWidth={2}
@@ -1186,7 +1221,22 @@ export default function ServiceDetailScreen({ route }: Props) {
                     <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
                   </Pressable>
 
-                  <ScrollView style={{ flex: 1 }} scrollEventThrottle={16} showsVerticalScrollIndicator={false} decelerationRate="normal">
+                  <ScrollView 
+                  style={{ flex: 1 }} 
+                  scrollEventThrottle={16} 
+                  showsVerticalScrollIndicator={false} 
+                  decelerationRate="normal"
+                  onScroll={(e) => {
+                    if (e.nativeEvent.contentOffset.y < -60) {
+                      setSelectedAddonDetail(null);
+                    }
+                  }}
+                  onScrollEndDrag={(e) => {
+                    if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
+                      setSelectedAddonDetail(null);
+                    }
+                  }}
+                >
                     {/* Full Image */}
                     <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
                       {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (

@@ -169,6 +169,8 @@ export const translations = {
             cancelReasonPlaceholder: "Enter reason here...",
             dontCancel: "Don't Cancel",
             confirmCancel: "Confirm Cancel",
+            cancellationExpired: "Cancellation period (6 hours) has expired.",
+            cancellationPolicyNote: "Cancellation Policy: Full refund if cancelled within 6 hours of booking creation.",
         },
         notifications: {
             missingInfo: "Missing Information",
@@ -374,6 +376,8 @@ export const translations = {
             cancelReasonPlaceholder: "కారణాన్ని ఇక్కడ నమోదు చేయండి...",
             dontCancel: "రద్దు చేయవద్దు",
             confirmCancel: "రద్దును నిర్ధారించండి",
+            cancellationExpired: "రద్దు వ్యవధి (6 గంటలు) ముగిసింది.",
+            cancellationPolicyNote: "రద్దు విధానం: బుకింగ్ చేసిన 6 గంటల లోపు రద్దు చేస్తే పూర్తి వాపసు లభిస్తుంది.",
         },
         notifications: {
             missingInfo: "సమాచారం లేదు",
@@ -592,6 +596,8 @@ export const translations = {
             cancelReasonPlaceholder: "यहां कारण दर्ज करें...",
             dontCancel: "रद्द न करें",
             confirmCancel: "रद्द करने की पुष्टि करें",
+            cancellationExpired: "रद्दीकरण की अवधि (6 घंटे) समाप्त हो गई है।",
+            cancellationPolicyNote: "रद्दीकरण नीति: बुकिंग के 6 घंटे के भीतर रद्द करने पर पूरा रिफंड मिलेगा।",
         },
         notifications: {
             missingInfo: "जानकारी गायब है",

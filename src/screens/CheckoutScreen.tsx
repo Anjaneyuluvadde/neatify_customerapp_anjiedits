@@ -13,6 +13,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   Vibration,
   View
 } from "react-native";
@@ -775,7 +776,30 @@ export default function CheckoutScreen({ route }: Props) {
       <Header />
 
       <View style={[styles.headerContainer, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>{t("checkout.title")}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>{t("checkout.title")}</Text>
+          <TouchableOpacity
+            onPress={() => {
+              const phoneNumber = "tel:7617618567";
+              Linking.canOpenURL(phoneNumber).then(supported => {
+                if (supported) Linking.openURL(phoneNumber);
+              });
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 20,
+              borderWidth: 1,
+              borderColor: theme.border,
+              gap: 4,
+            }}
+          >
+            <Ionicons name="help-circle-outline" size={20} color={theme.primary} />
+            <Text style={{ fontSize: 14, fontWeight: '700', color: theme.primary }}>Help</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: theme.background }}>
@@ -1102,6 +1126,7 @@ export default function CheckoutScreen({ route }: Props) {
               </Text>
             </Pressable>
           </View>
+          
 
           {/* PAY BUTTON */}
           <Pressable
