@@ -411,10 +411,10 @@ export default function HomeScreen({ navigation }: any) {
       )}
 
       {/* Popups (Festive & Offers) */}
-      <Modal visible={showPopup && !!popupType} transparent animationType="fade">
-        <View style={popupStyles.overlay}>
+      <Modal visible={showPopup && !!popupType} transparent animationType="fade" onRequestClose={() => setShowPopup(false)}>
+        <Pressable style={popupStyles.overlay} onPress={() => setShowPopup(false)}>
           <AnimatedGradientBorder borderRadius={20} borderWidth={2} animationSpeed={3} style={{ width: popupType === "APP_POPUP" ? POPUP_WIDTH : "90%" }}>
-            <View style={[popupStyles.container, { backgroundColor: theme.background }]}>
+            <Pressable onPress={(e) => e.stopPropagation()} style={[popupStyles.container, { backgroundColor: theme.background }]}>
               <Pressable style={popupStyles.closeBtn} onPress={() => setShowPopup(false)}>
                 <Ionicons name="close" size={22} color="#fff" />
               </Pressable>
@@ -461,9 +461,9 @@ export default function HomeScreen({ navigation }: any) {
                   <Pressable style={[popupStyles.footerBtn, { backgroundColor: theme.primary }]} onPress={() => setShowPopup(false)}><Text style={{ fontWeight: '700' }}>Browse Services</Text></Pressable>
                 </View>
               )}
-            </View>
+            </Pressable>
           </AnimatedGradientBorder>
-        </View>
+        </Pressable>
       </Modal>
     </SafeAreaView>
   );

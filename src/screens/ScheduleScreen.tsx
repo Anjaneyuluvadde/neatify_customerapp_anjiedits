@@ -184,14 +184,12 @@ const isTimeSlotValid = (
       const ruleServiceName = String(rule.service_name || rule.service || "").toLowerCase().trim();
       if (!ruleServiceName) return false;
       
-      // Match against service_type (category) first — this is the primary match
-      if (selectedServiceTypes.some(type => type && (type === ruleServiceName || type.includes(ruleServiceName) || ruleServiceName.includes(type)))) return true;
+      // 1. Match against service_type (category) exactly
+      if (selectedServiceTypes.some(type => type && type === ruleServiceName)) return true;
       
-      // Fallback: match against title
-      const ruleKeywords = ruleServiceName.split(" ").filter(k => k.length > 3);
+      // 2. Match against title strictly (no keyword splitting)
       return selectedServiceNames.some(name => {
-        if (name.includes(ruleServiceName) || ruleServiceName.includes(name)) return true;
-        return ruleKeywords.some(kw => name.includes(kw));
+        return name.includes(ruleServiceName) || ruleServiceName.includes(name);
       });
     });
 
