@@ -222,7 +222,6 @@ function AuthenticatedScreens() {
       }}
     >
       <AuthenticatedStack.Screen name="MainTabs" component={MainTabs} />
-      <AuthenticatedStack.Screen name="ResetPassword" component={ResetPasswordScreen as any} />
       <AuthenticatedStack.Screen name="CompleteProfile" component={CompleteProfileScreen as any} />
     </AuthenticatedStack.Navigator>
   );
@@ -262,6 +261,7 @@ export default function AppNavigator({ initialRouteName }: AppNavigatorProps) {
       }}
     >
       <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="ResetPassword" component={ResetPasswordScreen as any} />
       <Stack.Screen name="HomeDrawer" component={HomeDrawer} />
     </Stack.Navigator>
   );

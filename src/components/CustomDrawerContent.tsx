@@ -4,9 +4,9 @@ import React, { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
+import { useAuthGuard } from "../hooks/useAuthGuard";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
-import { useAuthGuard } from "../hooks/useAuthGuard";
 
 export default function CustomDrawerContent(props: DrawerContentComponentProps) {
   const insets = useSafeAreaInsets();
@@ -78,7 +78,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
               {session && profile ? "Welcome back," : "Welcome to"}
             </Text>
             <Text style={styles.brandText} numberOfLines={1}>
-              {session && profile ? profile.full_name : "Neatify"}
+              {session && profile ? profile.full_name : "The Neatify Team"}
             </Text>
           </View>
         </View>
@@ -149,12 +149,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
 
       {/* Footer */}
       <View style={[styles.footer, { borderTopColor: theme.border }]}>
-        <Text style={[styles.versionText, { color: theme.textMuted }]}>The neatify Team</Text>
-        <View style={styles.madeWithRow}>
-          <Text style={[styles.madeWithText, { color: theme.textLight }]}>Made with </Text>
-          <Ionicons name="heart" size={14} color="#F87171" />
-          <Text style={[styles.madeWithText, { color: theme.textLight }]}> in India</Text>
-        </View>
+        <Text style={[styles.versionText, { color: theme.textMuted }]}>The Neatify Team</Text>
       </View>
     </View>
   );
@@ -198,7 +193,7 @@ const styles = StyleSheet.create({
     color: '#334155',
   },
   brandText: {
-    fontSize: 28,
+    fontSize: 20,
     fontWeight: '800',
     color: COLORS.black,
   },

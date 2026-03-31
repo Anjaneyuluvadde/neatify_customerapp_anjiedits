@@ -1,5 +1,5 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Lock, Mail } from "lucide-react-native";
+import { Lock, Mail, Eye, EyeOff } from "lucide-react-native";
 import React, { useState } from "react";
 import {
     ActivityIndicator,
@@ -35,6 +35,8 @@ export default function ResetPasswordScreen() {
     const [newPassword, setNewPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
+    const [showNewPassword, setShowNewPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     // ── STEP 1: Send reset email ──────────────────────────────────────────────
     const handleSendResetEmail = async () => {
@@ -119,10 +121,13 @@ export default function ResetPasswordScreen() {
                                     style={[styles.input, { color: theme.text }]}
                                     placeholder="New Password"
                                     placeholderTextColor={theme.textLight}
-                                    secureTextEntry
+                                    secureTextEntry={!showNewPassword}
                                     value={newPassword}
                                     onChangeText={setNewPassword}
                                 />
+                                <TouchableOpacity onPress={() => setShowNewPassword(!showNewPassword)}>
+                                    {showNewPassword ? <EyeOff size={20} color={theme.textLight} /> : <Eye size={20} color={theme.textLight} />}
+                                </TouchableOpacity>
                             </View>
                             <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
                                 <Lock size={20} color={theme.textLight} />
@@ -130,10 +135,13 @@ export default function ResetPasswordScreen() {
                                     style={[styles.input, { color: theme.text }]}
                                     placeholder="Confirm New Password"
                                     placeholderTextColor={theme.textLight}
-                                    secureTextEntry
+                                    secureTextEntry={!showConfirmPassword}
                                     value={confirmPassword}
                                     onChangeText={setConfirmPassword}
                                 />
+                                <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                                    {showConfirmPassword ? <EyeOff size={20} color={theme.textLight} /> : <Eye size={20} color={theme.textLight} />}
+                                </TouchableOpacity>
                             </View>
                             <TouchableOpacity style={[styles.btn, { backgroundColor: theme.primary }]} onPress={handleUpdatePassword} disabled={loading}>
                                 {loading ? <ActivityIndicator color={theme.background} /> : <Text style={[styles.btnText, { color: theme.background }]}>Update Password</Text>}

@@ -28,7 +28,7 @@
     },
     "android": {
       "package": "com.theneatifyteam.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
@@ -90,8 +90,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "523831f4-d3aa-4083-aa07-9536fdf96aef"
+        "projectId": "8fd5df9c-ff2a-435f-b04d-eceec68d2539"
       }
-    }
+    },
+    "owner": "krishnaak1"
   }
 }

@@ -166,10 +166,9 @@
  */
 
 import RazorpayCheckout from "react-native-razorpay";
+import { supabase } from "./supabase"; // ✅ Use existing supabase client
 
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "";
-const ORDER_SERVER_URL = process.env.EXPO_PUBLIC_ORDER_SERVER_URL || "";
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "";
 
 /* ================= TYPES ================= */
 
@@ -203,36 +202,32 @@ export async function processPayment(
     /* ================= 1️⃣ CREATE ORDER ================= */
 
     console.log("🔵 Starting payment process...");
-    console.log("🔵 Server URL:", ORDER_SERVER_URL);
-    console.log("🔵 Razorpay Key:", RAZORPAY_KEY_ID ? "Set ✅" : "NOT SET ❌");
-    console.log("🔵 Amount:", amount);
     console.log("🔵 Booking ID:", bookingId);
+    console.log("🔵 Amount (INR):", amount);
 
-    const orderUrl = `${ORDER_SERVER_URL}/create-razorpay-order`;
-    console.log("🔵 Order URL:", orderUrl);
-
-    const orderResponse = await fetch(orderUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
+    // ✅ Use supabase.functions.invoke instead of manual fetch
+    const { data: orderData, error: orderError } = await supabase.functions.invoke("create-razorpay-order", {
+      body: {
         booking_id: bookingId,
-        amount: amount,
-      }),
+        amount: amount, // INR (Edge Function handles conversion to paise)
+      },
     });
 
-    console.log("🔵 Order Response Status:", orderResponse.status);
-    const orderData = await orderResponse.json();
+    if (orderError) {
+      console.error("❌ Order creation failed:", orderError);
+      throw new Error(orderError.message || "Failed to create order");
+    }
+
     console.log("🔵 Order Data:", JSON.stringify(orderData, null, 2));
 
-    if (!orderData?.success || !orderData?.order_id) {
-      console.error("❌ Order creation failed:", orderData?.error || "Unknown error");
+    // Support both 'order_id' and 'id' as per Razorpay response formats
+    const finalOrderId = orderData?.order_id || orderData?.id;
+
+    if (!finalOrderId) {
       throw new Error(orderData?.error || "Failed to create order");
     }
 
-    console.log("✅ Order created successfully:", orderData.order_id);
+    console.log("✅ Order created successfully:", finalOrderId);
 
     /* ================= 2️⃣ OPEN RAZORPAY ================= */
 
@@ -242,7 +237,7 @@ export async function processPayment(
       key: orderData.key || RAZORPAY_KEY_ID,
       amount: orderData.amount,
       name: "The Neatify Team",
-      order_id: orderData.order_id,
+      order_id: finalOrderId,
       prefill: {
         name: `${customer.firstName} ${customer.lastName}`,
         email: customer.email,
@@ -264,27 +259,16 @@ export async function processPayment(
 
     /* ================= 3️⃣ VERIFY PAYMENT ================= */
 
-    const verifyUrl = `${ORDER_SERVER_URL}/verify-payment`;
-    console.log("🔵 Verify URL:", verifyUrl);
-
-    const verifyResponse = await fetch(verifyUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({
+    const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-payment", {
+      body: {
         razorpay_order_id: payment.razorpay_order_id,
         razorpay_payment_id: payment.razorpay_payment_id,
         razorpay_signature: payment.razorpay_signature,
         booking_id: bookingId,
-      }),
+      },
     });
 
-    const verifyData = await verifyResponse.json();
-    console.log("🔵 Verify Response:", verifyData);
-
-    if (!verifyData.success) {
+    if (verifyError || !verifyData?.success) {
       throw new Error("Payment verification failed");
     }
 
@@ -309,3 +293,4 @@ export async function processPayment(
     };
   }
 }
+

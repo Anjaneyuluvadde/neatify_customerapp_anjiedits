@@ -71,7 +71,7 @@ export default function App() {
           return;
         }
       }
-      setInitialRoute(session ? "HomeDrawer" : "HomeDrawer");
+      setInitialRoute(session ? "HomeDrawer" : "Login");
       setLoading(false);
     };
     initApp();
@@ -109,6 +109,7 @@ export default function App() {
 
     // 3. Deep link handler
     const handleDeepLink = async ({ url }: { url: string }) => {
+      if (!url) return;
       console.log("Deep link received:", url);
 
       if (url.includes("google-auth")) {
@@ -132,28 +133,49 @@ export default function App() {
                     routes: [{ name: "HomeDrawer" }],
                   });
                 }
-                // If not complete, checkCompleteness already reset to CompleteProfile
               }, 500);
             }
           }
         }
-      } else if (url.includes("reset-password")) {
+      } else if (url.includes("reset-password") || url.includes("type=recovery")) {
         // Set flag to prevent onAuthStateChange from redirecting to Home
         skipAuthRedirect.current = true;
-        const fragment = url.split("#")[1];
-        if (fragment) {
-          const params = new URLSearchParams(fragment);
+        
+        // Supabase tokens can be in the fragment (#) or query (?)
+        const searchPart = url.includes("#") ? url.split("#")[1] : url.split("?")[1];
+        
+        if (searchPart) {
+          const params = new URLSearchParams(searchPart);
           const accessToken = params.get("access_token");
           const refreshToken = params.get("refresh_token");
+          
           if (accessToken && refreshToken) {
-            navigationRef.current?.navigate("ResetPassword", {
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
+            console.log("✅ Reset tokens detected. Navigating to ResetPassword...");
+            
+            // Add a small delay for navigation to ensure navigationRef is ready
+            setTimeout(() => {
+              navigationRef.current?.reset({
+                index: 0,
+                routes: [
+                  {
+                    name: "ResetPassword",
+                    params: {
+                      access_token: accessToken,
+                      refresh_token: refreshToken,
+                    },
+                  },
+                ],
+              });
+            }, 800);
           }
         }
       }
     };
+
+    // Check for initial URL (Cold Start)
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink({ url });
+    });
 
     const subscription = Linking.addEventListener("url", handleDeepLink);
 
@@ -169,6 +191,7 @@ export default function App() {
     prefixes: [
       Linking.createURL("/"),
       "neatifynation://",
+      "theneatifyteam://",
       "https://www.theneatifyteam.in",
       "https://theneatifyteam.in"
     ],
