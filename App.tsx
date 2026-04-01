@@ -11,7 +11,7 @@ import { supabase } from "./src/lib/supabase";
 import AppNavigator from "./src/navigation/AppNavigator";
 
 export default function App() {
-  const [initialRoute, setInitialRoute] = useState<"Login" | "HomeDrawer" | "CompleteProfile">("Login");
+  const [initialRoute, setInitialRoute] = useState<"Login" | "HomeDrawer" | "CompleteProfile">("HomeDrawer");
   const [loading, setLoading] = useState(true);
   const navigationRef = React.useRef<any>(null);
   const skipAuthRedirect = React.useRef(false);
@@ -64,6 +64,9 @@ export default function App() {
     const initApp = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
+        // Prevent onAuthStateChange from triggering a second reset immediately after this
+        hasCheckedOnce = true;
+        
         const isComplete = await checkCompleteness(session.user.id, false);
         if (!isComplete) {
           setInitialRoute("CompleteProfile");
@@ -71,7 +74,7 @@ export default function App() {
           return;
         }
       }
-      setInitialRoute(session ? "HomeDrawer" : "Login");
+      setInitialRoute("HomeDrawer");
       setLoading(false);
     };
     initApp();

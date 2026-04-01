@@ -1,6 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import { Edit2, Phone, Save, X } from "lucide-react-native";
-import React, { memo, useEffect, useState } from "react";
+import React, { memo, useCallback, useEffect, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 
 
 import {
@@ -123,13 +124,7 @@ export default function ProfileScreen() {
     pincode: "",
   });
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
-
-  /* ================= FETCH PROFILE ================= */
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       const {
         data: { user },
@@ -168,7 +163,13 @@ export default function ProfileScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfile();
+    }, [fetchProfile])
+  );
 
   /* ================= UPDATE PROFILE ================= */
 

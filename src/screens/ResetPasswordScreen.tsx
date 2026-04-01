@@ -99,7 +99,7 @@ export default function ResetPasswordScreen() {
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
 
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
+                    <TouchableOpacity onPress={() => navigation.reset({ index: 0, routes: [{ name: "Login" }] })} style={styles.back}>
                         <Text style={[styles.backText, { color: theme.primary }]}>← Back to Login</Text>
                     </TouchableOpacity>
 

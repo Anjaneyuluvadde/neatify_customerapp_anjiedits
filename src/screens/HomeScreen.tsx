@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useFocusEffect } from "@react-navigation/native";
 
 import CategoryTabs from "../components/CategoryTabs";
 import Header from "../components/Header";
@@ -92,13 +93,7 @@ export default function HomeScreen({ navigation }: any) {
   const [activeOffers, setActiveOffers] = useState<{ service_type: string; title: string; offer_percentage: number; description: string | null }[]>([]);
   const [showPopup, setShowPopup] = useState(false);
 
-  useEffect(() => {
-    fetchServices();
-    fetchHeroBanners();
-    fetchPopups();
-  }, []);
-
-  const fetchServices = async () => {
+  const fetchServices = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase.from("services").select("*");
 
@@ -144,9 +139,9 @@ export default function HomeScreen({ navigation }: any) {
 
     setServices(serviceList);
     setLoading(false);
-  };
+  }, []);
 
-  const fetchHeroBanners = async () => {
+  const fetchHeroBanners = useCallback(async () => {
     const { data, error } = await supabase
       .from("hero_banners")
       .select("image_path")
@@ -172,9 +167,9 @@ export default function HomeScreen({ navigation }: any) {
       return;
     }
     setHeroBanners(fallbackBanners);
-  };
+  }, []);
 
-  const fetchPopups = async () => {
+  const fetchPopups = useCallback(async () => {
     if (hasShownPopupThisSession) return;
 
     const { data: popupData } = await supabase
@@ -201,7 +196,15 @@ export default function HomeScreen({ navigation }: any) {
       setShowPopup(true);
       hasShownPopupThisSession = true;
     }
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchServices();
+      fetchHeroBanners();
+      fetchPopups();
+    }, [fetchServices, fetchHeroBanners, fetchPopups])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -403,7 +406,7 @@ export default function HomeScreen({ navigation }: any) {
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={onPagerScrollEnd}
               renderItem={renderCategoryPage}
-              initialScrollIndex={tabs.findIndex(t => t.value === activeCategory)}
+              initialScrollIndex={Math.max(0, tabs.findIndex(t => t.value === activeCategory))}
               getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
             />
           </View>

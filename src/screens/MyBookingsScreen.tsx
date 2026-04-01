@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -17,6 +17,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
+import { useFocusEffect } from "@react-navigation/native";
 
 type TabType = "current" | "completed";
 
@@ -38,11 +39,7 @@ export default function MyBookingsScreen() {
     pagerRef.current?.scrollToIndex({ index, animated: true });
   };
 
-  useEffect(() => {
-    fetchMyBookings();
-  }, []);
-
-  const fetchMyBookings = async () => {
+  const fetchMyBookings = useCallback(async () => {
     const {
       data: { user },
     } = await supabase.auth.getUser();
@@ -63,7 +60,13 @@ export default function MyBookingsScreen() {
     }
 
     setLoading(false);
-  };
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchMyBookings();
+    }, [fetchMyBookings])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -267,9 +270,9 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
-  name: { fontWeight: "700", fontSize: 16 },
+  name: { fontWeight: "700", fontSize: 16, flex: 1, marginRight: 12 },
   meta: { marginTop: 6 },
 
   /* STATUS */

@@ -77,7 +77,7 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
             <Text style={styles.welcomeLabelText}>
               {session && profile ? "Welcome back," : "Welcome to"}
             </Text>
-            <Text style={styles.brandText} numberOfLines={1}>
+            <Text style={styles.brandText}>
               {session && profile ? profile.full_name : "The Neatify Team"}
             </Text>
           </View>
