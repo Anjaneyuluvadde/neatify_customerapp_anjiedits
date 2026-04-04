@@ -197,7 +197,7 @@ export default function CompleteProfileScreen() {
             showToast("Profile updated!", "success");
             navigation.reset({
                 index: 0,
-                routes: [{ name: "Home" }],
+                routes: [{ name: "HomeDrawer" }],
             });
 
         } catch (error: any) {

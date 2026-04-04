@@ -179,6 +179,11 @@ function MainTabs() {
         name="HomeTab" 
         component={HomeTabStack} 
         options={{ tabBarLabel: "Home" }} 
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            navigation.navigate("HomeTab", { screen: "HomeMain" });
+          },
+        })}
       />
       <Tab.Screen 
         name="MyBookingsTab" 
@@ -222,7 +227,6 @@ function AuthenticatedScreens() {
       }}
     >
       <AuthenticatedStack.Screen name="MainTabs" component={MainTabs} />
-      <AuthenticatedStack.Screen name="CompleteProfile" component={CompleteProfileScreen as any} />
     </AuthenticatedStack.Navigator>
   );
 }
@@ -262,6 +266,7 @@ export default function AppNavigator({ initialRouteName }: AppNavigatorProps) {
     >
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="ResetPassword" component={ResetPasswordScreen as any} />
+      <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen as any} />
       <Stack.Screen name="HomeDrawer" component={HomeDrawer} />
     </Stack.Navigator>
   );

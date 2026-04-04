@@ -1,4 +1,4 @@
-import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import * as Linking from "expo-linking";
 import React, { useEffect, useState } from "react";
 import { StatusBar, StyleSheet } from "react-native";
@@ -66,7 +66,7 @@ export default function App() {
       if (session?.user) {
         // Prevent onAuthStateChange from triggering a second reset immediately after this
         hasCheckedOnce = true;
-        
+
         const isComplete = await checkCompleteness(session.user.id, false);
         if (!isComplete) {
           setInitialRoute("CompleteProfile");
@@ -143,18 +143,18 @@ export default function App() {
       } else if (url.includes("reset-password") || url.includes("type=recovery")) {
         // Set flag to prevent onAuthStateChange from redirecting to Home
         skipAuthRedirect.current = true;
-        
+
         // Supabase tokens can be in the fragment (#) or query (?)
         const searchPart = url.includes("#") ? url.split("#")[1] : url.split("?")[1];
-        
+
         if (searchPart) {
           const params = new URLSearchParams(searchPart);
           const accessToken = params.get("access_token");
           const refreshToken = params.get("refresh_token");
-          
+
           if (accessToken && refreshToken) {
             console.log("✅ Reset tokens detected. Navigating to ResetPassword...");
-            
+
             // Add a small delay for navigation to ensure navigationRef is ready
             setTimeout(() => {
               navigationRef.current?.reset({

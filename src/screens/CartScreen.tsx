@@ -5,6 +5,7 @@ import React, { useMemo } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   View,
@@ -12,12 +13,18 @@ import {
 
 import { useCart } from "../context/CartContext";
 import { useTheme } from "../context/ThemeContext";
-import { COLORS } from "../theme/colors";
 
 export default function CartScreen() {
   const navigation = useNavigation<any>();
-  const { cartItems, removeFromCart, clearCart, loadingCart } = useCart();
+  const { cartItems, removeFromCart, clearCart, loadingCart, fetchCart } = useCart();
   const { theme, isDark } = useTheme();
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const onRefresh = React.useCallback(async () => {
+    setRefreshing(true);
+    await fetchCart();
+    setRefreshing(false);
+  }, [fetchCart]);
 
   const total = useMemo(() => {
     return cartItems.reduce((sum, item) => {
@@ -98,7 +105,18 @@ export default function CartScreen() {
       ) : (
         <>
           {/* CART LIST */}
-          <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+          <ScrollView
+            contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={[theme.primary]}
+                tintColor={theme.primary}
+                progressBackgroundColor={theme.background}
+              />
+            }
+          >
             {/* ✅ Add more services */}
             <Pressable
               onPress={() => navigation.navigate("HomeDrawer")}

@@ -2,10 +2,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
 import {
+  Dimensions,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   Share,
   Text,
@@ -100,6 +102,7 @@ export default function ServiceDetailScreen({ route }: Props) {
 
   const [service, setService] = useState<Service | null>(paramService || null);
   const [loadingService, setLoadingService] = useState(!paramService && !!serviceId);
+  const [refreshing, setRefreshing] = useState(false);
   const addonsTouchY = useRef(0);
 
   const [showSummary, setShowSummary] = useState(false);
@@ -144,31 +147,28 @@ export default function ServiceDetailScreen({ route }: Props) {
   };
 
   /* ================= FETCH SERVICES & ADDONS ================= */
-  useEffect(() => {
+
+  const fetchAddons = useCallback(async () => {
     // Fetch Services (keeping existing logic though Add Another Service is removed from UI, might be useful later)
-    supabase
+    const { data: servicesData } = await supabase
       .from("services")
       .select(
         "id, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_not_included"
-      )
-      .then(({ data }) => {
-        if (data) setAvailableServices(data as Service[]);
-      });
+      );
+    if (servicesData) setAvailableServices(servicesData as Service[]);
 
     // Fetch Add-ons (only active ones)
-    supabase
+    const { data: addonsData, error } = await supabase
       .from("add_ons")
       .select("*")
       .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .then(({ data, error }) => {
-        if (error) console.error("Error fetching addons:", error);
-        if (data) setAddons(data as AddOn[]);
-      });
+      .order("sort_order", { ascending: true });
+    
+    if (error) console.error("Error fetching addons:", error);
+    if (addonsData) setAddons(addonsData as AddOn[]);
   }, []);
 
-  /* ================= FETCH SERVICE IF NEEDED ================= */
-  useEffect(() => {
+  const fetchServiceDetails = useCallback(async () => {
     if (!service && serviceId) {
       setLoadingService(true);
 
@@ -194,51 +194,64 @@ export default function ServiceDetailScreen({ route }: Props) {
         return { data, error };
       };
 
-      const init = async () => {
-        // Try slug first
-        let { data, error } = await fetchBySlug();
+      // Try slug first
+      let { data, error } = await fetchBySlug();
 
-        // If no data (and no breaking error), try ID
-        if (!data) {
-          const fallback = await fetchById();
-          data = fallback.data;
-          error = fallback.error;
-        }
-
-        if (error) {
-          console.error("Error fetching service details:", error);
-        }
-        if (data) {
-          setService(data as Service);
-        }
-        setLoadingService(false);
-      };
-
-      init();
-    }
-  }, [serviceId, service]);
-
-  /* ================= FETCH ACTIVE OFFER ================= */
-  useEffect(() => {
-    if (!service) return;
-
-    const fetchOffer = async () => {
-      const { data: offerData } = await supabase
-        .from("offers")
-        .select("offer_percentage")
-        .eq("title", service.title)
-        .eq("is_offer_enabled", true)
-        .maybeSingle();
-
-      if (offerData && offerData.offer_percentage > 0) {
-        setActiveOfferPercent(offerData.offer_percentage);
-      } else {
-        setActiveOfferPercent(null);
+      // If no data (and no breaking error), try ID
+      if (!data) {
+        const fallback = await fetchById();
+        data = fallback.data;
+        error = fallback.error;
       }
-    };
 
-    fetchOffer();
-  }, [service]);
+      if (error) {
+        console.error("Error fetching service details:", error);
+      }
+      if (data) {
+        setService(data as Service);
+      }
+      setLoadingService(false);
+    }
+  }, [service, serviceId]);
+
+  const fetchActiveOffer = useCallback(async (currentService: Service | null) => {
+    if (!currentService) return;
+
+    const { data: offerData } = await supabase
+      .from("offers")
+      .select("offer_percentage")
+      .eq("title", currentService.title)
+      .eq("is_offer_enabled", true)
+      .maybeSingle();
+
+    if (offerData && offerData.offer_percentage > 0) {
+      setActiveOfferPercent(offerData.offer_percentage);
+    } else {
+      setActiveOfferPercent(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAddons();
+  }, [fetchAddons]);
+
+  useEffect(() => {
+    fetchServiceDetails();
+  }, [fetchServiceDetails]);
+
+  useEffect(() => {
+    fetchActiveOffer(service);
+  }, [service, fetchActiveOffer]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      fetchAddons(),
+      fetchServiceDetails(),
+      fetchActiveOffer(service)
+    ]);
+    setRefreshing(false);
+  };
 
   /* ================= INIT SELECTED SERVICE ================= */
   useEffect(() => {
@@ -508,10 +521,27 @@ export default function ServiceDetailScreen({ route }: Props) {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <Header />
 
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.primary]} // Android
+            tintColor={theme.primary} // iOS
+            progressBackgroundColor={theme.background}
+          />
+        }
+      >
         {/* BACK BUTTON */}
         <Pressable
-          onPress={() => navigation.goBack()}
+          onPress={() => {
+            if (navigation.canGoBack()) {
+              navigation.goBack();
+            } else {
+              navigation.navigate("HomeDrawer" as any);
+            }
+          }}
           style={{
             position: "absolute",
             top: 16,
@@ -772,8 +802,7 @@ export default function ServiceDetailScreen({ route }: Props) {
 
         {/* ================= SUMMARY MODAL ================= */}
           <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
-            <Pressable
-              onPress={() => setShowSummary(false)}
+            <View
               style={{
                 flex: 1,
                 backgroundColor: "rgba(0,0,0,0.55)",
@@ -787,8 +816,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                 animationSpeed={3}
                 style={{ width: "100%", maxHeight: "80%" }}
               >
-                <Pressable
-                  onPress={(e) => e.stopPropagation()}
+                <View
                   style={{
                     backgroundColor: theme.background,
                     borderRadius: 14,
@@ -811,7 +839,12 @@ export default function ServiceDetailScreen({ route }: Props) {
                     </Pressable>
                   </View>
 
-                  <ScrollView style={{ maxHeight: 300, marginTop: 14 }}>
+                  <ScrollView
+                    style={{ maxHeight: Dimensions.get('window').height * 0.4, marginTop: 14 }}
+                    showsVerticalScrollIndicator={true}
+                    nestedScrollEnabled={true}
+                    bounces={false}
+                  >
                     {selectedServices.map((s) => (
                       <View
                         key={s.id}
@@ -842,24 +875,9 @@ export default function ServiceDetailScreen({ route }: Props) {
                           </View>
                         </View>
 
-                        {/* Show View and remove only if it's NOT the main service */}
+                        {/* Show remove only if it's NOT the main service */}
                         {s.id !== service.id && (
                           <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
-                            <Pressable 
-                              onPress={() => setSelectedAddonDetail(s as any)}
-                              style={{
-                                paddingVertical: 6,
-                                paddingHorizontal: 12,
-                                borderRadius: 6,
-                                borderWidth: 1,
-                                borderColor: theme.border,
-                                backgroundColor: theme.surfaceVariant
-                              }}
-                            >
-                              <Text style={{ color: theme.text, fontSize: 12, fontWeight: "600" }}>
-                                {t("schedule.view")}
-                              </Text>
-                            </Pressable>
                             <Pressable onPress={() => removeService(s.id)} style={{ paddingVertical: 6 }}>
                               <Text
                                 style={{ color: "red", fontSize: 12 }}
@@ -915,9 +933,9 @@ export default function ServiceDetailScreen({ route }: Props) {
                       {t("serviceDetail.scheduleAppointment")}
                     </Text>
                   </Pressable>
-                </Pressable>
+                </View>
               </AnimatedGradientBorder>
-            </Pressable>
+            </View>
         </Modal>
 
         {/* ================= ADDONS LIST MODAL ================= */}

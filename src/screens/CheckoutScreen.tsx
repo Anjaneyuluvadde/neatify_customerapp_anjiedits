@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as Location from "expo-location";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -9,6 +9,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -134,6 +135,7 @@ export default function CheckoutScreen({ route }: Props) {
   const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage: number } | null>(null);
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   // ✅ Centralized Geocoding Helper
   const handleManualGeocode = async (addressToGeocode: string) => {
@@ -232,98 +234,144 @@ export default function CheckoutScreen({ route }: Props) {
     checkPincodeServiceable(pincode);
   }, [pincode]);
 
-  /* ================= FETCH POLICIES ================= */
+  /* ================= FETCH COUPON ================= */
+
+  const fetchUserCoupon = async (phone: string) => {
+    if (!phone) return;
+
+    const userPhone10 = formatDisplayPhone(phone);
+    if (!userPhone10 || userPhone10.length < 10) return;
+
+    const userPhone91 = "91" + userPhone10;
+    const userPhonePlus91 = "+91" + userPhone10;
+
+    console.log("🔍 Fetching coupon for:", userPhone10);
+
+    const { data: couponData, error: couponError } = await supabase
+      .from("coupons")
+      .select("*")
+      .or(`phone_number.eq.${userPhone10},phone_number.eq.${userPhone91},phone_number.eq.${userPhonePlus91}`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (couponError) {
+      console.log("❌ Coupon fetch error:", couponError.message);
+      return;
+    }
+
+    // ✅ STRICT CHECK: Only show if is_used is explicitly true
+    if (couponData && couponData.is_used === true) {
+      console.log("✅ Valid coupon found and in-use:", couponData.coupon_code);
+      setCoupon({
+        id: couponData.id,
+        coupon_code: couponData.coupon_code,
+        discount_percentage: couponData.discount_percentage || couponData.discount_p || 0
+      });
+    } else {
+      console.log("ℹ️ Coupon not shown: either not found or is_used is false/null.");
+      setCoupon(null);
+    }
+  };
 
   useEffect(() => {
-    const fetchPolicies = async () => {
-      const { data, error } = await supabase
-        .from("app_policies")
-        .select("user_policies, terms_and_conditions")
-        .limit(1)
-        .maybeSingle();
+    if (profile?.phone) {
+      fetchUserCoupon(profile.phone);
+    }
+  }, [profile?.phone]);
 
-      if (error) {
-        console.log("Error fetching policies:", error);
-      } else if (data) {
-        setPolicies(data as Policies);
-      }
-    };
+  /* ================= FETCH POLICIES ================= */
 
-    fetchPolicies();
+  const fetchPolicies = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("app_policies")
+      .select("user_policies, terms_and_conditions")
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.log("Error fetching policies:", error);
+    } else if (data) {
+      setPolicies(data as Policies);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchPolicies();
+  }, [fetchPolicies]);
 
   /* ================= LOAD PROFILE ================= */
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!data.user) return;
+  const loadProfile = useCallback(async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return;
 
-      setUserId(data.user.id);
+    setUserId(data.user.id);
 
-      const { data: profileData, error } = await supabase
-        .from("profile")
-        .select("full_name,email,phone,address,pincode")
-        .eq("id", data.user.id)
-        .maybeSingle();
+    const { data: profileData, error } = await supabase
+      .from("profile")
+      .select("full_name,email,phone,address,pincode")
+      .eq("id", data.user.id)
+      .maybeSingle();
 
-      if (error) {
-        setAlertConfig({ title: 'Error', message: error.message, type: 'error' });
-        setShowAlertModal(true);
-        setLoadingProfile(false);
-        return;
-      }
-
-      if (profileData) {
-        // Apply phone formatting
-        const cleanedProfile = {
-          ...profileData,
-          phone: formatDisplayPhone(profileData.phone)
-        };
-        setProfile(cleanedProfile);
-
-        // ✅ Check for coupon linked to this phone number
-        const userPhone = formatDisplayPhone(profileData.phone); // 10-digit
-        const { data: couponData } = await supabase
-          .from("coupons")
-          .select("id, coupon_code, discount_percentage")
-          .eq("phone_number", userPhone)
-          .eq("is_used", false)
-          .maybeSingle();
-
-        if (couponData) {
-          setCoupon(couponData);
-        }
-
-        setPincode(profileData.pincode || "");
-
-        if (profileData.address) {
-          const addressWithoutPincode = profileData.address
-            .replace(/\s*-\s*\d{6}\s*$/, "")
-            .trim();
-
-          setManualAddress(addressWithoutPincode);
-          setIsAddressSummaryMode(true);
-          setHasUsedLocationFetch(true);
-
-          // ✅ Automatically geocode the saved profile address on load
-          handleManualGeocode(`${addressWithoutPincode}, ${profileData.pincode || ""}`);
-        }
-      } else {
-        setAlertConfig({
-          title: 'Profile Not Found',
-          message: 'Please complete your profile before booking',
-          type: 'warning'
-        });
-        setShowAlertModal(true);
-        navigation.navigate("MainTabs", { screen: "ProfileTab" });
-      }
-
+    if (error) {
+      setAlertConfig({ title: 'Error', message: error.message, type: 'error' });
+      setShowAlertModal(true);
       setLoadingProfile(false);
-    };
+      return;
+    }
 
+    if (profileData) {
+      // Apply phone formatting
+      const cleanedProfile = {
+        ...profileData,
+        phone: formatDisplayPhone(profileData.phone)
+      };
+      setProfile(cleanedProfile);
+
+      // ✅ Initial coupon fetch moved to useEffect [profile?.phone]
+
+      setPincode(profileData.pincode || "");
+
+      if (profileData.address) {
+        const addressWithoutPincode = profileData.address
+          .replace(/\s*-\s*\d{6}\s*$/, "")
+          .trim();
+
+        setManualAddress(addressWithoutPincode);
+        setIsAddressSummaryMode(true);
+        setHasUsedLocationFetch(true);
+
+        // ✅ Automatically geocode the saved profile address on load
+        handleManualGeocode(`${addressWithoutPincode}, ${profileData.pincode || ""}`);
+      }
+    } else {
+      setAlertConfig({
+        title: 'Profile Not Found',
+        message: 'Please complete your profile before booking',
+        type: 'warning'
+      });
+      setShowAlertModal(true);
+      navigation.navigate("MainTabs", { screen: "ProfileTab" });
+    }
+
+    setLoadingProfile(false);
+  }, [navigation]);
+
+  useEffect(() => {
     loadProfile();
-  }, []);
+  }, [loadProfile]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      loadProfile(),
+      fetchPolicies(),
+      profile?.phone ? fetchUserCoupon(profile.phone) : Promise.resolve(),
+      pincode ? checkPincodeServiceable(pincode) : Promise.resolve()
+    ]);
+    setRefreshing(false);
+  };
 
   /* ================= SCREEN FOCUS EFFECT ================= */
 
@@ -803,7 +851,19 @@ export default function CheckoutScreen({ route }: Props) {
       </View>
 
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: theme.background }}>
-        <ScrollView style={{ backgroundColor: theme.background }} contentContainerStyle={styles.container}>
+        <ScrollView
+          style={{ backgroundColor: theme.background }}
+          contentContainerStyle={styles.container}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]} // Android
+              tintColor={theme.primary} // iOS
+              progressBackgroundColor={theme.background}
+            />
+          }
+        >
           {/* ORDER SUMMARY */}
           <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
             <View style={[styles.sectionHeader, { borderBottomColor: theme.border }]}>

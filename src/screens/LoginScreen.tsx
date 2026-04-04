@@ -83,7 +83,7 @@ export default function LoginScreen(props: any) {
     } catch (err) {
       console.error("Profile check failed:", err);
       // Fallback to Home if DB check fails
-      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
+      navigation.reset({ index: 0, routes: [{ name: "HomeDrawer" }] });
     }
   };
 

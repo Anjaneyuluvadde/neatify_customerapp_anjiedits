@@ -299,7 +299,13 @@ export default function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={Keyboard.dismiss}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]} // Android
+              tintColor={theme.primary} // iOS
+              progressBackgroundColor={theme.background}
+            />
           }
         >
           {/* HEADER */}

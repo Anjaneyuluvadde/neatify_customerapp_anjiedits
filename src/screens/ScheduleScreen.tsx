@@ -1,11 +1,12 @@
-import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useEffect, useMemo, useState, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import {
+  Dimensions,
   FlatList,
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,10 +14,10 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import Header from "../components/Header";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
-import { useTheme } from "../context/ThemeContext";
+import Header from "../components/Header";
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import {
@@ -183,10 +184,10 @@ const isTimeSlotValid = (
     const matchingRules = serviceTimeRules.filter(rule => {
       const ruleServiceName = String(rule.service_name || rule.service || "").toLowerCase().trim();
       if (!ruleServiceName) return false;
-      
+
       // 1. Match against service_type (category) exactly
       if (selectedServiceTypes.some(type => type && type === ruleServiceName)) return true;
-      
+
       // 2. Match against title strictly (no keyword splitting)
       return selectedServiceNames.some(name => {
         return name.includes(ruleServiceName) || ruleServiceName.includes(name);
@@ -203,7 +204,7 @@ const isTimeSlotValid = (
         const normalized = String(lbTimeRaw).toLowerCase().trim();
         const lbModifier = normalized.includes("pm") ? "pm" : "am";
         const timePart = normalized.replace(/[ap]m/g, "").trim();
-        
+
         let lbHours = 0;
         let lbMinutes = 0;
 
@@ -304,6 +305,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const [timeSlots, setTimeSlots] = useState<string[]>(DEFAULT_TIMES);
   const [availableYears, setAvailableYears] = useState<number[]>(DEFAULT_YEARS);
   const [serviceTimeRules, setServiceTimeRules] = useState<any[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const calendar = useMemo(() => getCalendarMatrix(year, month), [year, month]);
 
@@ -314,71 +316,76 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
   /* ================= FETCH SERVICES & ADDONS ================= */
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     // Fetch services
-    supabase
+    const { data: servicesData } = await supabase
       .from("services")
-      .select("*")
-      .then(({ data }) => {
-        if (data) setAllServices(data);
-      });
+      .select("*");
+    if (servicesData) setAllServices(servicesData);
 
     // Fetch addons (only active ones)
-    supabase
+    const { data: addonsData, error: addonsError } = await supabase
       .from("add_ons")
       .select("*")
       .eq("is_active", true)
-      .order("sort_order", { ascending: true })
-      .then(({ data, error }) => {
-        if (error) console.error("Error fetching addons:", error);
-        if (data) setAddons(data as AddOn[]);
-      });
+      .order("sort_order", { ascending: true });
+    
+    if (addonsError) console.error("Error fetching addons:", addonsError);
+    if (addonsData) setAddons(addonsData as AddOn[]);
 
     // Fetch schedule config (time_slots, years)
-    supabase
+    const { data: configData, error: configError } = await supabase
       .from("schedule_config")
-      .select("*")
-      .then(({ data, error }) => {
-        if (error) {
-          console.error("Error fetching schedule config:", error);
-          return;
-        }
-        if (data) {
-          data.forEach((row: { config_key: string; config_value: any }) => {
-            if (row.config_key === "time_slots" && Array.isArray(row.config_value)) {
-              // time_slots may be plain strings or objects {value, active}
-              const normalized = row.config_value
-                .map((slot: any) => {
-                  if (typeof slot === "string") return slot.trim();
-                  if (slot && typeof slot === "object" && slot.value) {
-                    if (slot.active === false) return null;
-                    const val = String(slot.value).trim();
-                    return val || null;
-                  }
-                  return null;
-                })
-                .filter(Boolean) as string[];
-              setTimeSlots(normalized);
-            }
-            if (row.config_key === "years" && Array.isArray(row.config_value)) {
-              setAvailableYears(row.config_value as number[]);
-            }
-            // Check both config_key and config_keys as per user requirement
-            const key = (row as any).config_key || (row as any).config_keys || (row as any).config_id;
-            if (key === "service_time_rules") {
-              let rules = [];
-              if (typeof row.config_value === "string") {
-                try { rules = JSON.parse(row.config_value); } catch(e) { rules = []; }
-              } else {
-                rules = row.config_value;
+      .select("*");
+
+    if (configError) {
+      console.error("Error fetching schedule config:", configError);
+      return;
+    }
+    
+    if (configData) {
+      configData.forEach((row: { config_key: string; config_value: any }) => {
+        if (row.config_key === "time_slots" && Array.isArray(row.config_value)) {
+          const normalized = row.config_value
+            .map((slot: any) => {
+              if (typeof slot === "string") return slot.trim();
+              if (slot && typeof slot === "object" && slot.value) {
+                if (slot.active === false) return null;
+                const val = String(slot.value).trim();
+                return val || null;
               }
-              const finalRules = Array.isArray(rules) ? rules : (rules ? [rules] : []);
-              setServiceTimeRules(finalRules);
-            }
-          });
+              return null;
+            })
+            .filter(Boolean) as string[];
+          setTimeSlots(normalized);
+        }
+        if (row.config_key === "years" && Array.isArray(row.config_value)) {
+          setAvailableYears(row.config_value as number[]);
+        }
+        const key = (row as any).config_key || (row as any).config_keys || (row as any).config_id;
+        if (key === "service_time_rules") {
+          let rules = [];
+          if (typeof row.config_value === "string") {
+            try { rules = JSON.parse(row.config_value); } catch (e) { rules = []; }
+          } else {
+            rules = row.config_value;
+          }
+          const finalRules = Array.isArray(rules) ? rules : (rules ? [rules] : []);
+          setServiceTimeRules(finalRules);
         }
       });
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData();
+    setRefreshing(false);
+  };
 
 
   // Reset selectedTime when date, month, or year changes
@@ -390,7 +397,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const filteredAddons = useMemo(() => {
     // Try to get service_type directly from the selected service first
     let mainServiceType = editServices[0]?.service_type?.toUpperCase() || '';
-    
+
     // Fallback to searching in allServices if type is missing
     if (!mainServiceType && editServices[0]?.id) {
       const mainService = allServices.find((s) => s.id === editServices[0].id);
@@ -553,7 +560,18 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <Header />
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView 
+        contentContainerStyle={styles.container}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[theme.primary]} // Android
+            tintColor={theme.primary} // iOS
+            progressBackgroundColor={theme.background}
+          />
+        }
+      >
         <Text style={[styles.pageTitle, { color: theme.text }]}>{t("schedule.title")}</Text>
 
         {/* MONTH / YEAR */}
@@ -573,19 +591,19 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         <Modal visible={showMonthPicker} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowMonthPicker(false)}>
           <Pressable style={styles.pickerOverlay} onPress={() => setShowMonthPicker(false)}>
             <View style={[styles.pickerModal, { width: 250, maxHeight: 300, backgroundColor: theme.background }]}>
-                <FlatList
-                  data={MONTHS}
-                  keyExtractor={(item) => item}
-                  renderItem={({ item, index }) => (
-                    <Pressable
-                      style={[styles.pickerItem, month === index && styles.pickerItemSelected]}
-                      onPress={() => { setMonth(index); setShowMonthPicker(false); }}
-                    >
-                      <Text style={[styles.pickerItemText, { color: theme.text }, month === index && styles.pickerItemTextSelected]}>{item}</Text>
-                    </Pressable>
-                  )}
-                />
-              </View>
+              <FlatList
+                data={MONTHS}
+                keyExtractor={(item) => item}
+                renderItem={({ item, index }) => (
+                  <Pressable
+                    style={[styles.pickerItem, month === index && styles.pickerItemSelected]}
+                    onPress={() => { setMonth(index); setShowMonthPicker(false); }}
+                  >
+                    <Text style={[styles.pickerItemText, { color: theme.text }, month === index && styles.pickerItemTextSelected]}>{item}</Text>
+                  </Pressable>
+                )}
+              />
+            </View>
           </Pressable>
         </Modal>
 
@@ -593,19 +611,19 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         <Modal visible={showYearPicker} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setShowYearPicker(false)}>
           <Pressable style={styles.pickerOverlay} onPress={() => setShowYearPicker(false)}>
             <View style={[styles.pickerModal, { width: 150, maxHeight: 200, backgroundColor: theme.background }]}>
-                <FlatList
-                  data={availableYears}
-                  keyExtractor={(item) => String(item)}
-                  renderItem={({ item }) => (
-                    <Pressable
-                      style={[styles.pickerItem, year === item && styles.pickerItemSelected]}
-                      onPress={() => { setYear(item); setShowYearPicker(false); }}
-                    >
-                      <Text style={[styles.pickerItemText, { color: theme.text }, year === item && styles.pickerItemTextSelected]}>{String(item)}</Text>
-                    </Pressable>
-                  )}
-                />
-              </View>
+              <FlatList
+                data={availableYears}
+                keyExtractor={(item) => String(item)}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={[styles.pickerItem, year === item && styles.pickerItemSelected]}
+                    onPress={() => { setYear(item); setShowYearPicker(false); }}
+                  >
+                    <Text style={[styles.pickerItemText, { color: theme.text }, year === item && styles.pickerItemTextSelected]}>{String(item)}</Text>
+                  </Pressable>
+                )}
+              />
+            </View>
           </Pressable>
         </Modal>
 
@@ -760,7 +778,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
               borderRadius={20}
               borderWidth={2}
               animationSpeed={3}
-              style={{ flex: 1 }}
+              style={{ flex: 1, maxHeight: "80%" }}
             >
               <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20, padding: 20 }}>
                 <View style={styles.addHeader}>
@@ -819,36 +837,38 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
       </ScrollView>
 
       {/* ================= APPOINTMENT SUMMARY MODAL ================= */}
-      <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true}>
-        <Pressable
+      <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
+        <View
           style={{
             flex: 1,
             backgroundColor: "rgba(0,0,0,0.55)",
             justifyContent: "center",
             padding: 20
           }}
-          onPress={() => setShowSummary(false)}
         >
           <AnimatedGradientBorder
             borderRadius={14}
             borderWidth={2}
             animationSpeed={3}
-            style={{ width: "100%", maxHeight: "80%" }}
+            style={{ maxHeight: "80%", width: "100%" }}
           >
-            <Pressable
+            <View
               style={{
                 backgroundColor: theme.background,
                 borderRadius: 14,
-                padding: 20,
-                width: "100%"
+                width: "100%",
+                maxHeight: "100%",
               }}
-              onPress={(e) => e.stopPropagation()}
             >
+              {/* Header - fixed at top */}
               <View
                 style={{
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "center",
+                  paddingHorizontal: 20,
+                  paddingTop: 20,
+                  paddingBottom: 10,
                 }}
               >
                 <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text }}>
@@ -859,7 +879,14 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                 </Pressable>
               </View>
 
-              <ScrollView style={{ maxHeight: 300, marginTop: 14 }}>
+              {/* Scrollable list */}
+              <ScrollView
+                style={{ flexGrow: 1, flexShrink: 1 }}
+                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 10 }}
+                showsVerticalScrollIndicator={true}
+                scrollEventThrottle={16}
+                keyboardShouldPersistTaps="handled"
+              >
                 {editServices.map((s, index) => (
                   <View
                     key={s.id}
@@ -880,7 +907,6 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                       <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>
                         ₹{(parseFloat(s.price.replace(/[^\d]/g, "")) * (s.quantity || 1)).toLocaleString("en-IN")}
                       </Text>
-                      {/* ✅ Discount Badge */}
                       {(s.discount_label || (s.discount_percent && Number(s.discount_percent) > 0)) ? (
                         <View style={{ backgroundColor: "#E9F7EF", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
                           <Text style={{ color: "#1E7E34", fontWeight: "700", fontSize: 10 }}>
@@ -890,10 +916,9 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                       ) : null}
                     </View>
 
-                    {/* View and Remove only for addons (not the first/main service) */}
                     {index !== 0 && (
                       <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
-                        <Pressable 
+                        <Pressable
                           onPress={() => {
                             const fullAddon = addons.find(a => a.id === s.id);
                             setShowSummary(false);
@@ -930,73 +955,69 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                 ))}
               </ScrollView>
 
-              {/* ✅ ADDONS BUTTON — only show if there are matching addons for this service_type */}
-              {filteredAddons.length > 0 && (
+              {/* Bottom buttons - fixed at bottom */}
+              <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+                {filteredAddons.length > 0 && (
+                  <Pressable
+                    onPress={() => {
+                      setShowSummary(false);
+                      setShowAddonsModal(true);
+                    }}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      paddingVertical: 12,
+                      alignItems: "center",
+                      marginTop: 16,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ fontWeight: "800", color: theme.text }}>+ Addons</Text>
+                  </Pressable>
+                )}
+
                 <Pressable
                   onPress={() => {
+                    if (editServices.length === 0) {
+                      showAlert({
+                        title: "Error",
+                        message: "Please select at least one service",
+                        type: "error",
+                      });
+                      return;
+                    }
+                    setSelectedServices(editServices);
                     setShowSummary(false);
-                    setShowAddonsModal(true);
                   }}
                   style={{
-                    borderWidth: 1,
-                    borderColor: theme.border,
-                    paddingVertical: 12,
+                    backgroundColor: COLORS.saffron,
+                    paddingVertical: 14,
                     alignItems: "center",
                     marginTop: 16,
                     borderRadius: 10,
                   }}
                 >
-                  <Text style={{ fontWeight: "800", color: theme.text }}>+ Addons</Text>
+                  <Text style={{ color: "#000", fontWeight: "800" }}>Update Selection</Text>
                 </Pressable>
-              )}
-
-              <Pressable
-                onPress={() => {
-                  if (editServices.length === 0) {
-                    showAlert({
-                      title: "Error",
-                      message: "Please select at least one service",
-                      type: "error",
-                    });
-                    return;
-                  }
-                  // Check if items changed
-                  setSelectedServices(editServices);
-                  setShowSummary(false);
-                }}
-                style={{
-                  backgroundColor: COLORS.saffron,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  marginTop: 16,
-                  borderRadius: 10,
-                }}
-              >
-                <Text style={{ color: "#000", fontWeight: "800" }}>Update Selection</Text>
-              </Pressable>
-            </Pressable>
+              </View>
+            </View>
           </AnimatedGradientBorder>
-        </Pressable>
+        </View>
       </Modal>
 
+
       {/* ================= ADDONS LIST MODAL ================= */}
-      <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); setShowSummary(true); }}>
+      <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true}>
         <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]}>
-          <View 
+          <View
             style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}
-            onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
-            onTouchEnd={(e) => {
-              if (e.nativeEvent.pageY - addonsTouchY.current > 80) {
-                setShowAddonsModal(false);
-                setShowSummary(true);
-              }
-            }}
+
           >
             <AnimatedGradientBorder
               borderRadius={20}
               borderWidth={2}
               animationSpeed={3}
-              style={{ width: "100%", alignSelf: "stretch", flex: 1 }}
+              style={{ width: "100%", maxHeight: "80%", alignSelf: "stretch", flex: 1 }}
               flex={1}
             >
               <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20 }}>
@@ -1023,20 +1044,8 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                   </Pressable>
                 </View>
 
-                <ScrollView 
+                <ScrollView
                   contentContainerStyle={{ padding: 16 }}
-                  onScroll={(e) => {
-                    if (e.nativeEvent.contentOffset.y < -60) {
-                      setShowAddonsModal(false);
-                      setShowSummary(true);
-                    }
-                  }}
-                  onScrollEndDrag={(e) => {
-                    if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
-                      setShowAddonsModal(false);
-                      setShowSummary(true);
-                    }
-                  }}
                   scrollEventThrottle={16}
                 >
                   {filteredAddons.length === 0 ? (
@@ -1246,20 +1255,15 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
           onRequestClose={() => setSelectedAddonDetail(null)}
           statusBarTranslucent={true}
         >
-          <View 
+          <View
             style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}
-            onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
-            onTouchEnd={(e) => {
-              if (e.nativeEvent.pageY - addonsTouchY.current > 80) {
-                setSelectedAddonDetail(null);
-              }
-            }}
+
           >
             <AnimatedGradientBorder
               borderRadius={20}
               borderWidth={2}
               animationSpeed={3}
-              style={{ flex: 1 }}
+              style={{ maxHeight: "80%" }}
               flex={1}
             >
               <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20, overflow: 'hidden' }}>
@@ -1282,21 +1286,11 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                   <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
                 </Pressable>
 
-                <ScrollView 
-                  style={{ flex: 1 }} 
-                  scrollEventThrottle={16} 
-                  showsVerticalScrollIndicator={false} 
+                <ScrollView
+                  style={{ flex: 1 }}
+                  scrollEventThrottle={16}
+                  showsVerticalScrollIndicator={false}
                   decelerationRate="normal"
-                  onScroll={(e) => {
-                    if (e.nativeEvent.contentOffset.y < -60) {
-                      setSelectedAddonDetail(null);
-                    }
-                  }}
-                  onScrollEndDrag={(e) => {
-                    if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
-                      setSelectedAddonDetail(null);
-                    }
-                  }}
                 >
                   {/* Full Image */}
                   <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
