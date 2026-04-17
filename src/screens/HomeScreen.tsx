@@ -16,7 +16,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 
 import CategoryTabs from "../components/CategoryTabs";
 import Header from "../components/Header";
@@ -26,7 +26,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
-import { Service } from "../types/service";
+import { MainCategory, Service } from "../types/service";
 
 const { width, height } = Dimensions.get("window");
 const SLIDER_HEIGHT = height * 0.25; // Increased height to reduce empty space
@@ -66,6 +66,8 @@ export default function HomeScreen({ navigation }: any) {
   const { t } = useLanguage();
   const { theme } = useTheme();
   const [services, setServices] = useState<Service[]>([]);
+  const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
+  const [activeMainCategory, setActiveMainCategory] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState("BATHROOM");
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -92,6 +94,11 @@ export default function HomeScreen({ navigation }: any) {
   const [popupIndex, setPopupIndex] = useState(0);
   const [activeOffers, setActiveOffers] = useState<{ service_type: string; title: string; offer_percentage: number; description: string | null }[]>([]);
   const [showPopup, setShowPopup] = useState(false);
+
+  // ✅ Category Sheet state
+  const [categorySheetVisible, setCategorySheetVisible] = useState(false);
+  const [selectedMainCategoryForSheet, setSelectedMainCategoryForSheet] = useState<MainCategory | null>(null);
+  const isFocused = useIsFocused();
 
   const fetchServices = useCallback(async () => {
     setLoading(true);
@@ -138,7 +145,21 @@ export default function HomeScreen({ navigation }: any) {
     }
 
     setServices(serviceList);
-    setLoading(false);
+  }, []);
+
+  const fetchMainCategories = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("main_categories")
+      .select("*")
+      .order("sort_order", { ascending: true });
+
+    if (error) {
+      console.log("Main Categories error:", error);
+      return;
+    }
+    setMainCategories(data || []);
+    // Optional: Set the first one as active by default if you want
+    // if (data && data.length > 0) setActiveMainCategory(data[0].id);
   }, []);
 
   const fetchHeroBanners = useCallback(async () => {
@@ -200,21 +221,31 @@ export default function HomeScreen({ navigation }: any) {
 
   useFocusEffect(
     useCallback(() => {
-      fetchServices();
-      fetchHeroBanners();
-      fetchPopups();
-    }, [fetchServices, fetchHeroBanners, fetchPopups])
+      const loadAll = async () => {
+        setLoading(true);
+        await Promise.all([fetchMainCategories(), fetchServices()]);
+        await Promise.all([fetchHeroBanners(), fetchPopups()]);
+        setLoading(false);
+      };
+      loadAll();
+    }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchServices(), fetchHeroBanners(), fetchPopups()]);
+    await Promise.all([fetchMainCategories(), fetchServices(), fetchHeroBanners(), fetchPopups()]);
     setRefreshing(false);
   };
 
   const tabs = useMemo(() => {
     const categoryMap = new Map<string, number>();
-    services.forEach((s) => {
+    
+    // Filter services by active main category
+    const filteredServices = activeMainCategory 
+      ? services.filter(s => s.main_category_id === activeMainCategory)
+      : services;
+
+    filteredServices.forEach((s) => {
       if (s.service_type && !categoryMap.has(s.service_type)) {
         categoryMap.set(s.service_type, s.category_order ?? 999);
       }
@@ -222,19 +253,60 @@ export default function HomeScreen({ navigation }: any) {
 
     const sorted = Array.from(categoryMap.entries()).sort((a, b) => a[1] - b[1]);
 
-    return [
-      ...sorted.map(([type]) => ({
-        label: type.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-        value: type,
-      })),
-      { label: t("home.allServices"), value: "ALL" },
-    ];
-  }, [services, t]);
+    const result = sorted.map(([type]) => ({
+      label: type.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+      value: type,
+    }));
+
+    if (result.length > 0) {
+      return [...result, { label: t("home.allServices"), value: "ALL" }];
+    }
+    return result;
+  }, [services, t, activeMainCategory]);
+
+  // Sync activeCategory when tabs change
+  useEffect(() => {
+    if (tabs.length > 0) {
+      const exists = tabs.find(t => t.value === activeCategory);
+      if (!exists) setActiveCategory(tabs[0].value);
+    }
+  }, [tabs, activeCategory]);
+
+  // ✅ Get unique sub-categories for the bottom sheet
+  const subCategories = useMemo(() => {
+    if (!selectedMainCategoryForSheet) return [];
+    
+    // Use a map to track unique types AND their first found icon
+    const typeMap = new Map<string, { label: string, value: string, icon: string | null }>();
+    
+    services
+      .filter(s => s.main_category_id === selectedMainCategoryForSheet.id)
+      .forEach(s => {
+        if (s.service_type) {
+          const type = s.service_type;
+          const existing = typeMap.get(type);
+          
+          // If we haven't found this type yet, OR if we found it but it didn't have an icon and this one does
+          if (!existing || (!existing.icon && s.category_icon_url)) {
+            typeMap.set(type, {
+              label: type.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+              value: type,
+              icon: s.category_icon_url || existing?.icon || null
+            });
+          }
+        }
+      });
+      
+    return Array.from(typeMap.values());
+  }, [services, selectedMainCategoryForSheet]);
 
   const getServicesForCategory = useCallback(
     (categoryValue: string) => {
       const search = (searchText ?? "").trim().toLowerCase();
       return services.filter((service) => {
+        // Must match active Main Category if one is selected
+        if (activeMainCategory && service.main_category_id !== activeMainCategory) return false;
+        
         const matchesCategory = categoryValue === "ALL" || service.service_type === categoryValue;
         if (!matchesCategory) return false;
         if (search.length === 0) return true;
@@ -247,7 +319,7 @@ export default function HomeScreen({ navigation }: any) {
         return false;
       }).sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999));
     },
-    [services, searchText]
+    [services, searchText, activeMainCategory]
   );
 
   const handleCategoryChange = useCallback(
@@ -329,7 +401,9 @@ export default function HomeScreen({ navigation }: any) {
       ) : (
         <ScrollView
           ref={scrollRef}
-          stickyHeaderIndices={[heroBanners.length > 0 ? 2 : 1]} // Dynamic sticky index
+          stickyHeaderIndices={[
+            1 + (heroBanners.length > 0 ? 1 : 0) + (mainCategories.length > 0 ? 1 : 0)
+          ]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -383,16 +457,48 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           )}
 
-          {/* 3. Category Tabs (Sticky) */}
+          {/* 3. Main Category Grid (Explore all services) */}
+          {mainCategories.length > 0 && (
+            <View style={styles.gridContainer}>
+              <Text style={[styles.sectionTitle, { color: theme.text }]}>Explore all services</Text>
+              <View style={styles.grid}>
+                {mainCategories.map((item) => (
+                  <Pressable 
+                    key={item.id} 
+                    style={[styles.gridItem, activeMainCategory === item.id && styles.gridItemActive]}
+                    onPress={() => {
+                      setSelectedMainCategoryForSheet(item);
+                      setCategorySheetVisible(true);
+                    }}
+                  >
+                    <View style={[styles.gridIconContainer, { backgroundColor: theme.surfaceVariant || "#F5F7FA" }]}>
+                      {item.icon_url ? (
+                        <Image source={{ uri: item.icon_url }} style={styles.gridIcon} contentFit="cover" />
+                      ) : (
+                        <Ionicons name="apps-outline" size={32} color={theme.primary} />
+                      )}
+                    </View>
+                    <Text style={[styles.gridLabel, { color: theme.text }]} numberOfLines={2}>
+                      {item.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* 4. Category Tabs (Sticky) */}
           <View onLayout={(e) => setServicesY(e.nativeEvent.layout.y)}>
             <CategoryTabs activeTab={activeCategory} onChange={handleCategoryChange} tabs={tabs} />
           </View>
 
-          {/* 4. Title Heading */}
+          {/* 5. Title Heading */}
           <View style={[styles.titleRow, { backgroundColor: theme.background }]}>
             <View style={styles.titleBar} />
             <Text style={[styles.titleText, { color: theme.text }]}>
-              {activeCategory === "ALL" ? t("home.allServices") : tabs.find(t => t.value === activeCategory)?.label ?? "Services"}
+              {activeMainCategory 
+                ? mainCategories.find(c => c.id === activeMainCategory)?.name 
+                : tabs.find(t => t.value === activeCategory)?.label ?? "Services"}
             </Text>
           </View>
 
@@ -468,6 +574,63 @@ export default function HomeScreen({ navigation }: any) {
           </AnimatedGradientBorder>
         </Pressable>
       </Modal>
+
+      <Modal
+        visible={categorySheetVisible && isFocused}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCategorySheetVisible(false)}
+      >
+        <Pressable 
+          style={sheetStyles.overlay} 
+          onPress={() => setCategorySheetVisible(false)}
+        >
+          <View style={[sheetStyles.sheetContainer, { backgroundColor: theme.background }]}>
+            <View style={sheetStyles.header}>
+              <Text style={[sheetStyles.title, { color: theme.text }]}>
+                {selectedMainCategoryForSheet?.name}
+              </Text>
+              <Pressable 
+                onPress={() => setCategorySheetVisible(false)}
+                style={[sheetStyles.closeButton, { backgroundColor: theme.surfaceVariant }]}
+              >
+                <Ionicons name="close" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={sheetStyles.content}
+            >
+              <View style={sheetStyles.categoryGrid}>
+                {subCategories.map((cat) => (
+                  <Pressable 
+                    key={cat.value} 
+                    style={sheetStyles.categoryItem}
+                    onPress={() => {
+                      navigation.navigate("CategoryDetail", { 
+                        category: cat.value, 
+                        label: cat.label 
+                      });
+                    }}
+                  >
+                    <View style={[sheetStyles.categoryIconContainer, { backgroundColor: theme.surfaceVariant || "#F5F7FA" }]}>
+                      {cat.icon ? (
+                        <Image source={{ uri: cat.icon }} style={sheetStyles.categoryImage} contentFit="contain" />
+                      ) : (
+                        <Ionicons name="apps-outline" size={32} color={theme.primary} />
+                      )}
+                    </View>
+                    <Text style={[sheetStyles.categoryLabel, { color: theme.text }]} numberOfLines={2}>
+                      {cat.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -479,6 +642,23 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   titleBar: { width: 4, height: 22, backgroundColor: COLORS.saffron, borderRadius: 2 },
   titleText: { fontSize: 20, fontWeight: "800" },
+  sectionTitle: { fontSize: 18, fontWeight: "700", marginLeft: 16, marginTop: 24, marginBottom: 16 },
+  gridContainer: { paddingHorizontal: 12 },
+  grid: { flexDirection: "row", flexWrap: "wrap" },
+  gridItem: { width: "33.33%", alignItems: "center", marginBottom: 20, paddingHorizontal: 4 },
+  gridItemActive: { opacity: 0.7 },
+  gridIconContainer: { 
+    width: "100%", 
+    aspectRatio: 1, 
+    borderRadius: 16, 
+    justifyContent: "center", 
+    alignItems: "center", 
+    marginBottom: 10,
+    backgroundColor: "#F5F7FA",
+    overflow: "hidden", // Ensures image stays within rounded corners
+  },
+  gridIcon: { width: "85%", height: "85%" },
+  gridLabel: { fontSize: 13, fontWeight: "600", textAlign: "center", lineHeight: 18 },
 });
 
 const popupStyles = StyleSheet.create({
@@ -499,4 +679,70 @@ const popupStyles = StyleSheet.create({
   offTitle: { fontSize: 14, fontWeight: "700", marginTop: 2 },
   offBadge: { padding: 6, borderRadius: 8, borderWidth: 1 },
   footerBtn: { margin: 16, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
+});
+
+const sheetStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  sheetContainer: {
+    width: "100%",
+    maxHeight: height * 0.85,
+    borderTopLeftRadius: 30,
+    borderTopRightRadius: 30,
+    paddingTop: 24,
+    paddingBottom: 40,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    marginBottom: 20,
+  },
+  title: {
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  content: {
+    paddingHorizontal: 20,
+  },
+  categoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    paddingTop: 10,
+  },
+  categoryItem: {
+    width: "25%",
+    alignItems: "center",
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  categoryIconContainer: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  categoryLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 16,
+  },
+  categoryImage: {
+    width: "70%",
+    height: "70%",
+  },
 });

@@ -19,6 +19,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
+import CategoryDetailScreen from "../screens/CategoryDetailScreen";
 
 import { Service } from "../types/service";
 import { COLORS } from "../theme/colors";
@@ -70,6 +71,10 @@ export type RootStackParamList = {
   BookingDetails: {
     booking: any;
   };
+  CategoryDetail: {
+    category: string;
+    label: string;
+  };
   CompleteProfile: undefined;
 };
 
@@ -79,6 +84,7 @@ export type HomeStackParamList = {
   Booking: { services: SelectedService[] };
   Schedule: { services: SelectedService[] };
   Checkout: { services: SelectedService[]; total: number; bookingDateText: string };
+  CategoryDetail: { category: string; label: string };
 };
 
 export type BookingsStackParamList = {
@@ -113,6 +119,7 @@ function HomeTabStack() {
       <HomeStack.Screen name="Booking" component={BookingScreen as any} />
       <HomeStack.Screen name="Schedule" component={ScheduleScreen as any} />
       <HomeStack.Screen name="Checkout" component={CheckoutScreen as any} />
+      <HomeStack.Screen name="CategoryDetail" component={CategoryDetailScreen as any} />
     </HomeStack.Navigator>
   );
 }

@@ -1,5 +1,12 @@
 export type ServiceType = "BATHROOM" | "KITCHEN" | "HOUSE" | string;
 
+export interface MainCategory {
+  id: string;
+  name: string;
+  icon_url: string | null;
+  sort_order: number;
+}
+
 export interface Service {
   id: string;
   slug?: string;
@@ -72,4 +79,14 @@ export interface Service {
    * Tax percentage to apply (e.g., 5 for 5% tax)
    */
   tax_percent?: number | null;
+
+  /**
+   * Link to the main category (from main_categories table)
+   */
+  main_category_id?: string | null;
+
+  /**
+   * Icon for the category display in the bottom sheet
+   */
+  category_icon_url?: string | null;
 }
