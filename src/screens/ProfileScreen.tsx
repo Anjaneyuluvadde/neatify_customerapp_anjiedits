@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import { Edit2, Phone, Save, X } from "lucide-react-native";
+import { Copy, Edit2, Gift, Phone, Save, Share as ShareIcon, Wallet, X } from "lucide-react-native";
 import React, { memo, useCallback, useEffect, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -12,11 +12,13 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  Clipboard
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Header from "../components/Header";
@@ -27,6 +29,8 @@ import { useTheme } from "../context/ThemeContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
+import { registerForPushNotificationsAsync, removePushTokenFromSupabase } from "../utils/pushNotifications";
+import { generateReferralCode } from "../utils/referralUtils";
 
 /* ======================================================
    FIELD CARD (MOVED OUTSIDE – FIXES KEYBOARD ISSUE)
@@ -124,6 +128,9 @@ export default function ProfileScreen() {
     pincode: "",
   });
 
+  const [referralCode, setReferralCode] = useState<string>("");
+  const [walletBalance, setWalletBalance] = useState<number>(0);
+
   const fetchProfile = useCallback(async () => {
     try {
       const {
@@ -141,6 +148,19 @@ export default function ProfileScreen() {
         .maybeSingle();
 
       if (data) {
+        let currentCode = data.referral_code;
+
+        // If no referral code exists, generate and save one
+        if (!currentCode) {
+          currentCode = generateReferralCode(data.full_name || user.email || "User");
+          await supabase
+            .from("profile")
+            .update({ referral_code: currentCode })
+            .eq("id", user.id);
+        }
+
+        setReferralCode(currentCode);
+
         setFormData({
           full_name: data.full_name || "",
           email: data.email || user.email || "",
@@ -148,6 +168,21 @@ export default function ProfileScreen() {
           address: data.address || "",
           pincode: data.pincode || "",
         });
+
+        // Fetch Wallet Balance
+        const { data: walletData } = await supabase
+          .from("wallet")
+          .select("balance")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (walletData) {
+          setWalletBalance(walletData.balance || 0);
+        } else {
+          // Initialize wallet if it doesn't exist
+          await supabase.from("wallet").insert({ user_id: user.id, balance: 0 });
+          setWalletBalance(0);
+        }
       } else {
         setFormData((p) => ({
           ...p,
@@ -248,6 +283,23 @@ export default function ProfileScreen() {
       }));
   };
 
+  const handleShareReferral = async () => {
+    try {
+      const message = `Hey! Join me on Neatify and get ₹50 off on your first home service booking. Use my referral code: ${referralCode}\n\nDownload now: https://theneatifyteam.com/download`;
+      await Share.share({
+        message,
+        title: "Refer & Earn",
+      });
+    } catch (error) {
+      console.log("Error sharing:", error);
+    }
+  };
+
+  const copyToClipboard = () => {
+    Clipboard.setString(referralCode);
+    showToast("Code copied to clipboard!", "success");
+  };
+
   /* ================= LOGOUT ================= */
 
   const handleLogout = async () => {
@@ -258,11 +310,24 @@ export default function ProfileScreen() {
       showCancel: true,
       confirmText: t("notifications.logoutConfirm"),
       onConfirm: async () => {
-        await supabase.auth.signOut();
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "Login" }],
-        });
+        try {
+          // 1. Get the current token
+          const token = await registerForPushNotificationsAsync();
+          if (token) {
+            // 2. Explicitly remove this token from Supabase BEFORE signing out
+            // This ensures that this device stops receiving notifications for this user
+            await removePushTokenFromSupabase(token);
+          }
+        } catch (err) {
+          console.error("Failed to clear push token on logout:", err);
+        } finally {
+          // 3. Always sign out and redirect, even if token removal fails
+          await supabase.auth.signOut();
+          navigation.reset({
+            index: 0,
+            routes: [{ name: "Login" }],
+          });
+        }
       }
     });
   };
@@ -393,6 +458,70 @@ export default function ProfileScreen() {
             placeholder={t("profile.pincodePlaceholder")}
             fallback="--"
           />
+
+          {/* REFER & EARN SECTION */}
+          {!isEditing && (
+            <View style={[styles.referralCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <View style={styles.referralHeader}>
+                <View style={[styles.referralIconContainer, { backgroundColor: "rgba(244, 196, 48, 0.15)" }]}>
+                  <Gift size={22} color={COLORS.saffron} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.referralTitle, { color: theme.text }]}>Get ₹50 Discount Credits</Text>
+                  <Text style={[styles.referralSubtitle, { color: theme.textMuted }]}>
+                    Invite friends and get ₹50 off your next booking when they finish their first job.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.codeContainer, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
+                <View>
+                  <Text style={[styles.codeLabel, { color: theme.textMuted }]}>YOUR REFERRAL CODE</Text>
+                  <Text style={[styles.codeText, { color: theme.text }]}>{referralCode}</Text>
+                </View>
+                <View style={styles.codeActions}>
+                  <TouchableOpacity onPress={copyToClipboard} style={styles.iconBtn}>
+                    <Copy size={20} color={theme.text} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleShareReferral} style={[styles.shareBtnSmall, { backgroundColor: theme.primary }]}>
+                    <ShareIcon size={18} color={isDark ? theme.background : "#000"} />
+                    <Text style={[styles.shareBtnText, { color: isDark ? theme.background : "#000" }]}>Share</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+            </View>
+          )}
+
+          {/* DISCOUNT BALANCE (WALLET BOX) */}
+          {!isEditing && (
+            <View style={[styles.referralCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              <View style={styles.referralHeader}>
+                <View style={[styles.referralIconContainer, { backgroundColor: "rgba(244, 196, 48, 0.15)" }]}>
+                  <Wallet size={22} color={COLORS.saffron} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.referralTitle, { color: theme.text }]}>Discount Balance</Text>
+                  <Text style={[styles.referralSubtitle, { color: theme.textMuted }]}>
+                    Your earned rewards and referral credits. Use them for your next booking!
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.codeContainer, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
+                <View>
+                  <Text style={[styles.codeLabel, { color: theme.textMuted }]}>AVAILABLE BALANCE</Text>
+                  <Text style={[styles.codeText, { color: theme.text }]}>₹{walletBalance}</Text>
+                </View>
+                <View style={styles.codeActions}>
+                  <View style={[styles.shareBtnSmall, { backgroundColor: theme.primary }]}>
+                    <Wallet size={18} color={isDark ? theme.background : "#000"} />
+                    <Text style={[styles.shareBtnText, { color: isDark ? theme.background : "#000" }]}>Credits</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* Customer Care */}
           {!isEditing && (
@@ -622,5 +751,96 @@ const styles = StyleSheet.create({
   customerCareNumber: {
     fontSize: 18,
     fontWeight: "700",
+  },
+
+  /* REFERRAL SECTION STYLES */
+  referralCard: {
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  referralHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 16,
+  },
+  referralIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  referralTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  referralSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  codeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  codeLabel: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  codeText: {
+    fontSize: 20,
+    fontWeight: "900",
+    letterSpacing: 2,
+  },
+  codeActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  iconBtn: {
+    padding: 8,
+  },
+  shareBtnSmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+  },
+  shareBtnText: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  walletSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderStyle: "dashed",
+  },
+  walletInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  walletLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  walletAmount: {
+    fontSize: 20,
+    fontWeight: "900",
   },
 });

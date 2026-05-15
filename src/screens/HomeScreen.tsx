@@ -13,7 +13,9 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
+  Clipboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useIsFocused } from "@react-navigation/native";
@@ -23,6 +25,7 @@ import Header from "../components/Header";
 import ServiceCard from "../components/ServiceCard";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import { useLanguage } from "../context/LanguageContext";
+import { useNotification } from "../hooks/useNotification";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
@@ -81,6 +84,7 @@ export default function HomeScreen({ navigation }: any) {
   const pagerRef = useRef<FlatList>(null);
   const scrollRef = useRef<ScrollView>(null); // Main ScrollView ref
   const isProgrammaticScroll = useRef(false);
+  const [showGoUp, setShowGoUp] = useState(false);
   const popupSliderRef = useRef<FlatList>(null);
 
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -94,6 +98,39 @@ export default function HomeScreen({ navigation }: any) {
   const [popupIndex, setPopupIndex] = useState(0);
   const [activeOffers, setActiveOffers] = useState<{ service_type: string; title: string; offer_percentage: number; description: string | null }[]>([]);
   const [showPopup, setShowPopup] = useState(false);
+  const { showToast } = useNotification();
+
+  // ✅ Welcome Reward Popup state
+  const [showWelcomePopup, setShowWelcomePopup] = useState(false);
+  const [welcomeCoupon, setWelcomeCoupon] = useState("");
+
+  const checkWelcomeReward = useCallback(async () => {
+    try {
+      // Force refresh session to get latest metadata from server
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) throw refreshError;
+
+      const user = session?.user;
+      console.log("🔍 Checking Welcome Reward metadata...");
+
+      if (user?.user_metadata?.show_welcome_reward && user?.user_metadata?.welcome_coupon_code) {
+        console.log("🎁 Welcome Reward detected!", user.user_metadata.welcome_coupon_code);
+        setWelcomeCoupon(user.user_metadata.welcome_coupon_code);
+
+        // Short delay to ensure other UI is ready
+        setTimeout(() => {
+          setShowWelcomePopup(true);
+        }, 1000);
+
+        // Update metadata to NOT show it again
+        await supabase.auth.updateUser({
+          data: { show_welcome_reward: false }
+        });
+      }
+    } catch (err) {
+      console.error("Error checking welcome reward:", err);
+    }
+  }, []);
 
   // ✅ Category Sheet state
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
@@ -225,10 +262,11 @@ export default function HomeScreen({ navigation }: any) {
         setLoading(true);
         await Promise.all([fetchMainCategories(), fetchServices()]);
         await Promise.all([fetchHeroBanners(), fetchPopups()]);
+        await checkWelcomeReward();
         setLoading(false);
       };
       loadAll();
-    }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories])
+    }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories, checkWelcomeReward])
   );
 
   const onRefresh = async () => {
@@ -239,9 +277,9 @@ export default function HomeScreen({ navigation }: any) {
 
   const tabs = useMemo(() => {
     const categoryMap = new Map<string, number>();
-    
+
     // Filter services by active main category
-    const filteredServices = activeMainCategory 
+    const filteredServices = activeMainCategory
       ? services.filter(s => s.main_category_id === activeMainCategory)
       : services;
 
@@ -259,7 +297,7 @@ export default function HomeScreen({ navigation }: any) {
     }));
 
     if (result.length > 0) {
-      return [...result, { label: t("home.allServices"), value: "ALL" }];
+      return [{ label: t("home.allServices"), value: "ALL" }, ...result];
     }
     return result;
   }, [services, t, activeMainCategory]);
@@ -275,17 +313,17 @@ export default function HomeScreen({ navigation }: any) {
   // ✅ Get unique sub-categories for the bottom sheet
   const subCategories = useMemo(() => {
     if (!selectedMainCategoryForSheet) return [];
-    
+
     // Use a map to track unique types AND their first found icon
     const typeMap = new Map<string, { label: string, value: string, icon: string | null }>();
-    
+
     services
       .filter(s => s.main_category_id === selectedMainCategoryForSheet.id)
       .forEach(s => {
         if (s.service_type) {
           const type = s.service_type;
           const existing = typeMap.get(type);
-          
+
           // If we haven't found this type yet, OR if we found it but it didn't have an icon and this one does
           if (!existing || (!existing.icon && s.category_icon_url)) {
             typeMap.set(type, {
@@ -296,8 +334,30 @@ export default function HomeScreen({ navigation }: any) {
           }
         }
       });
-      
-    return Array.from(typeMap.values());
+
+    const result = Array.from(typeMap.values());
+
+    // Add 4 specific containers for Insta Help if they don't exist
+    if (selectedMainCategoryForSheet.name === "Insta Help") {
+      const instaItems = [
+        "Kitchen Utensil Cleaning",
+        "Clothes Ironing",
+        "Clothes Folding",
+        "Floor Mopping"
+      ];
+
+      instaItems.forEach(label => {
+        if (!result.some(r => r.label === label)) {
+          result.push({
+            label,
+            value: label.toUpperCase().replace(/\s+/g, "_"),
+            icon: null
+          });
+        }
+      });
+    }
+
+    return result;
   }, [services, selectedMainCategoryForSheet]);
 
   const getServicesForCategory = useCallback(
@@ -306,14 +366,14 @@ export default function HomeScreen({ navigation }: any) {
       return services.filter((service) => {
         // Must match active Main Category if one is selected
         if (activeMainCategory && service.main_category_id !== activeMainCategory) return false;
-        
+
         const matchesCategory = categoryValue === "ALL" || service.service_type === categoryValue;
         if (!matchesCategory) return false;
         if (search.length === 0) return true;
 
         const title = (service.title ?? "").toLowerCase();
         const type = (service.service_type ?? "").toLowerCase();
-        
+
         if (title.includes(search) || type.includes(search)) return true;
         if (search.length > 3 && getLevenshteinDistance(search, type) <= 2) return true;
         return false;
@@ -373,9 +433,9 @@ export default function HomeScreen({ navigation }: any) {
   );
 
   const activeCategoryServices = getServicesForCategory(activeCategory);
-  const CARD_ROW_HEIGHT = 350; // Better estimation for service cards
+  const CARD_ROW_HEIGHT = 320; // Fine-tuned height
   const serviceRows = Math.max(1, Math.ceil(activeCategoryServices.length / 2));
-  const pagerHeight = activeCategoryServices.length === 0 ? 250 : serviceRows * CARD_ROW_HEIGHT + 32;
+  const pagerHeight = activeCategoryServices.length === 0 ? 150 : serviceRows * CARD_ROW_HEIGHT;
 
   // Auto-slide effect
   useEffect(() => {
@@ -401,6 +461,8 @@ export default function HomeScreen({ navigation }: any) {
       ) : (
         <ScrollView
           ref={scrollRef}
+          onScroll={(e) => setShowGoUp(e.nativeEvent.contentOffset.y > 200)}
+          scrollEventThrottle={16}
           stickyHeaderIndices={[
             1 + (heroBanners.length > 0 ? 1 : 0) + (mainCategories.length > 0 ? 1 : 0)
           ]}
@@ -414,7 +476,7 @@ export default function HomeScreen({ navigation }: any) {
               progressBackgroundColor={theme.background}
             />
           }
-          contentContainerStyle={{ flexGrow: 1, backgroundColor: theme.background, paddingBottom: 100 }}
+          contentContainerStyle={{ backgroundColor: theme.background, paddingBottom: 0 }}
         >
           {/* 1. Header (Logo + Search) */}
           <Header
@@ -428,7 +490,7 @@ export default function HomeScreen({ navigation }: any) {
 
           {/* 2. Hero Slider */}
           {heroBanners.length > 0 && (
-            <View 
+            <View
               style={{ height: SLIDER_HEIGHT, marginHorizontal: 12, marginTop: 4, borderRadius: 20, overflow: "hidden", backgroundColor: theme.surfaceVariant }}
             >
               <FlatList
@@ -441,7 +503,7 @@ export default function HomeScreen({ navigation }: any) {
                 onScrollBeginDrag={() => setIsUserSwiping(true)}
                 onScrollEndDrag={() => setIsUserSwiping(false)}
                 renderItem={({ item }) => (
-                  <Pressable 
+                  <Pressable
                     onPress={() => scrollRef.current?.scrollTo({ y: servicesY, animated: true })}
                     style={{ width: width - 24, height: SLIDER_HEIGHT }}
                   >
@@ -463,8 +525,8 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={[styles.sectionTitle, { color: theme.text }]}>Explore all services</Text>
               <View style={styles.grid}>
                 {mainCategories.map((item) => (
-                  <Pressable 
-                    key={item.id} 
+                  <Pressable
+                    key={item.id}
                     style={[styles.gridItem, activeMainCategory === item.id && styles.gridItemActive]}
                     onPress={() => {
                       setSelectedMainCategoryForSheet(item);
@@ -496,8 +558,8 @@ export default function HomeScreen({ navigation }: any) {
           <View style={[styles.titleRow, { backgroundColor: theme.background }]}>
             <View style={styles.titleBar} />
             <Text style={[styles.titleText, { color: theme.text }]}>
-              {activeMainCategory 
-                ? mainCategories.find(c => c.id === activeMainCategory)?.name 
+              {activeMainCategory
+                ? mainCategories.find(c => c.id === activeMainCategory)?.name
                 : tabs.find(t => t.value === activeCategory)?.label ?? "Services"}
             </Text>
           </View>
@@ -581,8 +643,8 @@ export default function HomeScreen({ navigation }: any) {
         animationType="slide"
         onRequestClose={() => setCategorySheetVisible(false)}
       >
-        <Pressable 
-          style={sheetStyles.overlay} 
+        <Pressable
+          style={sheetStyles.overlay}
           onPress={() => setCategorySheetVisible(false)}
         >
           <View style={[sheetStyles.sheetContainer, { backgroundColor: theme.background }]}>
@@ -590,7 +652,7 @@ export default function HomeScreen({ navigation }: any) {
               <Text style={[sheetStyles.title, { color: theme.text }]}>
                 {selectedMainCategoryForSheet?.name}
               </Text>
-              <Pressable 
+              <Pressable
                 onPress={() => setCategorySheetVisible(false)}
                 style={[sheetStyles.closeButton, { backgroundColor: theme.surfaceVariant }]}
               >
@@ -598,19 +660,19 @@ export default function HomeScreen({ navigation }: any) {
               </Pressable>
             </View>
 
-            <ScrollView 
+            <ScrollView
               showsVerticalScrollIndicator={false}
               contentContainerStyle={sheetStyles.content}
             >
               <View style={sheetStyles.categoryGrid}>
                 {subCategories.map((cat) => (
-                  <Pressable 
-                    key={cat.value} 
+                  <Pressable
+                    key={cat.value}
                     style={sheetStyles.categoryItem}
                     onPress={() => {
-                      navigation.navigate("CategoryDetail", { 
-                        category: cat.value, 
-                        label: cat.label 
+                      navigation.navigate("CategoryDetail", {
+                        category: cat.value,
+                        label: cat.label
                       });
                     }}
                   >
@@ -631,6 +693,46 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </Pressable>
       </Modal>
+
+      {/* Welcome Reward Popup */}
+      <Modal visible={showWelcomePopup} transparent animationType="slide" onRequestClose={() => setShowWelcomePopup(false)}>
+        <Pressable style={popupStyles.overlay} onPress={() => setShowWelcomePopup(false)}>
+          <View style={[popupStyles.welcomeCard, { backgroundColor: theme.background }]}>
+            <View style={popupStyles.rewardIconContainer}>
+              <Ionicons name="gift" size={50} color={COLORS.saffron} />
+            </View>
+            <Text style={[popupStyles.welcomeTitle, { color: theme.text }]}>Welcome Reward! 🎉</Text>
+            <Text style={[popupStyles.welcomeDesc, { color: theme.textLight }]}>
+              Thanks for joining us! Here is your ₹50 reward for using a referral code.
+            </Text>
+            <View style={[popupStyles.couponBox, { backgroundColor: theme.surfaceVariant }]}>
+              <Text style={[popupStyles.couponCodeText, { color: theme.text }]}>{welcomeCoupon}</Text>
+              <TouchableOpacity onPress={() => {
+                Clipboard.setString(welcomeCoupon);
+                showToast("Code copied!", "success");
+              }}>
+                <Ionicons name="copy-outline" size={24} color={theme.primary} />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[popupStyles.footerBtn, { backgroundColor: theme.primary, width: '100%', margin: 0, marginTop: 24 }]}
+              onPress={() => setShowWelcomePopup(false)}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>Great, Thanks!</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+      {/* Floating Go Up Button */}
+      {showGoUp && (
+        <TouchableOpacity
+          style={goUpStyles.goUpBtn}
+          onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="arrow-up" size={24} color="#fff" />
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -647,12 +749,12 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap" },
   gridItem: { width: "33.33%", alignItems: "center", marginBottom: 20, paddingHorizontal: 4 },
   gridItemActive: { opacity: 0.7 },
-  gridIconContainer: { 
-    width: "100%", 
-    aspectRatio: 1, 
-    borderRadius: 16, 
-    justifyContent: "center", 
-    alignItems: "center", 
+  gridIconContainer: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 10,
     backgroundColor: "#F5F7FA",
     overflow: "hidden", // Ensures image stays within rounded corners
@@ -679,6 +781,54 @@ const popupStyles = StyleSheet.create({
   offTitle: { fontSize: 14, fontWeight: "700", marginTop: 2 },
   offBadge: { padding: 6, borderRadius: 8, borderWidth: 1 },
   footerBtn: { margin: 16, paddingVertical: 14, borderRadius: 12, alignItems: "center" },
+  welcomeCard: {
+    width: "85%",
+    padding: 24,
+    borderRadius: 24,
+    alignItems: "center",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+  },
+  rewardIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: "rgba(244, 196, 48, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  welcomeTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  welcomeDesc: {
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  couponBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    padding: 16,
+    borderRadius: 16,
+    borderStyle: "dashed",
+    borderWidth: 2,
+    borderColor: COLORS.saffron,
+  },
+  couponCodeText: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 1,
+  },
 });
 
 const sheetStyles = StyleSheet.create({
@@ -744,5 +894,24 @@ const sheetStyles = StyleSheet.create({
   categoryImage: {
     width: "70%",
     height: "70%",
+  },
+});
+
+const goUpStyles = StyleSheet.create({
+  goUpBtn: {
+    position: "absolute",
+    bottom: 30,
+    alignSelf: "center",
+    backgroundColor: COLORS.saffron,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
   },
 });

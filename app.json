@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "The Neatify Team",
-    "slug": "The-Neatify-Team",
+    "slug": "the-neatify-team-app",
     "version": "1.0.2",
     "orientation": "portrait",
     "scheme": [
@@ -28,6 +28,7 @@
     },
     "android": {
       "package": "com.theneatifyteam.app",
+      "googleServicesFile": "./google-services.json",
       "versionCode": 5,
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -78,21 +79,32 @@
       "expo-font",
       "expo-router",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/icon.png",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/sounds/my_custom_sound.wav"
+          ]
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
             "minSdkVersion": 24,
-            "targetSdkVersion": 35
+            "targetSdkVersion": 34
           }
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "8fd5df9c-ff2a-435f-b04d-eceec68d2539"
+        "projectId": "bfabbd61-2830-4b59-a336-32826235d2d6"
       }
     },
-    "owner": "krishnaak1"
+    "owner": "the_neatify_team"
   }
 }

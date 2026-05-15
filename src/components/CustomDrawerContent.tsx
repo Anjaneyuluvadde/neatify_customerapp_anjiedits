@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { supabase } from "../lib/supabase";
+import { registerForPushNotificationsAsync, removePushTokenFromSupabase } from "../utils/pushNotifications";
 import { COLORS } from "../theme/colors";
 
 export default function CustomDrawerContent(props: DrawerContentComponentProps) {
@@ -54,6 +55,14 @@ export default function CustomDrawerContent(props: DrawerContentComponentProps) 
   };
 
   const handleLogout = async () => {
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        await removePushTokenFromSupabase(token);
+      }
+    } catch (err) {
+      console.error("Failed to clear push token on logout:", err);
+    }
     await supabase.auth.signOut();
     props.navigation.closeDrawer();
   };

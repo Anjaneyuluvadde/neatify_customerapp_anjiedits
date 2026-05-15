@@ -9,12 +9,25 @@ import { NotificationProvider } from "./src/context/NotificationContext";
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 import { supabase } from "./src/lib/supabase";
 import AppNavigator from "./src/navigation/AppNavigator";
+import * as Notifications from 'expo-notifications';
+import { registerForPushNotificationsAsync, savePushTokenToSupabase } from "./src/utils/pushNotifications";
 
 export default function App() {
   const [initialRoute, setInitialRoute] = useState<"Login" | "HomeDrawer" | "CompleteProfile">("HomeDrawer");
   const [loading, setLoading] = useState(true);
   const navigationRef = React.useRef<any>(null);
   const skipAuthRedirect = React.useRef(false);
+
+  const handlePushToken = async (userId: string) => {
+    try {
+      const token = await registerForPushNotificationsAsync();
+      if (token) {
+        await savePushTokenToSupabase(userId, token);
+      }
+    } catch (err) {
+      console.error("Push token registration failed:", err);
+    }
+  };
 
   useEffect(() => {
     // Helper: check DB + Auth completeness
@@ -25,8 +38,16 @@ export default function App() {
       if (!userId) return true;
       try {
         // Always fetch fresh user data from server
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user) return true;
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        // Handle invalid sessions (e.g. Refresh Token Not Found)
+        if (userError || !user) {
+          if (userError?.message?.includes("Refresh Token") || userError?.status === 401) {
+            console.warn("Session invalid, signing out...");
+            await supabase.auth.signOut();
+          }
+          return true;
+        }
 
         const { data: profile } = await supabase
           .from("profile")
@@ -62,20 +83,39 @@ export default function App() {
     // 1. Initial Launch Check (cold start / app kill recovery)
     // Navigation is NOT mounted yet here, so we set initialRoute instead of resetting nav
     const initApp = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        // Prevent onAuthStateChange from triggering a second reset immediately after this
-        hasCheckedOnce = true;
-
-        const isComplete = await checkCompleteness(session.user.id, false);
-        if (!isComplete) {
-          setInitialRoute("CompleteProfile");
-          setLoading(false);
-          return;
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          if (sessionError.message?.includes("Refresh Token") || sessionError.status === 400) {
+            console.warn("Broken session detected on init. Clearing...");
+            await supabase.auth.signOut();
+            setInitialRoute("Login");
+            setLoading(false);
+            return;
+          }
+          throw sessionError;
         }
+
+        if (session?.user) {
+          handlePushToken(session.user.id);
+          // Prevent onAuthStateChange from triggering a second reset immediately after this
+          hasCheckedOnce = true;
+
+          const isComplete = await checkCompleteness(session.user.id, false);
+          if (!isComplete) {
+            setInitialRoute("CompleteProfile");
+            setLoading(false);
+            return;
+          }
+        }
+        setInitialRoute("HomeDrawer");
+      } catch (err) {
+        console.error("App init failed:", err);
+        setInitialRoute("Login");
+      } finally {
+        setLoading(false);
       }
-      setInitialRoute("HomeDrawer");
-      setLoading(false);
     };
     initApp();
 
@@ -97,6 +137,7 @@ export default function App() {
         }
         if (event === "SIGNED_IN" && session?.user && !hasCheckedOnce) {
           hasCheckedOnce = true;
+          handlePushToken(session.user.id);
           setTimeout(async () => {
             const isComplete = await checkCompleteness(session.user.id);
             if (isComplete) {
@@ -182,9 +223,24 @@ export default function App() {
 
     const subscription = Linking.addEventListener("url", handleDeepLink);
 
+    // Listen for notification taps to handle navigation
+    const notificationResponseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.screen === 'bookings') {
+        navigationRef.current?.navigate('HomeDrawer', {
+          screen: 'AuthenticatedScreens',
+          params: {
+            screen: 'MainTabs',
+            params: { screen: 'MyBookingsTab' }
+          }
+        });
+      }
+    });
+
     return () => {
       listener.subscription.unsubscribe();
       subscription.remove();
+      notificationResponseSubscription.remove();
     };
   }, []);
 

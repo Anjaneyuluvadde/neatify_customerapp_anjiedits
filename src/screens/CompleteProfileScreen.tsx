@@ -1,5 +1,5 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { ChevronLeft, Eye, EyeOff, Lock, Mail, Phone, User } from "lucide-react-native";
+import { ChevronLeft, Eye, EyeOff, Gift, Lock, Mail, Phone, User } from "lucide-react-native";
 import React, { useEffect, useState } from "react";
 import {
     ActivityIndicator,
@@ -18,6 +18,7 @@ import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { useTheme } from "../context/ThemeContext";
+import { generateReferralCode, validateReferralCode } from "../utils/referralUtils";
 
 export default function CompleteProfileScreen() {
     const navigation = useNavigation<any>();
@@ -37,6 +38,7 @@ export default function CompleteProfileScreen() {
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+    const [referralCode, setReferralCode] = useState("");
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -177,6 +179,19 @@ export default function CompleteProfileScreen() {
 
             if (!currentUser) throw new Error("User operation failed.");
 
+            // Handle Referral Logic
+            let referrerId = null;
+            if (referralCode.trim()) {
+                referrerId = await validateReferralCode(referralCode.trim());
+                if (!referrerId) {
+                    showAlert({ type: "warning", title: "Invalid Referral", message: "The referral code you entered is invalid. You can continue without it." });
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            const myReferralCode = generateReferralCode(fullName.trim());
+
             // Sync with local tables
             await Promise.all([
                 supabase.from("profile").upsert({
@@ -184,14 +199,48 @@ export default function CompleteProfileScreen() {
                     full_name: fullName.trim(),
                     email: email.trim(),
                     phone: cleanDigits,
+                    referral_code: myReferralCode,
+                    referred_by_id: referrerId
                 }),
                 supabase.from("signup").upsert({
                     id: currentUser?.id,
                     full_name: fullName.trim(),
                     email: email.trim(),
                     phone: cleanDigits,
+                }),
+                // Initialize Wallet
+                supabase.from("wallet").upsert({
+                    user_id: currentUser?.id,
+                    balance: 0
                 })
             ]);
+
+            // If referred, create the tracking record AND the ₹50 coupon
+            if (referrerId) {
+                // 1. Referral tracking
+                await supabase.from("referrals").insert({
+                    referrer_id: referrerId,
+                    referred_user_id: currentUser?.id,
+                    status: 'pending'
+                });
+
+                // 2. Create the ₹50 Welcome Coupon for the new user
+                const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+                await supabase.from("coupons").insert({
+                    coupon_code: welcomeCouponCode,
+                    discount_amount: 50,
+                    is_used: false,
+                    phone_number: cleanDigits // Link to user's phone
+                });
+                
+                // Store in user metadata so Home Screen knows to show the popup
+                await supabase.auth.updateUser({
+                    data: { 
+                        show_welcome_reward: true,
+                        welcome_coupon_code: welcomeCouponCode
+                    }
+                });
+            }
 
             // Everything done — go to Home
             showToast("Profile updated!", "success");
@@ -332,6 +381,19 @@ export default function CompleteProfileScreen() {
                                 </View>
                             </>
                         )}
+
+                        {/* REFERRAL CODE (Optional) */}
+                        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                            <Gift size={20} color={theme.textLight} />
+                            <TextInput
+                                style={[styles.input, { color: theme.text }]}
+                                placeholder="Referral Code (Optional)"
+                                placeholderTextColor={theme.textLight}
+                                value={referralCode}
+                                onChangeText={setReferralCode}
+                                autoCapitalize="characters"
+                            />
+                        </View>
 
                         <TouchableOpacity
                             style={[styles.primaryBtn, { backgroundColor: theme.primary }, saving && styles.disabledBtn]}

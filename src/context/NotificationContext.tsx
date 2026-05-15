@@ -1,4 +1,7 @@
-import React, { createContext, ReactNode, useState } from "react";
+import React, { createContext, ReactNode, useState, useEffect, useRef } from "react";
+import * as Notifications from 'expo-notifications';
+import { supabase } from "../lib/supabase";
+import { registerForPushNotificationsAsync, savePushTokenToSupabase } from "../utils/pushNotifications";
 import AppToast from "../components/AppToast";
 import CustomAlert from "../components/CustomAlert";
 
@@ -36,6 +39,60 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const [toastConfig, setToastConfig] = useState<ToastConfig | null>(null);
     const [showAlertModal, setShowAlertModal] = useState(false);
     const [showToastModal, setShowToastModal] = useState(false);
+
+    const notificationListener = useRef<Notifications.Subscription | null>(null);
+    const responseListener = useRef<Notifications.Subscription | null>(null);
+
+    useEffect(() => {
+        // ✅ THE MISSING LINK: Register tokens automatically
+        const setupNotifications = async () => {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+                const token = await registerForPushNotificationsAsync();
+                if (token) {
+                    await savePushTokenToSupabase(session.user.id, token);
+                }
+            }
+        };
+
+        setupNotifications();
+
+        // Listen for auth changes to register new tokens on login
+        const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+            if (event === 'SIGNED_IN' && session?.user) {
+                const token = await registerForPushNotificationsAsync();
+                if (token) {
+                    await savePushTokenToSupabase(session.user.id, token);
+                }
+            }
+        });
+
+        // Set up the custom channel for Android
+        Notifications.setNotificationChannelAsync('custom-sound-channel-v3', {
+            name: 'Custom Sound Alerts',
+            importance: Notifications.AndroidImportance.MAX,
+            sound: 'my_custom_sound.wav', // Put the exact file name here (with extension)
+        });
+
+        notificationListener.current = Notifications.addNotificationReceivedListener(notification => {
+            console.log('Notification Received:', notification);
+            // In-app feedback for foreground notifications
+            const { title, body } = notification.request.content;
+            showToast(`${title}: ${body}`, "info");
+        });
+
+        responseListener.current = Notifications.addNotificationResponseReceivedListener(response => {
+            console.log('Notification Tapped:', response);
+            // Deep linking is handled by Expo Router/Linking if configured, 
+            // but we can add custom logic here if needed.
+        });
+
+        return () => {
+            notificationListener.current?.remove();
+            responseListener.current?.remove();
+            authListener.subscription.unsubscribe();
+        };
+    }, []);
 
     const showAlert = (config: AlertConfig) => {
         setAlertConfig(config);

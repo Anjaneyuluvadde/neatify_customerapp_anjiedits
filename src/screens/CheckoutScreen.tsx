@@ -132,9 +132,19 @@ export default function CheckoutScreen({ route }: Props) {
   const [policies, setPolicies] = useState<Policies | null>(null);
 
   // ✅ Coupon state
-  const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage: number } | null>(null);
+  const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage?: number; discount_amount?: number } | null>(null);
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
+  
+  // ✅ Wallet state
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [useWallet, setUseWallet] = useState(false);
+  
+  // ✅ Manual Coupon State
+  const [manualCouponCode, setManualCouponCode] = useState("");
+  const [isVerifyingCoupon, setIsVerifyingCoupon] = useState(false);
+  const [couponStatus, setCouponStatus] = useState<{ type: 'success' | 'error' | '', message: string }>({ type: '', message: '' });
+
   const [refreshing, setRefreshing] = useState(false);
 
   // ✅ Centralized Geocoding Helper
@@ -260,16 +270,17 @@ export default function CheckoutScreen({ route }: Props) {
       return;
     }
 
-    // ✅ STRICT CHECK: Only show if is_used is explicitly true
-    if (couponData && couponData.is_used === true) {
-      console.log("✅ Valid coupon found and in-use:", couponData.coupon_code);
+    // ✅ STRICT CHECK: Only show if is_used is NOT true (unused)
+    if (couponData && !couponData.is_used) {
+      console.log("✅ Valid unused coupon found:", couponData.coupon_code);
       setCoupon({
         id: couponData.id,
         coupon_code: couponData.coupon_code,
-        discount_percentage: couponData.discount_percentage || couponData.discount_p || 0
+        discount_percentage: couponData.discount_percentage || couponData.discount_p || 0,
+        discount_amount: couponData.discount_amount || 0
       });
     } else {
-      console.log("ℹ️ Coupon not shown: either not found or is_used is false/null.");
+      console.log("ℹ️ Coupon not shown: either not found or already used.");
       setCoupon(null);
     }
   };
@@ -353,6 +364,17 @@ export default function CheckoutScreen({ route }: Props) {
       });
       setShowAlertModal(true);
       navigation.navigate("MainTabs", { screen: "ProfileTab" });
+    }
+
+    // ✅ Fetch Wallet Balance
+    const { data: walletData } = await supabase
+      .from("wallet")
+      .select("balance")
+      .eq("user_id", data.user.id)
+      .maybeSingle();
+    
+    if (walletData) {
+      setWalletBalance(walletData.balance || 0);
     }
 
     setLoadingProfile(false);
@@ -475,13 +497,70 @@ export default function CheckoutScreen({ route }: Props) {
 
   const applyCoupon = () => {
     if (!coupon) return;
-    setCouponDiscount(coupon.discount_percentage);
+    setCouponDiscount(coupon.discount_percentage || 0);
     setCouponApplied(true);
+    const msg = coupon.discount_amount && coupon.discount_amount > 0 
+      ? `Coupon applied! ₹${coupon.discount_amount} off`
+      : `Coupon applied! ${coupon.discount_percentage}% off`;
+    setCouponStatus({ type: 'success', message: msg });
+  };
+
+  const handleApplyManualCoupon = async () => {
+    if (!manualCouponCode.trim()) return;
+    
+    setIsVerifyingCoupon(true);
+    setCouponStatus({ type: '', message: '' });
+    
+    try {
+      const cleanPhone = profile?.phone ? profile.phone.replace(/\D/g, "").slice(-10) : "";
+      
+      const { data, error } = await supabase
+        .from("coupons")
+        .select("*")
+        .eq("coupon_code", manualCouponCode.trim().toUpperCase())
+        .maybeSingle();
+
+      if (error || !data) {
+        setCouponStatus({ type: "error", message: "Invalid coupon code" });
+        setCouponApplied(false);
+      } else if (data.is_used) {
+        setCouponStatus({ type: "error", message: "This coupon has already been used" });
+        setCouponApplied(false);
+      } else {
+        // Check phone number if applicable
+        const couponPhone = data.phone_number ? data.phone_number.replace(/\D/g, "").slice(-10) : "";
+        if (couponPhone && couponPhone !== cleanPhone) {
+          setCouponStatus({ type: "error", message: "This coupon is not valid for your phone number" });
+          setCouponApplied(false);
+        } else {
+          setCoupon({
+            id: data.id,
+            coupon_code: data.coupon_code,
+            discount_percentage: data.discount_percentage || data.discount_p || 0,
+            discount_amount: data.discount_amount || 0
+          });
+          setCouponDiscount(data.discount_percentage || data.discount_p || 0);
+          setCouponApplied(true);
+          const msg = data.discount_amount && data.discount_amount > 0 
+            ? `Coupon applied! ₹${data.discount_amount} off`
+            : `Coupon applied! ${data.discount_percentage || data.discount_p}% off`;
+          setCouponStatus({ type: "success", message: msg });
+        }
+      }
+    } catch (err) {
+      console.error("Coupon verification error:", err);
+      setCouponStatus({ type: "error", message: "Error verifying coupon" });
+    } finally {
+      setIsVerifyingCoupon(false);
+    }
   };
 
   const removeCoupon = () => {
     setCouponDiscount(0);
     setCouponApplied(false);
+    setCoupon(null);
+    setManualCouponCode("");
+    setCouponStatus({ type: '', message: '' });
   };
 
   /* ================= TOTALS ================= */
@@ -535,12 +614,29 @@ export default function CheckoutScreen({ route }: Props) {
 
   const grandTotal = useMemo(() => {
     const baseTotal = totalPrice + totalTax;
-    if (couponApplied && couponDiscount > 0) {
-      const discountAmount = (baseTotal * couponDiscount) / 100;
-      return baseTotal - discountAmount;
+    let finalTotal = baseTotal;
+
+    // 1. Apply Coupon Discount (Percentage or Fixed)
+    if (couponApplied && coupon) {
+      if (coupon.discount_amount && coupon.discount_amount > 0) {
+        // Fixed amount discount
+        finalTotal = Math.max(0, baseTotal - coupon.discount_amount);
+      } else if (couponDiscount > 0) {
+        // Percentage discount
+        const discountAmount = (baseTotal * couponDiscount) / 100;
+        finalTotal = baseTotal - discountAmount;
+      }
     }
-    return baseTotal;
-  }, [totalPrice, totalTax, couponApplied, couponDiscount]);
+
+    // 2. Apply Wallet Discount (Flat Amount)
+    if (useWallet && walletBalance > 0) {
+      // Don't let discount exceed the total price
+      const deduction = Math.min(finalTotal, walletBalance);
+      finalTotal = finalTotal - deduction;
+    }
+
+    return finalTotal;
+  }, [totalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance]);
 
   /* ================= PAYMENT ================= */
 
@@ -687,6 +783,7 @@ export default function CheckoutScreen({ route }: Props) {
             services: services,
             booking_date: datePart,
             booking_time: timePart,
+            booking_schedule_at: `${datePart} ${timePart} +05:30`,
             total_amount: Number(grandTotal.toFixed(2)),
             payment_status: "pending",
             payment_method: "razorpay",
@@ -714,16 +811,29 @@ export default function CheckoutScreen({ route }: Props) {
       const [firstName, ...rest] = profile.full_name.split(" ");
       const lastName = rest.join(" ");
 
-      const payment = await processPayment(Number(grandTotal.toFixed(2)), {
-        firstName,
-        lastName,
-        email: profile.email,
-        phone: profile.phone,
-        address: fullAddress,
-        city: "", // Consolidated into fullAddress
-        region: "",
-        zip: pincode,
-      }, bookingId);
+      let payment;
+
+      // ✅ TEST MODE BYPASS
+      if (profile.full_name.toUpperCase() === "TEST USER") {
+        console.log("🛠️ TEST MODE: Bypassing real payment...");
+        payment = { 
+          success: true, 
+          paymentId: "test_pay_" + Date.now(), 
+          orderId: "test_ord_" + Date.now(),
+          signature: "test_sig_123"
+        };
+      } else {
+        payment = await processPayment(Number(grandTotal.toFixed(2)), {
+          firstName,
+          lastName,
+          email: profile.email,
+          phone: profile.phone,
+          address: fullAddress,
+          city: "", // Consolidated into fullAddress
+          region: "",
+          zip: pincode,
+        }, bookingId);
+      }
 
       if (!payment?.success) {
         // ✅ Update booking to "failed" status
@@ -761,6 +871,29 @@ export default function CheckoutScreen({ route }: Props) {
           .eq("id", coupon.id);
         console.log("✅ Coupon marked as used:", coupon.coupon_code);
       }
+
+      // ✅ Deduct from Wallet (if applied)
+      if (useWallet && walletBalance > 0) {
+        const deduction = Math.min(totalPrice + totalTax, walletBalance);
+        const { error: walletError } = await supabase
+          .from("wallet")
+          .update({ balance: walletBalance - deduction })
+          .eq("user_id", userId);
+        
+        if (!walletError) {
+          // Record transaction using your specific table structure
+          await supabase.from("wallet_transactions").insert({
+            user_id: userId,
+            amount: -deduction,
+            transaction_type: 'booking_payment',
+            description: `Discount applied to booking #${bookingId}`
+          });
+        }
+        console.log("✅ Wallet balance updated after discount");
+      }
+
+      // Referral reward logic moved to database trigger (on COMPLETED status)
+
 
       // ✅ Send Booking Confirmation Email
       try {
@@ -930,13 +1063,15 @@ export default function CheckoutScreen({ route }: Props) {
             )}
 
             {/* ✅ Coupon Discount Row */}
-            {couponApplied && couponDiscount > 0 && (
+            {couponApplied && (
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
                 <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
                   Coupon ({coupon?.coupon_code})
                 </Text>
                 <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
-                  -{couponDiscount}%
+                  {coupon?.discount_amount && coupon.discount_amount > 0 
+                    ? `-₹${coupon.discount_amount}` 
+                    : `-${couponDiscount}%`}
                 </Text>
               </View>
             )}
@@ -948,33 +1083,99 @@ export default function CheckoutScreen({ route }: Props) {
             </View>
           </View>
 
-          {/* ✅ COUPON CARD - Only shown if user has an active coupon */}
-          {coupon && (
-            <View style={styles.couponCard}>
-              <Text style={styles.couponTitle}>🎉 You have a coupon!</Text>
+          {/* ✅ COUPON SECTION */}
+          <View style={styles.couponCard}>
+            <Text style={styles.couponTitle}>Have a coupon code?</Text>
+            
+            {couponApplied && coupon ? (
               <View style={styles.couponRow}>
-                <View style={styles.couponCodeBox}>
-                  <Text style={styles.couponCode}>{coupon.coupon_code}</Text>
+                <View style={styles.couponAppliedBadge}>
+                  <Text style={styles.couponAppliedText}>
+                    ✅ {coupon.coupon_code} applied! ({coupon.discount_amount && coupon.discount_amount > 0 ? `₹${coupon.discount_amount} off` : `${coupon.discount_percentage}% off`})
+                  </Text>
                 </View>
-                {couponApplied ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={styles.couponAppliedBadge}>
-                      <Text style={styles.couponAppliedText}>✅ {coupon.discount_percentage}% off</Text>
-                    </View>
-                    <Pressable onPress={removeCoupon}>
-                      <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 13 }}>Remove</Text>
-                    </Pressable>
+                <Pressable onPress={removeCoupon}>
+                  <Text style={{ color: "#EF4444", fontWeight: "700", fontSize: 14 }}>Remove</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View>
+                <View style={styles.couponRow}>
+                  <View style={[styles.couponInputBox, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                    <TextInput
+                      style={[styles.couponInput, { color: theme.text }]}
+                      value={manualCouponCode}
+                      onChangeText={(text) => setManualCouponCode(text.toUpperCase())}
+                      placeholder="ENTER CODE"
+                      placeholderTextColor={theme.textLight}
+                      autoCapitalize="characters"
+                    />
                   </View>
-                ) : (
-                  <Pressable style={styles.couponApplyBtn} onPress={applyCoupon}>
-                    <Text style={styles.couponApplyBtnText}>Apply</Text>
+                  <Pressable 
+                    style={[styles.couponApplyBtn, (!manualCouponCode.trim() || isVerifyingCoupon) && { opacity: 0.5 }]} 
+                    onPress={handleApplyManualCoupon}
+                    disabled={!manualCouponCode.trim() || isVerifyingCoupon}
+                  >
+                    {isVerifyingCoupon ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.couponApplyBtnText}>Apply</Text>
+                    )}
+                  </Pressable>
+                </View>
+                
+                {/* suggested coupon if auto-detected */}
+                {coupon && !couponApplied && (
+                  <Pressable 
+                    style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    onPress={applyCoupon}
+                  >
+                    <Text style={{ fontSize: 12, color: theme.textLight }}>🎉 Suggestion:</Text>
+                    <Text style={{ fontSize: 12, color: theme.primary, fontWeight: '700', textDecorationLine: 'underline' }}>
+                      Apply {coupon.coupon_code} ({coupon.discount_amount && coupon.discount_amount > 0 ? `₹${coupon.discount_amount} off` : `${coupon.discount_percentage}% off`})
+                    </Text>
                   </Pressable>
                 )}
               </View>
-              {couponApplied && (
-                <Text style={styles.couponSavingText}>
-                  You save ₹{((totalPrice + totalTax) * coupon.discount_percentage / 100).toFixed(2)} with this coupon!
-                </Text>
+            )}
+
+            {couponStatus.message ? (
+              <Text style={[styles.couponSavingText, { color: couponStatus.type === 'error' ? '#EF4444' : '#065F46' }]}>
+                {couponStatus.message}
+              </Text>
+            ) : couponApplied && coupon ? (
+              <Text style={styles.couponSavingText}>
+                You save ₹{coupon.discount_amount && coupon.discount_amount > 0 
+                  ? coupon.discount_amount 
+                  : ((totalPrice + totalTax) * (coupon.discount_percentage || 0) / 100).toFixed(2)} with this coupon!
+              </Text>
+            ) : null}
+          </View>
+
+          {/* WALLET CREDIT */}
+          {walletBalance > 0 && (
+            <View style={[styles.walletCard, { backgroundColor: useWallet ? "#FFFBEB" : "#F8FAFC", borderColor: useWallet ? COLORS.saffron : "#E2E8F0" }]}>
+              <View style={styles.walletHeader}>
+                <View style={styles.walletInfo}>
+                  <View style={[styles.walletIconContainer, { backgroundColor: useWallet ? "#FEF3C7" : "#EDF2F7" }]}>
+                    <Ionicons name="wallet-outline" size={20} color={useWallet ? "#92400E" : "#4A5568"} />
+                  </View>
+                  <View>
+                    <Text style={[styles.walletTitle, { color: useWallet ? "#92400E" : "#2D3748" }]}>Discount Wallet</Text>
+                    <Text style={[styles.walletBalance, { color: useWallet ? "#B45309" : "#718096" }]}>₹{walletBalance} available</Text>
+                  </View>
+                </View>
+                <TouchableOpacity 
+                  onPress={() => setUseWallet(!useWallet)}
+                  style={[styles.walletToggle, { backgroundColor: useWallet ? COLORS.saffron : "#E2E8F0" }]}
+                >
+                  <View style={[styles.toggleCircle, { transform: [{ translateX: useWallet ? 18 : 2 }] }]} />
+                </TouchableOpacity>
+              </View>
+              {useWallet && (
+                <View style={styles.walletAppliedBadge}>
+                  <Text style={styles.walletAppliedText}>- ₹{Math.min(grandTotal + (useWallet ? Math.min(totalPrice + totalTax, walletBalance) : 0), walletBalance).toFixed(2)} applied from wallet</Text>
+                </View>
               )}
             </View>
           )}
@@ -1891,6 +2092,19 @@ const styles = StyleSheet.create({
     color: "#78350F",
     letterSpacing: 2,
   },
+  couponInputBox: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    height: 45,
+    justifyContent: "center",
+  },
+  couponInput: {
+    fontSize: 14,
+    fontWeight: "700",
+    letterSpacing: 1,
+  },
   couponApplyBtn: {
     backgroundColor: "#F4C430",
     borderRadius: 8,
@@ -1918,5 +2132,65 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#065F46",
     fontWeight: "600" as const,
+  },
+  walletCard: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    padding: 16,
+    marginBottom: 20,
+    marginTop: 10,
+  },
+  walletHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  walletInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  walletIconContainer: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  walletTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  walletBalance: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  walletToggle: {
+    width: 42,
+    height: 24,
+    borderRadius: 12,
+    justifyContent: "center",
+  },
+  toggleCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  walletAppliedBadge: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(251, 191, 36, 0.2)",
+  },
+  walletAppliedText: {
+    fontSize: 13,
+    color: "#065F46",
+    fontWeight: "700",
   },
 });

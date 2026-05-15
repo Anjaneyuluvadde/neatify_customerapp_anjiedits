@@ -27,6 +27,13 @@ export default function BookingDetailsScreen({ route }: Props) {
   const [cancelling, setCancelling] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [cancellationDetails, setCancellationDetails] = useState<{
+    fee: number;
+    refund_amount: number;
+    is_free: boolean;
+    hours_until_service: number;
+  } | null>(null);
+  const [fetchingFees, setFetchingFees] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
 
@@ -92,45 +99,77 @@ export default function BookingDetailsScreen({ route }: Props) {
     };
   }, [booking.id]);
 
+  // 🟢 NEW POLICY: Calculate time difference and deep cleaning status
+  const { diffHours, isDeepCleaning } = React.useMemo(() => {
+    if (!booking.booking_date || !booking.booking_time) return { diffHours: 999, isDeepCleaning: false };
+    try {
+      const scheduledStr = `${booking.booking_date} ${booking.booking_time}`;
+      const scheduledDate = new Date(scheduledStr);
+      const now = new Date();
+      const diff = (scheduledDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+      
+      const deep = services.some((s: any) => 
+        s.title.toLowerCase().includes("deep cleaning")
+      );
+      
+      return { diffHours: diff, isDeepCleaning: deep };
+    } catch (e) {
+      return { diffHours: 999, isDeepCleaning: false };
+    }
+  }, [booking.booking_date, booking.booking_time, services]);
+
   // Check Cancellation Eligibility
   useEffect(() => {
-    const checkEligibility = async () => {
-      if (!booking.id) return;
-
-      // Ensure timezone is treated as UTC if omitted by Supabase (fixes 5.5hr IST offset bug)
+    const checkEligibility = () => {
       let clientEligible = true;
-      if (booking.created_at) {
-        let dateStr = booking.created_at;
-        if (!dateStr.includes('Z') && !dateStr.includes('+')) {
-          dateStr = dateStr.replace(' ', 'T') + 'Z';
-        }
-        const createdAt = new Date(dateStr);
-        const now = new Date();
-        const diffMs = now.getTime() - createdAt.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-        
-        // Check if more than 6 hours since creation OR already completed/cancelled
-        if (diffHours > 6 || ['COMPLETED', 'CANCELLED'].includes(booking.work_status)) {
-          clientEligible = false;
-        }
+      if (['COMPLETED', 'CANCELLED'].includes(booking.work_status)) {
+        clientEligible = false;
       }
-
       setIsEligibleToCancel(clientEligible);
     };
-
     checkEligibility();
-  }, [booking]);
+  }, [booking.work_status]);
 
-  const handleCancelBooking = () => {
+  const handleCancelBooking = async () => {
     if (!isEligibleToCancel) {
       showAlert({
         type: "info",
         title: t("notifications.cancellationClosed"),
-        message: "Cancellation is only available within 6 hours of booking creation."
+        message: "Cancellation is no longer available for this booking status."
       });
       return;
     }
-    setShowCancelModal(true);
+
+    setFetchingFees(true);
+    try {
+      let { data, error } = await supabase.rpc('calculate_cancellation_details', {
+        booking_uuid: booking.id
+      });
+
+      if (error) throw error;
+
+      // 🟢 Enforce 6-hour policy override in frontend if RPC returns 0
+      // Explicitly check for the 6-hour boundary (<= 6 hours)
+      if (diffHours <= 6 && (!data || data.fee === 0)) {
+        const fee = isDeepCleaning ? 299 : 99;
+        data = {
+          ...data,
+          fee: fee,
+          is_free: false,
+          total_amount: data?.total_amount || booking.total_amount,
+          refund_amount: Math.max(0, (data?.total_amount || booking.total_amount || 0) - fee),
+          hours_until_service: diffHours
+        };
+      }
+
+      setCancellationDetails(data);
+      setShowCancelModal(true);
+    } catch (err) {
+      console.error("Error fetching cancellation details:", err);
+      setShowCancelModal(true);
+    } finally {
+      setFetchingFees(false);
+    }
   };
 
   const confirmCancellation = async () => {
@@ -146,33 +185,7 @@ export default function BookingDetailsScreen({ route }: Props) {
     setCancelling(true);
 
     try {
-      // 🔐 Re-check eligibility (6-hour rule) using fixed client logic
-      let eligible = true;
-      if (booking.created_at) {
-        let dateStr = booking.created_at;
-        if (!dateStr.includes('Z') && !dateStr.includes('+')) {
-          dateStr = dateStr.replace(' ', 'T') + 'Z';
-        }
-        const createdAt = new Date(dateStr);
-        const now = new Date();
-        const diffHours = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-        
-        if (diffHours > 6 || ['COMPLETED', 'CANCELLED'].includes(booking.work_status)) {
-          eligible = false;
-        }
-      }
-
-      if (!eligible) {
-        showAlert({
-          type: "info",
-          title: t("notifications.cancellationClosed"),
-          message: t("notifications.cancellationClosedMessage")
-        });
-        setCancelling(false);
-        return;
-      }
-
-      // Update booking with cancellation + refund tracking
+      // Update booking with cancellation + refund tracking + calculated fees
       const { error } = await supabase
         .from('bookings')
         .update({
@@ -180,7 +193,9 @@ export default function BookingDetailsScreen({ route }: Props) {
           cancel_requested: true,
           cancel_reason: cancelReason,
           cancel_time: new Date().toISOString(),
-          refund_status: 'PENDING',  // Set to PENDING for admin to process
+          refund_status: 'PENDING',
+          cancellation_fee: cancellationDetails?.fee || 0,
+          refund_amount: cancellationDetails?.refund_amount || booking.total_amount,
         })
         .eq('id', booking.id);
 
@@ -370,6 +385,16 @@ export default function BookingDetailsScreen({ route }: Props) {
           </View>
         </View>
 
+        {/* CANCELLATION WARNING BANNER */}
+        {diffHours <= 6 && diffHours > 0 && !['CANCELLED', 'COMPLETED'].includes(booking.work_status) && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="alert-circle" size={18} color="#ef4444" />
+            <Text style={styles.warningText}>
+              Cancellation within 6 hours of service incurs a fee (₹{isDeepCleaning ? '299' : '99'} for {isDeepCleaning ? 'deep cleaning' : 'small services'}).
+            </Text>
+          </View>
+        )}
+
         <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.customerDetails")}</Text>
         <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
           <Text style={[styles.bold, { color: theme.text }]}>{booking.customer_name || 'N/A'}</Text>
@@ -501,9 +526,9 @@ export default function BookingDetailsScreen({ route }: Props) {
                 !isEligibleToCancel ? styles.disabledCancelButton : null
               ]}
               onPress={handleCancelBooking}
-              disabled={cancelling}
+              disabled={cancelling || fetchingFees}
             >
-              {cancelling ? (
+              {cancelling || fetchingFees ? (
                 <ActivityIndicator color="#fff" />
               ) : (
                 <Text style={styles.cancelButtonText}>{t("bookingDetails.cancelBooking")}</Text>
@@ -523,14 +548,15 @@ export default function BookingDetailsScreen({ route }: Props) {
             styles.cancelButton,
             styles.disabledButton,
             booking.refund_status === 'REFUNDED' ? styles.refundCompletedButton : null,
-            booking.refund_status === 'PENDING' ? styles.refundPendingButton : null
+            (booking.refund_status && booking.refund_status !== 'REFUNDED') ? styles.refundPendingButton : null
           ]}>
             <Text style={styles.cancelButtonText}>
               {booking.refund_status === 'REFUNDED' ? t("bookingDetails.refundCompleted") :
                 booking.refund_status === 'PENDING' ? t("bookingDetails.refundPending") :
+                (booking.refund_status && booking.refund_status !== 'REFUNDED') ? t("bookingDetails.refundInitiated") :
                   t("bookingDetails.bookingCancelled")}
             </Text>
-            {booking.refund_status === 'PENDING' && (
+            {booking.refund_status && booking.refund_status !== 'REFUNDED' && (
               <Text style={{ color: '#f1f5f9', fontSize: 13, marginTop: 6, fontWeight: '500' }}>
                 {t("bookingDetails.refundNote")}
               </Text>
@@ -608,6 +634,31 @@ export default function BookingDetailsScreen({ route }: Props) {
                   {t("bookingDetails.cancelModalSubtitle")}
                 </Text>
 
+                {/* CANCELLATION SUMMARY */}
+                {cancellationDetails && (
+                  <View style={[styles.feeContainer, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
+                    <View style={styles.feeRow}>
+                      <Text style={[styles.feeLabel, { color: theme.text }]}>Total Amount</Text>
+                      <Text style={[styles.feeValue, { color: theme.text }]}>₹{cancellationDetails.total_amount}</Text>
+                    </View>
+                    <View style={styles.feeRow}>
+                      <Text style={[styles.feeLabel, { color: theme.text }]}>Cancellation Charge</Text>
+                      <Text style={[styles.feeValue, { color: cancellationDetails.fee > 0 ? '#ef4444' : '#22c55e' }]}>
+                        {cancellationDetails.fee > 0 ? `- ₹${cancellationDetails.fee}` : 'Free'}
+                      </Text>
+                    </View>
+                    <View style={[styles.feeRow, styles.feeTotalRow, { borderTopColor: theme.border }]}>
+                      <Text style={[styles.feeLabelTotal, { color: theme.text }]}>Final Refund</Text>
+                      <Text style={[styles.feeValueTotal, { color: theme.primary }]}>₹{cancellationDetails.refund_amount}</Text>
+                    </View>
+                    {cancellationDetails.fee > 0 && (
+                      <Text style={styles.feeNote}>
+                        * Fee applied as cancellation is within 6 hours of service.
+                      </Text>
+                    )}
+                  </View>
+                )}
+
                 <TextInput
                   style={[styles.reasonInput, { backgroundColor: theme.surfaceVariant, color: theme.text, borderColor: theme.border }]}
                   placeholderTextColor={theme.textLight}
@@ -669,6 +720,24 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 20,
     marginBottom: 8,
+  },
+
+  warningBanner: {
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  warningText: {
+    color: '#991b1b',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
 
   card: {
@@ -940,5 +1009,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#0f172a",
+  },
+  feeContainer: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 20,
+  },
+  feeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  feeTotalRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  feeLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  feeValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  feeLabelTotal: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  feeValueTotal: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  feeNote: {
+    fontSize: 11,
+    color: '#ef4444',
+    fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

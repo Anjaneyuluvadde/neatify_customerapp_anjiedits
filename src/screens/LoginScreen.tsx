@@ -1,7 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { Eye, EyeOff, Lock, Mail, Phone, User } from "lucide-react-native";
+import { Eye, EyeOff, Gift, Lock, Mail, Phone, User } from "lucide-react-native";
 import React, { useState } from "react";
 
 import {
@@ -26,6 +26,7 @@ import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { useTheme } from "../context/ThemeContext";
+import { generateReferralCode, validateReferralCode } from "../utils/referralUtils";
 
 
 export default function LoginScreen(props: any) {
@@ -42,6 +43,7 @@ export default function LoginScreen(props: any) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
+  const [referralCode, setReferralCode] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -148,6 +150,17 @@ export default function LoginScreen(props: any) {
           setLoading(false);
           return;
         }
+
+        // Validate Referral Code if provided
+        let referrerId = null;
+        if (referralCode.trim()) {
+            referrerId = await validateReferralCode(referralCode.trim());
+            if (!referrerId) {
+                showAlert({ type: "warning", title: "Invalid Referral", message: "The referral code you entered is invalid. You can continue without it." });
+                setLoading(false);
+                return;
+            }
+        }
         if (!isValidEmail(email)) {
           showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
           setLoading(false);
@@ -196,20 +209,57 @@ export default function LoginScreen(props: any) {
 
         // Upsert profile and signup tables immediately so completeness check passes
         if (authUser) {
+          const myReferralCode = generateReferralCode(fullName.trim());
+          
           await Promise.all([
             supabase.from("profile").upsert({
               id: authUser.id,
               full_name: fullName.trim(),
               email: email.trim(),
               phone: cleanPhone,
+              referral_code: myReferralCode,
+              referred_by_id: referrerId
             }),
             supabase.from("signup").upsert({
               id: authUser.id,
               full_name: fullName.trim(),
               email: email.trim(),
               phone: cleanPhone,
+            }),
+            // Initialize Wallet
+            supabase.from("wallet").upsert({
+                user_id: authUser.id,
+                balance: 0
             })
           ]);
+
+          // If referred, create the tracking record AND the ₹50 coupon
+          if (referrerId) {
+            // 1. Referral tracking
+            await supabase.from("referrals").insert({
+                referrer_id: referrerId,
+                referred_user_id: authUser.id,
+                status: 'pending',
+                reward_amount: 50
+            });
+
+            // 2. Create the ₹50 Welcome Coupon for the new user
+            const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+            await supabase.from("coupons").insert({
+                coupon_code: welcomeCouponCode,
+                discount_amount: 50,
+                is_used: false,
+                phone_number: cleanPhone // Link to user's phone
+            });
+            
+            // Store in user metadata so Home Screen knows to show the popup
+            await supabase.auth.updateUser({
+                data: { 
+                    show_welcome_reward: true,
+                    welcome_coupon_code: welcomeCouponCode
+                }
+            });
+          }
         }
       }
 
@@ -323,6 +373,21 @@ export default function LoginScreen(props: any) {
               </View>
             )}
 
+            {/* SIGNUP: Referral Code (Optional) */}
+            {!isLogin && (
+              <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
+                <Gift size={20} color={theme.textLight} />
+                <TextInput
+                  style={[styles.input, { color: theme.text }]}
+                  placeholder="Referral/Discount Code (Optional)"
+                  placeholderTextColor={theme.textLight}
+                  value={referralCode}
+                  onChangeText={(text) => setReferralCode(text.toUpperCase())}
+                  autoCapitalize="characters"
+                />
+              </View>
+            )}
+
             {/* PASSWORD */}
             <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
               <Lock size={20} color={theme.textLight} />
@@ -338,6 +403,7 @@ export default function LoginScreen(props: any) {
                 {showPassword ? <EyeOff size={20} color={theme.textLight} /> : <Eye size={20} color={theme.textLight} />}
               </TouchableOpacity>
             </View>
+
 
             {/* FORGOT PASSWORD */}
             {isLogin && (

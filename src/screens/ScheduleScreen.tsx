@@ -303,6 +303,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
   // Dynamic schedule config from Supabase
   const [timeSlots, setTimeSlots] = useState<string[]>(DEFAULT_TIMES);
+  const [dateTimeSlotsConfig, setDateTimeSlotsConfig] = useState<Record<string, string[]>>({});
   const [availableYears, setAvailableYears] = useState<number[]>(DEFAULT_YEARS);
   const [serviceTimeRules, setServiceTimeRules] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -359,6 +360,27 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
             .filter(Boolean) as string[];
           setTimeSlots(normalized);
         }
+        if (row.config_key === "date_time_slots" && typeof row.config_value === "object" && row.config_value !== null) {
+          const rawObj = row.config_value as Record<string, any[]>;
+          const normalizedObj: Record<string, string[]> = {};
+          
+          Object.keys(rawObj).forEach((dateKey) => {
+            const slots = rawObj[dateKey];
+            if (Array.isArray(slots)) {
+              normalizedObj[dateKey] = slots
+                .map((slot: any) => {
+                  if (typeof slot === "string") return slot.trim();
+                  if (slot && typeof slot === "object" && slot.value) {
+                    if (slot.active === false) return null;
+                    return String(slot.value).trim();
+                  }
+                  return null;
+                })
+                .filter(Boolean) as string[];
+            }
+          });
+          setDateTimeSlotsConfig(normalizedObj);
+        }
         if (row.config_key === "years" && Array.isArray(row.config_value)) {
           setAvailableYears(row.config_value as number[]);
         }
@@ -392,6 +414,22 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   useEffect(() => {
     setSelectedTime(null);
   }, [selectedDate, month, year]);
+
+  // ✅ Compute available time slots based on selected date
+  const availableTimeSlots = useMemo(() => {
+    if (selectedDate === null) return timeSlots;
+    
+    // Format: YYYY-MM-DD
+    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
+    
+    // If we have specific slots for this date, use them (even if empty list)
+    if (dateTimeSlotsConfig[dateString]) {
+      return dateTimeSlotsConfig[dateString];
+    }
+    
+    // Otherwise fallback to default slots
+    return timeSlots;
+  }, [selectedDate, month, year, dateTimeSlotsConfig, timeSlots]);
 
   // ✅ Filter addons to match the main service's service_type (case-insensitive)
   const filteredAddons = useMemo(() => {
@@ -674,7 +712,9 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
             <Text style={[styles.section, { color: theme.text }]}>{t("schedule.selectTime")}</Text>
 
             <View style={styles.timeGrid}>
-              {timeSlots.map((time) => {
+              {availableTimeSlots
+                .filter((time) => isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules))
+                .map((time) => {
                 const valid = isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules);
                 return (
                   <Pressable
