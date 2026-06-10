@@ -201,6 +201,22 @@ export default function BookingDetailsScreen({ route }: Props) {
 
       if (error) throw error;
 
+      // ✅ Send WhatsApp Cancellation Notification
+      try {
+        await supabase.functions.invoke("booking-cancelled-whatsapp", {
+          body: {
+            customer_phone: booking.customer_phone,
+            customer_name: booking.customer_name,
+            service_title: services[0]?.title || 'Service',
+            booking_id: booking.id,
+            reason: cancelReason || "Cancelled by Customer"
+          },
+        });
+        console.log("✅ WhatsApp cancellation sent");
+      } catch (waError) {
+        console.error("WhatsApp sending failed (non-critical):", waError);
+      }
+
       setShowCancelModal(false);
       showToast(t("notifications.bookingCancelled"), "success");
     } catch (err) {

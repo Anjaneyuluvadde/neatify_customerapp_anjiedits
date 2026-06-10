@@ -72,6 +72,7 @@ export default function HomeScreen({ navigation }: any) {
   const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
   const [activeMainCategory, setActiveMainCategory] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState("BATHROOM");
+  const [measuredHeights, setMeasuredHeights] = useState<{[key: string]: number}>({});
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -424,18 +425,25 @@ export default function HomeScreen({ navigation }: any) {
                 <ServiceCard service={item} onPress={() => navigation.navigate("ServiceDetail", { service: item })} />
               )}
               contentContainerStyle={{ padding: 8, paddingBottom: 16 }}
+              onContentSizeChange={(_, h) => {
+                if (measuredHeights[tab.value] !== h) {
+                  setMeasuredHeights((prev) => ({ ...prev, [tab.value]: h }));
+                }
+              }}
             />
           )}
         </View>
       );
     },
-    [getServicesForCategory, navigation, t, theme]
+    [getServicesForCategory, navigation, t, theme, measuredHeights]
   );
 
   const activeCategoryServices = getServicesForCategory(activeCategory);
-  const CARD_ROW_HEIGHT = 320; // Fine-tuned height
+  const CARD_ROW_HEIGHT = 320; // Safe fallback height to prevent any layout cutoffs
   const serviceRows = Math.max(1, Math.ceil(activeCategoryServices.length / 2));
-  const pagerHeight = activeCategoryServices.length === 0 ? 150 : serviceRows * CARD_ROW_HEIGHT;
+  const pagerHeight = activeCategoryServices.length === 0 
+    ? 150 
+    : (measuredHeights[activeCategory] || (serviceRows * CARD_ROW_HEIGHT));
 
   // Auto-slide effect
   useEffect(() => {
@@ -726,11 +734,11 @@ export default function HomeScreen({ navigation }: any) {
       {/* Floating Go Up Button */}
       {showGoUp && (
         <TouchableOpacity
-          style={goUpStyles.goUpBtn}
+          style={[goUpStyles.goUpBtn, { backgroundColor: theme.background, borderColor: theme.border }]}
           onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
           activeOpacity={0.85}
         >
-          <Ionicons name="arrow-up" size={24} color="#fff" />
+          <Ionicons name="arrow-up" size={24} color={COLORS.saffron} />
         </TouchableOpacity>
       )}
     </SafeAreaView>
@@ -902,12 +910,12 @@ const goUpStyles = StyleSheet.create({
     position: "absolute",
     bottom: 30,
     alignSelf: "center",
-    backgroundColor: COLORS.saffron,
     width: 44,
     height: 44,
     borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 1,
     elevation: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },

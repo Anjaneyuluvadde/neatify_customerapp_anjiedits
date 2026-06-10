@@ -1,7 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import React, { memo } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, Dimensions } from "react-native";
+
+const { width } = Dimensions.get("window");
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { COLORS } from "../theme/colors";
@@ -81,6 +83,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     margin: 8,
+    maxWidth: width / 2 - 24,
     borderRadius: 20,
     overflow: "hidden",
     elevation: 3,

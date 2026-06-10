@@ -382,7 +382,20 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
           setDateTimeSlotsConfig(normalizedObj);
         }
         if (row.config_key === "years" && Array.isArray(row.config_value)) {
-          setAvailableYears(row.config_value as number[]);
+          const normalizedYears = row.config_value
+            .map((y: any) => {
+              if (typeof y === "number" || typeof y === "string") return Number(y);
+              if (y && typeof y === "object" && y.value !== undefined) {
+                if (y.active === false) return null;
+                return Number(y.value);
+              }
+              return null;
+            })
+            .filter((y) => y !== null && !isNaN(y)) as number[];
+          
+          if (normalizedYears.length > 0) {
+            setAvailableYears(normalizedYears);
+          }
         }
         const key = (row as any).config_key || (row as any).config_keys || (row as any).config_id;
         if (key === "service_time_rules") {

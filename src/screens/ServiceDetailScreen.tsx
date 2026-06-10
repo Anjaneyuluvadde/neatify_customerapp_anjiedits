@@ -1,5 +1,5 @@
 
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
@@ -10,12 +10,12 @@ import {
   RefreshControl,
   ScrollView,
   Share,
+  StatusBar,
   Text,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import Header from "../components/Header";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
@@ -103,6 +103,7 @@ export default function ServiceDetailScreen({ route }: Props) {
   const [service, setService] = useState<Service | null>(paramService || null);
   const [loadingService, setLoadingService] = useState(!paramService && !!serviceId);
   const [refreshing, setRefreshing] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const addonsTouchY = useRef(0);
 
   const [showSummary, setShowSummary] = useState(false);
@@ -120,6 +121,10 @@ export default function ServiceDetailScreen({ route }: Props) {
 
   // ✅ Active offer from offers table
   const [activeOfferPercent, setActiveOfferPercent] = useState<number | null>(null);
+
+  // ✅ Active FAQ State
+  const [activeFaqId, setActiveFaqId] = useState<number>(1);
+
 
   /* ✅ PRICE FORMATTER */
   const formatPrice = (value: any) => {
@@ -145,6 +150,282 @@ export default function ServiceDetailScreen({ route }: Props) {
     }
     return t("serviceDetail.specialOffer");
   };
+
+  /* ✅ Category-specific How it Works steps mapping */
+  const getHowItWorksSteps = () => {
+    const mainServiceType = service?.service_type?.toUpperCase() || '';
+    const title = service?.title?.toUpperCase() || '';
+
+    if (mainServiceType.includes("BATHROOM") || title.includes("BATHROOM")) {
+      return [
+        {
+          title: "Toilet Deep Cleaning",
+          desc: "Thorough cleaning and sanitization of toilet bowls and seats.",
+          icon: "toilet",
+        },
+        {
+          title: "Basin & Countertop Cleaning",
+          desc: "Intensive cleaning of basins, fittings, and countertops for a sparkling finish.",
+          icon: "soap",
+        },
+        {
+          title: "Shower & Tap Cleaning",
+          desc: "Deep cleaning of shower areas, taps, and mixers to remove limescale and grime.",
+          icon: "shower",
+        },
+        {
+          title: "Tile & Grout Cleaning",
+          desc: "Deep cleaning of tiles, grout lines, and corners for a hygienic bathroom.",
+          icon: "grid",
+        },
+        {
+          title: "Floor Cleaning & Mopping",
+          desc: "Deep scrubbing of floors followed by disinfected mopping for a spotless shine.",
+          icon: "bucket-outline",
+        },
+      ];
+    }
+
+    if (mainServiceType.includes("KITCHEN") || title.includes("KITCHEN")) {
+      return [
+        {
+          title: "Chimney & Exhaust Cleaning",
+          desc: "Deep degreasing and cleaning of chimney filters, mesh, and exhaust fans.",
+          icon: "fan",
+        },
+        {
+          title: "Gas Stove & Hob Cleaning",
+          desc: "Thorough removal of tough stains, grease, and carbon buildup from stove burners.",
+          icon: "stove",
+        },
+        {
+          title: "Countertop & Backsplash",
+          desc: "Intensive scrubbing and sanitization of kitchen countertops and wall tiles.",
+          icon: "table-furniture",
+        },
+        {
+          title: "Sink & Faucets Cleaning",
+          desc: "Descaling and polishing of sink area, drain outlets, and metal taps.",
+          icon: "water",
+        },
+        {
+          title: "Floor Scrubbing & Sanitizing",
+          desc: "Complete degreasing, deep scrubbing, and wet mopping of the kitchen floor.",
+          icon: "bucket-outline",
+        },
+      ];
+    }
+
+    if (mainServiceType.includes("DEEP") || mainServiceType.includes("CLEANING") || title.includes("DEEP") || title.includes("CLEANING")) {
+      return [
+        {
+          title: "Room & Living Area Dusting",
+          desc: "Dusting and vacuuming of all bedroom and living room furniture, fans, and lights.",
+          icon: "vacuum",
+        },
+        {
+          title: "Kitchen Deep Cleaning",
+          desc: "Detailed degreasing of kitchen cabinets, slabs, sink, stove, and tiles.",
+          icon: "stove",
+        },
+        {
+          title: "Bathroom Sanitization",
+          desc: "Deep cleaning and germ protection for all toilets, tiles, sinks, and shower heads.",
+          icon: "toilet",
+        },
+        {
+          title: "Windows & Balcony Cleaning",
+          desc: "Dusting and scrubbing of balcony tiles, grilles, window panes, and sliding tracks.",
+          icon: "window-closed",
+        },
+        {
+          title: "Deep Floor Scrubbing",
+          desc: "Complete vacuuming, intensive floor scrubbing, and disinfecting wet mop.",
+          icon: "bucket-outline",
+        },
+      ];
+    }
+
+    if (mainServiceType.includes("BALCONY") || title.includes("BALCONY")) {
+      return [
+        {
+          title: "Railing & Grill Dusting",
+          desc: "Dry dusting and wiping of grilles, railings, and boundary walls.",
+          icon: "broom",
+        },
+        {
+          title: "Sliding Glass Doors",
+          desc: "Deep cleaning of balcony glass windows, doors, and track frames.",
+          icon: "window-closed",
+        },
+        {
+          title: "Floor Scrubbing",
+          desc: "Intensive scrubbing of balcony tiles to remove mud, stains, and dry leaves.",
+          icon: "grid",
+        },
+        {
+          title: "Wet Mop & Sanitization",
+          desc: "Final sanitizing wet mop using premium disinfectants for a fresh feel.",
+          icon: "bucket-outline",
+        },
+      ];
+    }
+
+    // Fallback for Sofa, Carpet, Appliance, etc.
+    return [
+      {
+        title: "Deep Dry Vacuuming",
+        desc: "High-power vacuuming to remove embedded dust mites, pet hair, and food crumbs.",
+        icon: "vacuum",
+      },
+      {
+        title: "Premium Shampoo Application",
+        desc: "Eco-friendly specialized shampoo scrubbing to dissolve stains and odors.",
+        icon: "spray-bottle",
+      },
+      {
+        title: "Extraction & Rinse",
+        desc: "Wet extraction to pull out water, dirt, and shampoo residue completely.",
+        icon: "water",
+      },
+      {
+        title: "Final Sanitization",
+        desc: "Application of anti-bacterial spray for ultimate hygienic freshness.",
+        icon: "sparkles",
+      },
+    ];
+  };
+
+  /* ✅ Category-specific FAQs resolver */
+  const getServiceSpecificFAQs = () => {
+    const mainServiceType = service?.service_type?.toUpperCase() || '';
+    const title = service?.title?.toUpperCase() || '';
+
+    if (mainServiceType.includes("BATHROOM") || title.includes("BATHROOM")) {
+      return [
+        {
+          id: 1,
+          question: "How long does bathroom cleaning take?",
+          answer: "It usually takes 1 to 1.5 hours per bathroom, depending on the size and current condition."
+        },
+        {
+          id: 2,
+          question: "Do you clean wall tiles and exhaust fans?",
+          answer: "Yes, wall tile scrubbing, exhaust fan cleaning, taps descaling, and toilet sanitization are all fully included."
+        },
+        {
+          id: 3,
+          question: "Will hard water stains be completely removed?",
+          answer: "We use premium descaling agents to remove up to 90% of hard water stains from tiles, glass surfaces, and taps."
+        },
+        {
+          id: 4,
+          question: "Do I need to provide cleaning materials?",
+          answer: "No, our professionals bring all necessary materials, including specialized liquids and scrubs, at no extra cost."
+        }
+      ];
+    }
+
+    if (mainServiceType.includes("KITCHEN") || title.includes("KITCHEN")) {
+      return [
+        {
+          id: 1,
+          question: "Is chimney cleaning included in the service?",
+          answer: "Yes, kitchen deep cleaning includes chimney filter degreasing and exhaust fan cleaning."
+        },
+        {
+          id: 2,
+          question: "Will you clean inside the cabinets?",
+          answer: "We clean inside cabinets if they are emptied prior to the service. Outer surfaces are cleaned by default."
+        },
+        {
+          id: 3,
+          question: "How long does kitchen deep cleaning take?",
+          answer: "A standard kitchen deep cleaning takes around 2 to 3 hours to complete thoroughly."
+        },
+        {
+          id: 4,
+          question: "Do you remove tough oil and grease stains?",
+          answer: "Yes, we use specialized grease-dissolving agents to scrub hobs, countertops, and tiles."
+        }
+      ];
+    }
+
+    if (mainServiceType.includes("DEEP") || mainServiceType.includes("CLEANING") || title.includes("DEEP") || title.includes("CLEANING")) {
+      return [
+        {
+          id: 1,
+          question: "What is included in Full Home Deep Cleaning?",
+          answer: "It includes deep cleaning of bedrooms, bathrooms, kitchen, balcony, windows, floor scrubbing, and dusting of all furniture."
+        },
+        {
+          id: 2,
+          question: "How many professionals will come for deep cleaning?",
+          answer: "Depending on the size of your home (BHK), a team of 2 to 4 trained professionals will be assigned."
+        },
+        {
+          id: 3,
+          question: "How long does full home deep cleaning take?",
+          answer: "It typically takes 4 to 6 hours depending on the BHK configuration and current dirt level of the house."
+        },
+        {
+          id: 4,
+          question: "Is sofa and carpet shampooing included?",
+          answer: "Sofa and carpet dry vacuuming is included, but shampooing is available as a separate add-on package."
+        }
+      ];
+    }
+
+    if (mainServiceType.includes("BALCONY") || title.includes("BALCONY")) {
+      return [
+        {
+          id: 1,
+          question: "Will you clean the sliding glass tracks?",
+          answer: "Yes, we scrub and clean sliding tracks along with glass door panels."
+        },
+        {
+          id: 2,
+          question: "Do you remove hard water spots from balcony glass?",
+          answer: "Yes, we use special descaling solutions to clean balcony glasses and panels."
+        },
+        {
+          id: 3,
+          question: "How long does balcony cleaning take?",
+          answer: "A typical balcony cleaning takes about 30 to 45 minutes."
+        },
+        {
+          id: 4,
+          question: "Will pigeon droppings be cleared?",
+          answer: "Yes, we scrape, scrub, and sanitize areas affected by bird droppings."
+        }
+      ];
+    }
+
+    // Fallback for Sofa, Carpet, Appliance, etc.
+    return [
+      {
+        id: 1,
+        question: "How long does it take for a sofa to dry after shampooing?",
+        answer: "It typically takes 3 to 5 hours to dry completely under a ceiling fan."
+      },
+      {
+        id: 2,
+        question: "Are the cleaning chemicals safe for kids and pets?",
+        answer: "Yes, we use eco-friendly, non-toxic, and certified cleaning agents that are safe for everyone."
+      },
+      {
+        id: 3,
+        question: "How frequently should I get deep cleaning done?",
+        answer: "We recommend booking a deep cleaning every 6 months to maintain hygiene and fabric fresh feel."
+      },
+      {
+        id: 4,
+        question: "Can I cancel or reschedule my booking?",
+        answer: "Yes, you can easily reschedule or cancel your booking for free up to 2 hours before the scheduled time slot."
+      }
+    ];
+  };
+
 
   /* ================= FETCH SERVICES & ADDONS ================= */
 
@@ -518,11 +799,32 @@ export default function ServiceDetailScreen({ route }: Props) {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
-      <Header />
-
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <StatusBar translucent backgroundColor="transparent" barStyle={isDark ? "light-content" : "dark-content"} />
+      {insets.top > 0 && (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: insets.top,
+            backgroundColor: isScrolled ? theme.background : "transparent",
+            zIndex: 100,
+          }}
+        />
+      )}
       <ScrollView 
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          const y = e.nativeEvent.contentOffset.y;
+          if (y > 50) {
+            setIsScrolled(true);
+          } else {
+            setIsScrolled(false);
+          }
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -544,7 +846,7 @@ export default function ServiceDetailScreen({ route }: Props) {
           }}
           style={{
             position: "absolute",
-            top: 16,
+            top: insets.top > 0 ? insets.top + 8 : 16,
             left: 16,
             zIndex: 10,
             backgroundColor: isDark ? "rgba(0,0,0,0.6)" : "rgba(255, 255, 255, 0.9)",
@@ -568,7 +870,7 @@ export default function ServiceDetailScreen({ route }: Props) {
           onPress={handleShare}
           style={{
             position: "absolute",
-            top: 16,
+            top: insets.top > 0 ? insets.top + 8 : 16,
             right: 16,
             zIndex: 10,
             backgroundColor: isDark ? "rgba(0,0,0,0.6)" : "rgba(255, 255, 255, 0.9)",
@@ -590,7 +892,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         {/* IMAGE */}
         <Image
           source={{ uri: service.image }}
-          style={{ width: "100%", height: 240 }}
+          style={{ width: "100%", height: 280 }}
           resizeMode="cover"
         />
 
@@ -763,42 +1065,247 @@ export default function ServiceDetailScreen({ route }: Props) {
             </>
           ) : null}
 
-          {/* ✅ Gallery */}
-          {Array.isArray(service.gallery_images) &&
-            service.gallery_images.length > 0 ? (
-            <>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginTop: 30,
-                  color: theme.text,
-                }}
-              >
-                {t("serviceDetail.workframes")}
-              </Text>
+          {/* ✅ How it works */}
+          <View style={{ marginTop: 30, paddingBottom: 20 }}>
+            <Text
+              style={{
+                fontSize: 22,
+                fontWeight: "800",
+                color: theme.text,
+                marginBottom: 20,
+              }}
+            >
+              {t("serviceDetail.howItWorks")}
+            </Text>
 
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginTop: 12 }}
-              >
-                {service.gallery_images.map((img, idx) => (
-                  <Image
-                    key={idx}
-                    source={{ uri: img }}
+            <View style={{ flexDirection: "column" }}>
+              {getHowItWorksSteps().map((step, idx, arr) => (
+                <View key={idx} style={{ flexDirection: "row", gap: 16, marginBottom: idx === arr.length - 1 ? 0 : 24 }}>
+                  <View style={{ width: 48, alignItems: "center" }}>
+                    <View
+                      style={{
+                        width: 48,
+                        height: 48,
+                        borderRadius: 24,
+                        backgroundColor: theme.primary + "15",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        borderWidth: 1,
+                        borderColor: theme.primary + "30",
+                        zIndex: 2,
+                      }}
+                    >
+                      <MaterialCommunityIcons name={step.icon as any} size={24} color={theme.primary} />
+                    </View>
+
+                    {idx < arr.length - 1 && (
+                      <View
+                        style={{
+                          position: "absolute",
+                          top: 48,
+                          bottom: -24,
+                          width: 2,
+                          borderWidth: 1,
+                          borderColor: theme.primary + "50",
+                          borderStyle: "dashed",
+                          borderRadius: 1,
+                          zIndex: 1,
+                        }}
+                      />
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1, paddingTop: 4 }}>
+                    <Text
+                      style={{
+                        fontSize: 16,
+                        fontWeight: "700",
+                        color: theme.text,
+                        marginBottom: 4,
+                      }}
+                    >
+                      {step.title}
+                    </Text>
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        color: theme.textLight || "#666",
+                        lineHeight: 20,
+                      }}
+                    >
+                      {step.desc}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* ✅ FAQs Section (dynamic, service-specific, theme-adapted, below How it Works) */}
+          {(() => {
+            const faqs = getServiceSpecificFAQs();
+            const activeFAQ = faqs.find((f) => f.id === activeFaqId) || faqs[0];
+            const inactiveFAQs = faqs.filter((f) => f.id !== activeFaqId);
+
+            return (
+              <View style={{ marginTop: 24, paddingBottom: 16 }}>
+                {/* FAQ Badge */}
+                <View
+                  style={{
+                    backgroundColor: isDark ? "rgba(244, 196, 48, 0.15)" : "#FDFCE8",
+                    borderColor: "rgba(244, 196, 48, 0.3)",
+                    borderWidth: 1,
+                    borderRadius: 100,
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    alignSelf: "flex-start",
+                    marginBottom: 12,
+                  }}
+                >
+                  <Text
                     style={{
-                      width: 130,
-                      height: 130,
-                      borderRadius: 12,
-                      marginRight: 12,
+                      color: "#D97706",
+                      fontSize: 11,
+                      fontWeight: "800",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.6,
                     }}
-                  />
+                  >
+                    FAQs
+                  </Text>
+                </View>
+
+                {/* FAQ Title */}
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: "800",
+                    color: theme.text,
+                    marginBottom: 6,
+                  }}
+                >
+                  Frequently Asked{" "}
+                  <Text style={{ color: COLORS.saffron }}>Questions</Text>
+                </Text>
+
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: theme.textLight,
+                    marginBottom: 20,
+                    lineHeight: 20,
+                  }}
+                >
+                  Find answers to common questions about our {service?.title || "service"}.
+                </Text>
+
+                {/* Active FAQ Card */}
+                {activeFAQ && (
+                  <View
+                    style={{
+                      backgroundColor: isDark ? "rgba(244, 196, 48, 0.06)" : "#FDFDF6",
+                      borderColor: "rgba(244, 196, 48, 0.25)",
+                      borderWidth: 1,
+                      borderLeftWidth: 5,
+                      borderLeftColor: COLORS.saffron,
+                      borderRadius: 16,
+                      padding: 16,
+                      marginBottom: 14,
+                      shadowColor: COLORS.saffron,
+                      shadowOffset: { width: 0, height: 4 },
+                      shadowOpacity: isDark ? 0.05 : 0.03,
+                      shadowRadius: 8,
+                      elevation: 1,
+                    }}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: 12,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
+                        <View
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 12,
+                            backgroundColor: COLORS.saffron,
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          <Ionicons name="remove" size={14} color="#000" />
+                        </View>
+                        <Text
+                          style={{
+                            fontSize: 16,
+                            fontWeight: "700",
+                            color: theme.text,
+                            flex: 1,
+                          }}
+                        >
+                          {activeFAQ.question}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-up" size={18} color={COLORS.saffron} />
+                    </View>
+
+                    <View style={{ paddingLeft: 34, marginTop: 8 }}>
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          lineHeight: 21,
+                          color: theme.textLight,
+                        }}
+                      >
+                        {activeFAQ.answer}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Inactive FAQ cards stack */}
+                {inactiveFAQs.map((faq) => (
+                  <Pressable
+                    key={faq.id}
+                    onPress={() => setActiveFaqId(faq.id)}
+                    style={({ pressed }) => ({
+                      backgroundColor: theme.background,
+                      borderColor: theme.border,
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      paddingHorizontal: 16,
+                      paddingVertical: 14,
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: 10,
+                      gap: 12,
+                      opacity: pressed ? 0.8 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        fontWeight: "600",
+                        color: theme.text,
+                        flex: 1,
+                        lineHeight: 20,
+                      }}
+                    >
+                      {faq.question}
+                    </Text>
+                    <Ionicons name="add" size={18} color={theme.textLight} />
+                  </Pressable>
                 ))}
-              </ScrollView>
-            </>
-          ) : null}
+              </View>
+            );
+          })()}
         </View>
+
 
         {/* ================= SUMMARY MODAL ================= */}
           <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
@@ -1414,7 +1921,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         )}
 
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 

@@ -135,11 +135,11 @@ export default function CheckoutScreen({ route }: Props) {
   const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage?: number; discount_amount?: number } | null>(null);
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
-  
+
   // ✅ Wallet state
   const [walletBalance, setWalletBalance] = useState(0);
   const [useWallet, setUseWallet] = useState(false);
-  
+
   // ✅ Manual Coupon State
   const [manualCouponCode, setManualCouponCode] = useState("");
   const [isVerifyingCoupon, setIsVerifyingCoupon] = useState(false);
@@ -372,7 +372,7 @@ export default function CheckoutScreen({ route }: Props) {
       .select("balance")
       .eq("user_id", data.user.id)
       .maybeSingle();
-    
+
     if (walletData) {
       setWalletBalance(walletData.balance || 0);
     }
@@ -499,7 +499,7 @@ export default function CheckoutScreen({ route }: Props) {
     if (!coupon) return;
     setCouponDiscount(coupon.discount_percentage || 0);
     setCouponApplied(true);
-    const msg = coupon.discount_amount && coupon.discount_amount > 0 
+    const msg = coupon.discount_amount && coupon.discount_amount > 0
       ? `Coupon applied! ₹${coupon.discount_amount} off`
       : `Coupon applied! ${coupon.discount_percentage}% off`;
     setCouponStatus({ type: 'success', message: msg });
@@ -507,13 +507,13 @@ export default function CheckoutScreen({ route }: Props) {
 
   const handleApplyManualCoupon = async () => {
     if (!manualCouponCode.trim()) return;
-    
+
     setIsVerifyingCoupon(true);
     setCouponStatus({ type: '', message: '' });
-    
+
     try {
       const cleanPhone = profile?.phone ? profile.phone.replace(/\D/g, "").slice(-10) : "";
-      
+
       const { data, error } = await supabase
         .from("coupons")
         .select("*")
@@ -541,7 +541,7 @@ export default function CheckoutScreen({ route }: Props) {
           });
           setCouponDiscount(data.discount_percentage || data.discount_p || 0);
           setCouponApplied(true);
-          const msg = data.discount_amount && data.discount_amount > 0 
+          const msg = data.discount_amount && data.discount_amount > 0
             ? `Coupon applied! ₹${data.discount_amount} off`
             : `Coupon applied! ${data.discount_percentage || data.discount_p}% off`;
           setCouponStatus({ type: "success", message: msg });
@@ -636,7 +636,24 @@ export default function CheckoutScreen({ route }: Props) {
     }
 
     return finalTotal;
-  }, [totalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance]);
+  }, [totalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance, coupon]);
+
+  const walletDeductionAmount = useMemo(() => {
+    if (!useWallet || walletBalance <= 0) return 0;
+    const baseTotal = totalPrice + totalTax;
+    let finalTotal = baseTotal;
+
+    if (couponApplied && coupon) {
+      if (coupon.discount_amount && coupon.discount_amount > 0) {
+        finalTotal = Math.max(0, baseTotal - coupon.discount_amount);
+      } else if (couponDiscount > 0) {
+        const discountAmount = (baseTotal * couponDiscount) / 100;
+        finalTotal = baseTotal - discountAmount;
+      }
+    }
+    return Math.min(finalTotal, walletBalance);
+  }, [totalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance, coupon]);
+
 
   /* ================= PAYMENT ================= */
 
@@ -816,9 +833,9 @@ export default function CheckoutScreen({ route }: Props) {
       // ✅ TEST MODE BYPASS
       if (profile.full_name.toUpperCase() === "TEST USER") {
         console.log("🛠️ TEST MODE: Bypassing real payment...");
-        payment = { 
-          success: true, 
-          paymentId: "test_pay_" + Date.now(), 
+        payment = {
+          success: true,
+          paymentId: "test_pay_" + Date.now(),
           orderId: "test_ord_" + Date.now(),
           signature: "test_sig_123"
         };
@@ -879,7 +896,7 @@ export default function CheckoutScreen({ route }: Props) {
           .from("wallet")
           .update({ balance: walletBalance - deduction })
           .eq("user_id", userId);
-        
+
         if (!walletError) {
           // Record transaction using your specific table structure
           await supabase.from("wallet_transactions").insert({
@@ -904,6 +921,36 @@ export default function CheckoutScreen({ route }: Props) {
       } catch (emailError) {
         console.error("Email sending failed (non-critical):", emailError);
         // Don't fail the booking if email fails
+      }
+
+      // ✅ Send WhatsApp Payment Confirmation
+      try {
+        await supabase.functions.invoke("send-payment-confirmation", {
+          body: {
+            customer_phone: profile.phone,
+            customer_name: profile.full_name,
+            amount_paid: String(grandTotal.toFixed(2)),
+            service_name: services[0]?.title || 'Service'
+          },
+        });
+        console.log("✅ WhatsApp payment confirmation sent");
+      } catch (waError) {
+        console.error("WhatsApp sending failed (non-critical):", waError);
+      }
+
+      // ✅ Send WhatsApp Booking Confirmation
+      try {
+        await supabase.functions.invoke("booking-confirmation-whatsapp", {
+          body: {
+            customer_phone: profile.phone,
+            customer_name: profile.full_name,
+            service_name: services[0]?.title || 'Service',
+            booking_date: bookingDateText || 'Your scheduled date'
+          },
+        });
+        console.log("✅ WhatsApp booking confirmation sent");
+      } catch (waBookingError) {
+        console.error("WhatsApp booking sending failed (non-critical):", waBookingError);
       }
 
       // Clear cart
@@ -1069,9 +1116,21 @@ export default function CheckoutScreen({ route }: Props) {
                   Coupon ({coupon?.coupon_code})
                 </Text>
                 <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
-                  {coupon?.discount_amount && coupon.discount_amount > 0 
-                    ? `-₹${coupon.discount_amount}` 
+                  {coupon?.discount_amount && coupon.discount_amount > 0
+                    ? `-₹${coupon.discount_amount}`
                     : `-${couponDiscount}%`}
+                </Text>
+              </View>
+            )}
+
+            {/* ✅ Wallet Discount Row */}
+            {useWallet && walletDeductionAmount > 0 && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+                <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
+                  Wallet Applied
+                </Text>
+                <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
+                  -₹{parseFloat(walletDeductionAmount.toFixed(2)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </Text>
               </View>
             )}
@@ -1086,7 +1145,7 @@ export default function CheckoutScreen({ route }: Props) {
           {/* ✅ COUPON SECTION */}
           <View style={styles.couponCard}>
             <Text style={styles.couponTitle}>Have a coupon code?</Text>
-            
+
             {couponApplied && coupon ? (
               <View style={styles.couponRow}>
                 <View style={styles.couponAppliedBadge}>
@@ -1111,8 +1170,8 @@ export default function CheckoutScreen({ route }: Props) {
                       autoCapitalize="characters"
                     />
                   </View>
-                  <Pressable 
-                    style={[styles.couponApplyBtn, (!manualCouponCode.trim() || isVerifyingCoupon) && { opacity: 0.5 }]} 
+                  <Pressable
+                    style={[styles.couponApplyBtn, (!manualCouponCode.trim() || isVerifyingCoupon) && { opacity: 0.5 }]}
                     onPress={handleApplyManualCoupon}
                     disabled={!manualCouponCode.trim() || isVerifyingCoupon}
                   >
@@ -1123,10 +1182,10 @@ export default function CheckoutScreen({ route }: Props) {
                     )}
                   </Pressable>
                 </View>
-                
+
                 {/* suggested coupon if auto-detected */}
                 {coupon && !couponApplied && (
-                  <Pressable 
+                  <Pressable
                     style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', gap: 4 }}
                     onPress={applyCoupon}
                   >
@@ -1145,8 +1204,8 @@ export default function CheckoutScreen({ route }: Props) {
               </Text>
             ) : couponApplied && coupon ? (
               <Text style={styles.couponSavingText}>
-                You save ₹{coupon.discount_amount && coupon.discount_amount > 0 
-                  ? coupon.discount_amount 
+                You save ₹{coupon.discount_amount && coupon.discount_amount > 0
+                  ? coupon.discount_amount
                   : ((totalPrice + totalTax) * (coupon.discount_percentage || 0) / 100).toFixed(2)} with this coupon!
               </Text>
             ) : null}
@@ -1165,7 +1224,7 @@ export default function CheckoutScreen({ route }: Props) {
                     <Text style={[styles.walletBalance, { color: useWallet ? "#B45309" : "#718096" }]}>₹{walletBalance} available</Text>
                   </View>
                 </View>
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => setUseWallet(!useWallet)}
                   style={[styles.walletToggle, { backgroundColor: useWallet ? COLORS.saffron : "#E2E8F0" }]}
                 >
@@ -1174,7 +1233,7 @@ export default function CheckoutScreen({ route }: Props) {
               </View>
               {useWallet && (
                 <View style={styles.walletAppliedBadge}>
-                  <Text style={styles.walletAppliedText}>- ₹{Math.min(grandTotal + (useWallet ? Math.min(totalPrice + totalTax, walletBalance) : 0), walletBalance).toFixed(2)} applied from wallet</Text>
+                  <Text style={styles.walletAppliedText}>- ₹{walletDeductionAmount.toFixed(2)} applied from wallet</Text>
                 </View>
               )}
             </View>

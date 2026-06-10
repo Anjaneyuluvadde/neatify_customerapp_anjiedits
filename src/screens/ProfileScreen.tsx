@@ -46,6 +46,7 @@ type FieldCardProps = {
   maxLength?: number;
   onChangeText?: (t: string) => void;
   placeholder?: string;
+  valueStyle?: any;
 };
 
 const FieldCard = memo(
@@ -60,6 +61,7 @@ const FieldCard = memo(
     onChangeText,
     placeholder,
     fallback,
+    valueStyle,
   }: FieldCardProps & { fallback?: string }) => {
     const { theme } = useTheme();
     return (
@@ -83,7 +85,7 @@ const FieldCard = memo(
             blurOnSubmit={!multiline}
           />
         ) : (
-          <Text style={[styles.value, { color: theme.text }]}>
+          <Text style={[styles.value, { color: theme.text }, valueStyle]}>
             {value?.trim() ? value : fallback || "--"}
           </Text>
         )}
@@ -443,6 +445,7 @@ export default function ProfileScreen() {
             }
             placeholder={t("profile.addressPlaceholder")}
             fallback={t("profile.noAddress")}
+            valueStyle={{ fontWeight: "normal" }}
           />
 
           <FieldCard

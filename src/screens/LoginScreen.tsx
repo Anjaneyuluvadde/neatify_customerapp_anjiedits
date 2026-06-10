@@ -49,6 +49,8 @@ export default function LoginScreen(props: any) {
   const [googleLoading, setGoogleLoading] = useState(false);
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  const isValidPassword = (p: string) => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(p);
+
 
   // =====================================================
   // SHARED: CHECK PROFILE & NAVIGATE
@@ -150,6 +152,17 @@ export default function LoginScreen(props: any) {
           setLoading(false);
           return;
         }
+
+        if (!isValidPassword(password)) {
+          showAlert({
+            type: "error",
+            title: "Invalid Password",
+            message: "Password must contain at least 8 characters, uppercase, lowercase, number, and special character."
+          });
+          setLoading(false);
+          return;
+        }
+
 
         // Validate Referral Code if provided
         let referrerId = null;
@@ -404,6 +417,19 @@ export default function LoginScreen(props: any) {
               </TouchableOpacity>
             </View>
 
+            {/* PASSWORD POLICY (SIGNUP ONLY) */}
+            {!isLogin && password.length > 0 && (
+              <View style={styles.policyContainer}>
+                <Text style={[styles.policyHeader, { color: theme.text }]}>Should contain:</Text>
+                <PolicyRow label="At least 8 characters in length" isMet={password.length >= 8} theme={theme} />
+                <PolicyRow label="Lowercase letters (a-z)" isMet={/[a-z]/.test(password)} theme={theme} />
+                <PolicyRow label="Uppercase letters (A-Z)" isMet={/[A-Z]/.test(password)} theme={theme} />
+                <PolicyRow label="Numbers (0-9)" isMet={/\d/.test(password)} theme={theme} />
+                <PolicyRow label="Special characters (@$!%*?&)" isMet={/[@$!%*?&]/.test(password)} theme={theme} />
+              </View>
+            )}
+
+
 
             {/* FORGOT PASSWORD */}
             {isLogin && (
@@ -492,6 +518,22 @@ function Input({ icon, placeholder, value, onChange, theme }: any) {
   );
 }
 
+function PolicyRow({ label, isMet, theme }: { label: string, isMet: boolean, theme: any }) {
+  return (
+    <View style={styles.policyRow}>
+      <Ionicons 
+        name={isMet ? "checkmark-circle" : "close-circle"} 
+        size={16} 
+        color={isMet ? "#4CAF50" : "#F44336"} 
+      />
+      <Text style={[styles.policyText, { color: isMet ? "#4CAF50" : theme.textLight }]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 25, paddingBottom: 70 },
   header: { alignItems: "center", marginBottom: 20, marginTop: 40 },
@@ -550,4 +592,26 @@ const styles = StyleSheet.create({
   googleText: { fontSize: 16, fontWeight: "700", color: COLORS.text },
   footer: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
   link: { fontWeight: "800", color: COLORS.saffron },
-});
+
+  // PASSWORD POLICY
+  policyContainer: {
+    paddingHorizontal: 5,
+    marginTop: -4,
+    marginBottom: 8,
+    gap: 4,
+  },
+  policyHeader: {
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 2,
+  },
+  policyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  policyText: {
+    fontSize: 12,
+    fontWeight: "500",
+  },
+});
