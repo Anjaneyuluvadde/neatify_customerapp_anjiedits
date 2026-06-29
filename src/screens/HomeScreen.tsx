@@ -24,6 +24,7 @@ import CategoryTabs from "../components/CategoryTabs";
 import Header from "../components/Header";
 import ServiceCard from "../components/ServiceCard";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
+import WhyChooseUs from "../components/WhyChooseUs";
 import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore
@@ -71,7 +72,7 @@ export default function HomeScreen({ navigation }: any) {
   const [services, setServices] = useState<Service[]>([]);
   const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
   const [activeMainCategory, setActiveMainCategory] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState("BATHROOM");
+  const [activeCategory, setActiveCategory] = useState("ALL");
   const [measuredHeights, setMeasuredHeights] = useState<{[key: string]: number}>({});
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -107,8 +108,8 @@ export default function HomeScreen({ navigation }: any) {
 
   const checkWelcomeReward = useCallback(async () => {
     try {
-      // Force refresh session to get latest metadata from server
-      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+      // Safely get the session without forcing a stressful backend refresh
+      const { data: { session }, error: refreshError } = await supabase.auth.getSession();
       if (refreshError) throw refreshError;
 
       const user = session?.user;
@@ -586,6 +587,11 @@ export default function HomeScreen({ navigation }: any) {
               getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
             />
           </View>
+
+          {/* 6. Why Choose Us Section */}
+          <WhyChooseUs onBookNow={() => {
+            scrollRef.current?.scrollTo({ y: 0, animated: true });
+          }} />
         </ScrollView>
       )}
 

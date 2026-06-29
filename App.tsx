@@ -168,16 +168,9 @@ export default function App() {
               refresh_token: refreshToken,
             });
             if (!error && data.user) {
-              setTimeout(async () => {
-                const isComplete = await checkCompleteness(data.user!.id);
-                if (isComplete) {
-                  // Profile complete — go to Home
-                  navigationRef.current?.reset({
-                    index: 0,
-                    routes: [{ name: "HomeDrawer" }],
-                  });
-                }
-              }, 500);
+              // Navigation is intentionally removed from here.
+              // The onAuthStateChange listener higher up in this file will automatically
+              // detect this new session and navigate to HomeDrawer safely.
             }
           }
         }

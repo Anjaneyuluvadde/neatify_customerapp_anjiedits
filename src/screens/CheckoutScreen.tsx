@@ -940,7 +940,7 @@ export default function CheckoutScreen({ route }: Props) {
 
       // ✅ Send WhatsApp Booking Confirmation
       try {
-        await supabase.functions.invoke("booking-confirmation-whatsapp", {
+        await supabase.functions.invoke("send-booking-confirmation-whatsapp", {
           body: {
             customer_phone: profile.phone,
             customer_name: profile.full_name,

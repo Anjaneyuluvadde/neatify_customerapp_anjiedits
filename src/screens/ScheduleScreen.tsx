@@ -1,8 +1,7 @@
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -163,12 +162,16 @@ const isTimeSlotValid = (
   if (day === null) return false;
   if (!timeString || typeof timeString !== "string") return false;
 
-  const [time, modifier] = timeString.split(" ");
-  if (!time) return false;
-  let [hours, minutes] = time.split(":").map(Number);
+  const normalizedTime = timeString.toLowerCase().trim();
+  const isPm = normalizedTime.includes("pm");
+  const timePart = normalizedTime.replace(/[ap]m/g, "").trim();
 
-  if (modifier === "pm" && hours < 12) hours += 12;
-  if (modifier === "am" && hours === 12) hours = 0;
+  if (!timePart) return false;
+  let [hours, minutes] = timePart.split(":").map(Number);
+  minutes = minutes || 0;
+
+  if (isPm && hours < 12) hours += 12;
+  if (!isPm && hours === 12) hours = 0;
 
   const slotDate = new Date(year, month, day, hours, minutes);
   const now = new Date();
@@ -330,7 +333,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
       .select("*")
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
-    
+
     if (addonsError) console.error("Error fetching addons:", addonsError);
     if (addonsData) setAddons(addonsData as AddOn[]);
 
@@ -343,7 +346,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
       console.error("Error fetching schedule config:", configError);
       return;
     }
-    
+
     if (configData) {
       configData.forEach((row: { config_key: string; config_value: any }) => {
         if (row.config_key === "time_slots" && Array.isArray(row.config_value)) {
@@ -363,7 +366,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         if (row.config_key === "date_time_slots" && typeof row.config_value === "object" && row.config_value !== null) {
           const rawObj = row.config_value as Record<string, any[]>;
           const normalizedObj: Record<string, string[]> = {};
-          
+
           Object.keys(rawObj).forEach((dateKey) => {
             const slots = rawObj[dateKey];
             if (Array.isArray(slots)) {
@@ -392,7 +395,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
               return null;
             })
             .filter((y) => y !== null && !isNaN(y)) as number[];
-          
+
           if (normalizedYears.length > 0) {
             setAvailableYears(normalizedYears);
           }
@@ -431,15 +434,15 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   // ✅ Compute available time slots based on selected date
   const availableTimeSlots = useMemo(() => {
     if (selectedDate === null) return timeSlots;
-    
+
     // Format: YYYY-MM-DD
     const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-    
+
     // If we have specific slots for this date, use them (even if empty list)
     if (dateTimeSlotsConfig[dateString]) {
       return dateTimeSlotsConfig[dateString];
     }
-    
+
     // Otherwise fallback to default slots
     return timeSlots;
   }, [selectedDate, month, year, dateTimeSlotsConfig, timeSlots]);
@@ -611,7 +614,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <Header />
-      <ScrollView 
+      <ScrollView
         contentContainerStyle={styles.container}
         refreshControl={
           <RefreshControl
@@ -728,32 +731,32 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
               {availableTimeSlots
                 .filter((time) => isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules))
                 .map((time) => {
-                const valid = isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules);
-                return (
-                  <Pressable
-                    key={time}
-                    disabled={!valid}
-                    onPress={() => setSelectedTime(time)}
-                    style={[
-                      styles.timeBox,
-                      { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
-                      !valid && { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0', borderColor: isDark ? '#333' : '#ddd' },
-                      selectedTime === time && styles.selectedTime,
-                    ]}
-                  >
-                    <Text
+                  const valid = isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules);
+                  return (
+                    <Pressable
+                      key={time}
+                      disabled={!valid}
+                      onPress={() => setSelectedTime(time)}
                       style={[
-                        styles.timeText,
-                        { color: theme.text },
-                        !valid && { color: theme.textLight },
-                        selectedTime === time && styles.selectedText,
+                        styles.timeBox,
+                        { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
+                        !valid && { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0', borderColor: isDark ? '#333' : '#ddd' },
+                        selectedTime === time && styles.selectedTime,
                       ]}
                     >
-                      {time}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                      <Text
+                        style={[
+                          styles.timeText,
+                          { color: theme.text },
+                          !valid && { color: theme.textLight },
+                          selectedTime === time && styles.selectedText,
+                        ]}
+                      >
+                        {time}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
             </View>
           </>
         )}

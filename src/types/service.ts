@@ -36,6 +36,11 @@ export interface Service {
   gallery_images?: string[];
 
   /**
+   * Second image or gallery alternative (workframes)
+   */
+  image2?: string | string[] | any;
+
+  /**
    * Full description from Supabase column
    */
   description?: string;
@@ -89,4 +94,9 @@ export interface Service {
    * Icon for the category display in the bottom sheet
    */
   category_icon_url?: string | null;
+
+  /**
+   * Dynamic JSON column for How it works section
+   */
+  how_it_works?: any;
 }

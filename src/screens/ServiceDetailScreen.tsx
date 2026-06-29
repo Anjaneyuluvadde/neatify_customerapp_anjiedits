@@ -1,5 +1,5 @@
 
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
@@ -151,150 +151,7 @@ export default function ServiceDetailScreen({ route }: Props) {
     return t("serviceDetail.specialOffer");
   };
 
-  /* ✅ Category-specific How it Works steps mapping */
-  const getHowItWorksSteps = () => {
-    const mainServiceType = service?.service_type?.toUpperCase() || '';
-    const title = service?.title?.toUpperCase() || '';
 
-    if (mainServiceType.includes("BATHROOM") || title.includes("BATHROOM")) {
-      return [
-        {
-          title: "Toilet Deep Cleaning",
-          desc: "Thorough cleaning and sanitization of toilet bowls and seats.",
-          icon: "toilet",
-        },
-        {
-          title: "Basin & Countertop Cleaning",
-          desc: "Intensive cleaning of basins, fittings, and countertops for a sparkling finish.",
-          icon: "soap",
-        },
-        {
-          title: "Shower & Tap Cleaning",
-          desc: "Deep cleaning of shower areas, taps, and mixers to remove limescale and grime.",
-          icon: "shower",
-        },
-        {
-          title: "Tile & Grout Cleaning",
-          desc: "Deep cleaning of tiles, grout lines, and corners for a hygienic bathroom.",
-          icon: "grid",
-        },
-        {
-          title: "Floor Cleaning & Mopping",
-          desc: "Deep scrubbing of floors followed by disinfected mopping for a spotless shine.",
-          icon: "bucket-outline",
-        },
-      ];
-    }
-
-    if (mainServiceType.includes("KITCHEN") || title.includes("KITCHEN")) {
-      return [
-        {
-          title: "Chimney & Exhaust Cleaning",
-          desc: "Deep degreasing and cleaning of chimney filters, mesh, and exhaust fans.",
-          icon: "fan",
-        },
-        {
-          title: "Gas Stove & Hob Cleaning",
-          desc: "Thorough removal of tough stains, grease, and carbon buildup from stove burners.",
-          icon: "stove",
-        },
-        {
-          title: "Countertop & Backsplash",
-          desc: "Intensive scrubbing and sanitization of kitchen countertops and wall tiles.",
-          icon: "table-furniture",
-        },
-        {
-          title: "Sink & Faucets Cleaning",
-          desc: "Descaling and polishing of sink area, drain outlets, and metal taps.",
-          icon: "water",
-        },
-        {
-          title: "Floor Scrubbing & Sanitizing",
-          desc: "Complete degreasing, deep scrubbing, and wet mopping of the kitchen floor.",
-          icon: "bucket-outline",
-        },
-      ];
-    }
-
-    if (mainServiceType.includes("DEEP") || mainServiceType.includes("CLEANING") || title.includes("DEEP") || title.includes("CLEANING")) {
-      return [
-        {
-          title: "Room & Living Area Dusting",
-          desc: "Dusting and vacuuming of all bedroom and living room furniture, fans, and lights.",
-          icon: "vacuum",
-        },
-        {
-          title: "Kitchen Deep Cleaning",
-          desc: "Detailed degreasing of kitchen cabinets, slabs, sink, stove, and tiles.",
-          icon: "stove",
-        },
-        {
-          title: "Bathroom Sanitization",
-          desc: "Deep cleaning and germ protection for all toilets, tiles, sinks, and shower heads.",
-          icon: "toilet",
-        },
-        {
-          title: "Windows & Balcony Cleaning",
-          desc: "Dusting and scrubbing of balcony tiles, grilles, window panes, and sliding tracks.",
-          icon: "window-closed",
-        },
-        {
-          title: "Deep Floor Scrubbing",
-          desc: "Complete vacuuming, intensive floor scrubbing, and disinfecting wet mop.",
-          icon: "bucket-outline",
-        },
-      ];
-    }
-
-    if (mainServiceType.includes("BALCONY") || title.includes("BALCONY")) {
-      return [
-        {
-          title: "Railing & Grill Dusting",
-          desc: "Dry dusting and wiping of grilles, railings, and boundary walls.",
-          icon: "broom",
-        },
-        {
-          title: "Sliding Glass Doors",
-          desc: "Deep cleaning of balcony glass windows, doors, and track frames.",
-          icon: "window-closed",
-        },
-        {
-          title: "Floor Scrubbing",
-          desc: "Intensive scrubbing of balcony tiles to remove mud, stains, and dry leaves.",
-          icon: "grid",
-        },
-        {
-          title: "Wet Mop & Sanitization",
-          desc: "Final sanitizing wet mop using premium disinfectants for a fresh feel.",
-          icon: "bucket-outline",
-        },
-      ];
-    }
-
-    // Fallback for Sofa, Carpet, Appliance, etc.
-    return [
-      {
-        title: "Deep Dry Vacuuming",
-        desc: "High-power vacuuming to remove embedded dust mites, pet hair, and food crumbs.",
-        icon: "vacuum",
-      },
-      {
-        title: "Premium Shampoo Application",
-        desc: "Eco-friendly specialized shampoo scrubbing to dissolve stains and odors.",
-        icon: "spray-bottle",
-      },
-      {
-        title: "Extraction & Rinse",
-        desc: "Wet extraction to pull out water, dirt, and shampoo residue completely.",
-        icon: "water",
-      },
-      {
-        title: "Final Sanitization",
-        desc: "Application of anti-bacterial spray for ultimate hygienic freshness.",
-        icon: "sparkles",
-      },
-    ];
-  };
 
   /* ✅ Category-specific FAQs resolver */
   const getServiceSpecificFAQs = () => {
@@ -434,7 +291,7 @@ export default function ServiceDetailScreen({ route }: Props) {
     const { data: servicesData } = await supabase
       .from("services")
       .select(
-        "id, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_not_included"
+        "id, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, image2, sort_order, description, gallery_images, work_not_included"
       );
     if (servicesData) setAvailableServices(servicesData as Service[]);
 
@@ -457,7 +314,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         const { data, error } = await supabase
           .from("services")
           .select(
-            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes, work_not_included"
+            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, image2, sort_order, description, gallery_images, work_includes, work_not_included"
           )
           .eq("slug", serviceId)
           .maybeSingle();
@@ -468,7 +325,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         const { data, error } = await supabase
           .from("services")
           .select(
-            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes, work_not_included"
+            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, image2, sort_order, description, gallery_images, work_includes, work_not_included"
           )
           .eq("id", serviceId)
           .maybeSingle();
@@ -1065,81 +922,172 @@ export default function ServiceDetailScreen({ route }: Props) {
             </>
           ) : null}
 
-          {/* ✅ How it works */}
-          <View style={{ marginTop: 30, paddingBottom: 20 }}>
-            <Text
-              style={{
-                fontSize: 22,
-                fontWeight: "800",
-                color: theme.text,
-                marginBottom: 20,
-              }}
-            >
-              {t("serviceDetail.howItWorks")}
-            </Text>
+          {/* ✅ How it works (Replaced Workframes) */}
+          {(() => {
+            let howItWorksItems: { title: string, iconUrl?: string }[] = [];
 
-            <View style={{ flexDirection: "column" }}>
-              {getHowItWorksSteps().map((step, idx, arr) => (
-                <View key={idx} style={{ flexDirection: "row", gap: 16, marginBottom: idx === arr.length - 1 ? 0 : 24 }}>
-                  <View style={{ width: 48, alignItems: "center" }}>
-                    <View
-                      style={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 24,
-                        backgroundColor: theme.primary + "15",
-                        justifyContent: "center",
-                        alignItems: "center",
-                        borderWidth: 1,
-                        borderColor: theme.primary + "30",
-                        zIndex: 2,
-                      }}
-                    >
-                      <MaterialCommunityIcons name={step.icon as any} size={24} color={theme.primary} />
-                    </View>
+            // 1. Check if the new JSON column 'how_it_works' has data
+            let parsedHowItWorks = null;
+            if (service.how_it_works) {
+              if (Array.isArray(service.how_it_works)) {
+                parsedHowItWorks = service.how_it_works;
+              } else if (typeof service.how_it_works === "string") {
+                try { parsedHowItWorks = JSON.parse(service.how_it_works); } catch (e) {}
+              }
+            }
 
-                    {idx < arr.length - 1 && (
-                      <View
-                        style={{
-                          position: "absolute",
-                          top: 48,
-                          bottom: -24,
-                          width: 2,
-                          borderWidth: 1,
-                          borderColor: theme.primary + "50",
-                          borderStyle: "dashed",
-                          borderRadius: 1,
-                          zIndex: 1,
-                        }}
-                      />
-                    )}
-                  </View>
+            if (parsedHowItWorks && Array.isArray(parsedHowItWorks) && parsedHowItWorks.length > 0) {
+              // Use the new dynamic JSON column
+              howItWorksItems = parsedHowItWorks.map((item: any) => {
+                let imgUrl = item.image;
+                if (imgUrl && !imgUrl.startsWith("http")) {
+                  imgUrl = supabase.storage.from("service-images").getPublicUrl(imgUrl).data.publicUrl;
+                }
+                return {
+                  title: item.title,
+                  iconUrl: imgUrl || undefined
+                };
+              });
+            } else {
+              // 2. Legacy fallback: Prioritize gallery_images first
+              let frames: string[] = [];
+              
+              if (service.gallery_images) {
+                if (Array.isArray(service.gallery_images)) {
+                  frames = service.gallery_images;
+                } else if (typeof service.gallery_images === 'string') {
+                  try { frames = JSON.parse(service.gallery_images); } catch (e) { frames = [service.gallery_images]; }
+                }
+              }
 
-                  <View style={{ flex: 1, paddingTop: 4 }}>
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontWeight: "700",
-                        color: theme.text,
-                        marginBottom: 4,
-                      }}
-                    >
-                      {step.title}
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        color: theme.textLight || "#666",
-                        lineHeight: 20,
-                      }}
-                    >
-                      {step.desc}
-                    </Text>
-                  </View>
+              // Fallback to image2 if gallery_images is empty or not provided
+              if (frames.length === 0 && service.image2) {
+                if (Array.isArray(service.image2)) {
+                  frames = service.image2;
+                } else if (typeof service.image2 === 'string') {
+                  if (service.image2.startsWith('[') || service.image2.startsWith('{')) {
+                    try { frames = JSON.parse(service.image2); } catch (e) { frames = [service.image2]; }
+                  } else {
+                    frames = [service.image2];
+                  }
+                }
+              }
+
+              // Robust cleanup: sometimes Supabase text[] returns a single element containing a stringified array
+              let actualFrames: string[] = [];
+              frames.forEach(f => {
+                if (typeof f === 'string' && (f.startsWith('[') || f.startsWith('{'))) {
+                  try {
+                    const parsed = JSON.parse(f);
+                    if (Array.isArray(parsed)) {
+                      actualFrames.push(...parsed);
+                    } else {
+                      actualFrames.push(f);
+                    }
+                  } catch (e) {
+                    actualFrames.push(f);
+                  }
+                } else {
+                  actualFrames.push(f);
+                }
+              });
+              frames = actualFrames;
+
+              const resolvedFrames = frames.map(f => {
+                if (f && !f.startsWith('http')) {
+                  return supabase.storage.from("service-images").getPublicUrl(f).data.publicUrl;
+                }
+                return f;
+              });
+
+              const workIncludesLines = service.work_includes
+                ? service.work_includes
+                    .replace(/\r\n/g, "\n")
+                    .split("\n")
+                    .map((l) => l.trim())
+                    .filter(Boolean)
+                : [];
+                
+              howItWorksItems = workIncludesLines.map((line, idx) => {
+                // Strip leading bullets/dashes
+                let cleanLine = line.replace(/^[•\-\*]\s*/, "");
+                return { 
+                  title: cleanLine,
+                  iconUrl: resolvedFrames[idx]
+                };
+              });
+            }
+
+            return howItWorksItems.length > 0 ? (
+              <>
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: "800",
+                    marginTop: 30,
+                    marginBottom: 20,
+                    color: theme.text,
+                  }}
+                >
+                  {t("serviceDetail.howItWorks") || "How it works"}
+                </Text>
+
+                <View style={{ paddingLeft: 4 }}>
+                  {howItWorksItems.map((item, idx) => {
+                    const iconUrl = item.iconUrl; // Read from the prepared item
+                    const isLast = idx === howItWorksItems.length - 1;
+                    return (
+                      <View key={idx} style={{ flexDirection: "row", marginBottom: isLast ? 0 : 20 }}>
+                        {/* Left Column: Icon and Vertical Line */}
+                        <View style={{ alignItems: "center", marginRight: 16 }}>
+                          {iconUrl ? (
+                            <Image
+                              source={{ uri: iconUrl }}
+                              style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 28,
+                                backgroundColor: isDark ? "#333" : "#f0f0f0",
+                              }}
+                            />
+                          ) : (
+                            <View
+                              style={{
+                                width: 56,
+                                height: 56,
+                                borderRadius: 28,
+                                backgroundColor: isDark ? "#333" : "#f0f0f0",
+                              }}
+                            />
+                          )}
+                          {!isLast && (
+                            <View style={{ height: '100%', position: 'absolute', top: 56, bottom: -20, width: 2, alignItems: 'center' }}>
+                              <View
+                                style={{
+                                  width: 0,
+                                  height: '100%',
+                                  borderStyle: "dashed",
+                                  borderLeftWidth: 2,
+                                  borderColor: COLORS.saffron,
+                                }}
+                              />
+                            </View>
+                          )}
+                        </View>
+                        
+                        {/* Right Column: Text */}
+                        <View style={{ flex: 1, justifyContent: "center", paddingBottom: 16 }}>
+                          <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text, lineHeight: 24 }}>
+                            {item.title}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
-              ))}
-            </View>
-          </View>
+              </>
+            ) : null;
+          })()}
 
           {/* ✅ FAQs Section (dynamic, service-specific, theme-adapted, below How it Works) */}
           {(() => {
