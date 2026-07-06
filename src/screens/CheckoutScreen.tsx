@@ -28,6 +28,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { processPayment } from "../lib/paymentService";
 import { supabase } from "../lib/supabase";
+import { invokeFunction } from "../lib/backendClient";
 import { RootStackParamList, SelectedService } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
 
@@ -914,7 +915,7 @@ export default function CheckoutScreen({ route }: Props) {
 
       // ✅ Send Booking Confirmation Email
       try {
-        await supabase.functions.invoke("send-booking-confirmation", {
+        await invokeFunction("send-booking-confirmation", {
           body: { booking_id: bookingId },
         });
         console.log("✅ Booking confirmation email sent");
@@ -925,7 +926,7 @@ export default function CheckoutScreen({ route }: Props) {
 
       // ✅ Send WhatsApp Payment Confirmation
       try {
-        await supabase.functions.invoke("send-payment-confirmation", {
+        await invokeFunction("send-payment-confirmation", {
           body: {
             customer_phone: profile.phone,
             customer_name: profile.full_name,
@@ -940,7 +941,7 @@ export default function CheckoutScreen({ route }: Props) {
 
       // ✅ Send WhatsApp Booking Confirmation
       try {
-        await supabase.functions.invoke("send-booking-confirmation-whatsapp", {
+        await invokeFunction("send-booking-confirmation-whatsapp", {
           body: {
             customer_phone: profile.phone,
             customer_name: profile.full_name,

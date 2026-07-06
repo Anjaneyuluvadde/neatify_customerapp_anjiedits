@@ -166,7 +166,8 @@
  */
 
 import RazorpayCheckout from "react-native-razorpay";
-import { supabase } from "./supabase"; // ✅ Use existing supabase client
+import { supabase } from "./supabase";
+import { invokeFunction } from "./backendClient"; // ✅ Use existing supabase client
 
 const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "";
 
@@ -205,8 +206,8 @@ export async function processPayment(
     console.log("🔵 Booking ID:", bookingId);
     console.log("🔵 Amount (INR):", amount);
 
-    // ✅ Use supabase.functions.invoke instead of manual fetch
-    const { data: orderData, error: orderError } = await supabase.functions.invoke("create-razorpay-order", {
+    // ✅ Use invokeFunction instead of manual fetch
+    const { data: orderData, error: orderError } = await invokeFunction("create-razorpay-order", {
       body: {
         booking_id: bookingId,
         amount: amount, // INR (Edge Function handles conversion to paise)
@@ -259,7 +260,7 @@ export async function processPayment(
 
     /* ================= 3️⃣ VERIFY PAYMENT ================= */
 
-    const { data: verifyData, error: verifyError } = await supabase.functions.invoke("verify-payment", {
+    const { data: verifyData, error: verifyError } = await invokeFunction("verify-payment", {
       body: {
         razorpay_order_id: payment.razorpay_order_id,
         razorpay_payment_id: payment.razorpay_payment_id,

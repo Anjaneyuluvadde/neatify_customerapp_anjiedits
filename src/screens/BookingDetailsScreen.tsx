@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
+import { invokeFunction } from "../lib/backendClient";
 import { RootStackParamList } from "../navigation/AppNavigator";
 
 type Props = {
@@ -32,6 +33,7 @@ export default function BookingDetailsScreen({ route }: Props) {
     refund_amount: number;
     is_free: boolean;
     hours_until_service: number;
+    total_amount?: number;
   } | null>(null);
   const [fetchingFees, setFetchingFees] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -203,7 +205,7 @@ export default function BookingDetailsScreen({ route }: Props) {
 
       // ✅ Send WhatsApp Cancellation Notification
       try {
-        await supabase.functions.invoke("booking-cancelled-whatsapp", {
+        await invokeFunction("booking-cancelled-whatsapp", {
           body: {
             customer_phone: booking.customer_phone,
             customer_name: booking.customer_name,
