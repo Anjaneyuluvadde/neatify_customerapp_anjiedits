@@ -163,11 +163,7 @@ export default function HomeScreen({ navigation }: any) {
           (o) => o.title.toLowerCase() === svc.title.toLowerCase()
         );
         if (matchingOffer && matchingOffer.offer_percentage > 0) {
-          const cleanedOriginal = String(svc.original_price ?? '').replace(/[^\d.]/g, '');
-          const basePrice =
-            svc.original_price && cleanedOriginal && Number(cleanedOriginal) > 0
-              ? Number(cleanedOriginal)
-              : parseFloat(String(svc.price).replace(/[^\d.]/g, ""));
+          const basePrice = parseFloat(String(svc.price).replace(/[^\d.]/g, "")) || 0;
           const discountedPrice = Math.round(
             basePrice - (basePrice * matchingOffer.offer_percentage) / 100
           );

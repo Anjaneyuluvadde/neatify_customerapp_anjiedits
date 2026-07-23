@@ -120,6 +120,46 @@ export default function BookingDetailsScreen({ route }: Props) {
     }
   }, [booking.booking_date, booking.booking_time, services]);
 
+  // 🟢 Fetch dynamic cancellation_fee column from services table
+  const [serviceCancellationFee, setServiceCancellationFee] = useState<number | null>(null);
+
+  useEffect(() => {
+    const fetchCancellationFee = async () => {
+      if (!services || services.length === 0) return;
+
+      const embeddedFee = services.find((s: any) => s.cancellation_fee !== undefined && s.cancellation_fee !== null);
+      if (embeddedFee) {
+        setServiceCancellationFee(Number(embeddedFee.cancellation_fee));
+        return;
+      }
+
+      const ids = services.map((s: any) => s.id).filter(Boolean);
+      const titles = services.map((s: any) => s.title || s.service_name).filter(Boolean);
+
+      let query = supabase.from("services").select("cancellation_fee, id, title");
+      if (ids.length > 0) {
+        query = query.in("id", ids);
+      } else if (titles.length > 0) {
+        query = query.in("title", titles);
+      } else {
+        return;
+      }
+
+      const { data } = await query;
+      if (data && data.length > 0) {
+        const fees = data
+          .map((item: any) => item.cancellation_fee)
+          .filter((f: any) => f !== null && f !== undefined)
+          .map(Number);
+        if (fees.length > 0) {
+          setServiceCancellationFee(Math.max(...fees));
+        }
+      }
+    };
+
+    fetchCancellationFee();
+  }, [services]);
+
   // Check Cancellation Eligibility
   useEffect(() => {
     const checkEligibility = () => {
@@ -153,7 +193,7 @@ export default function BookingDetailsScreen({ route }: Props) {
       // 🟢 Enforce 6-hour policy override in frontend if RPC returns 0
       // Explicitly check for the 6-hour boundary (<= 6 hours)
       if (diffHours <= 6 && (!data || data.fee === 0)) {
-        const fee = isDeepCleaning ? 299 : 99;
+        const fee = serviceCancellationFee !== null ? serviceCancellationFee : (isDeepCleaning ? 299 : 99);
         data = {
           ...data,
           fee: fee,
@@ -408,7 +448,7 @@ export default function BookingDetailsScreen({ route }: Props) {
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle" size={18} color="#ef4444" />
             <Text style={styles.warningText}>
-              Cancellation within 6 hours of service incurs a fee (₹{isDeepCleaning ? '299' : '99'} for {isDeepCleaning ? 'deep cleaning' : 'small services'}).
+              Cancellation within 6 hours of service incurs a fee of ₹{serviceCancellationFee !== null ? serviceCancellationFee : (isDeepCleaning ? '299' : '99')}.
             </Text>
           </View>
         )}

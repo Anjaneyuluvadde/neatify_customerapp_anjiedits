@@ -401,11 +401,7 @@ export default function ServiceDetailScreen({ route }: Props) {
       let effectiveDiscountPercent = (service as any)?.discount_percent ?? null;
 
       if (activeOfferPercent && activeOfferPercent > 0) {
-        // Use original_price as the base for calculating offer discount
-        const cleanedOriginal = String(effectiveOriginalPrice ?? '').replace(/[^\d.]/g, '');
-        const basePrice = cleanedOriginal && Number(cleanedOriginal) > 0
-          ? Number(cleanedOriginal)
-          : parseFloat(String(service.price).replace(/[^\d.]/g, ""));
+        const basePrice = parseFloat(String(service.price).replace(/[^\d.]/g, "")) || 0;
 
         const discountedPrice = Math.round(basePrice - (basePrice * activeOfferPercent / 100));
         effectivePrice = discountedPrice.toString();
