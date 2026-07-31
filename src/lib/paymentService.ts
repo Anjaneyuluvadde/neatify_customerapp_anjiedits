@@ -169,7 +169,7 @@ import RazorpayCheckout from "react-native-razorpay";
 import { supabase } from "./supabase";
 import { invokeFunction } from "./backendClient"; // ✅ Use existing supabase client
 
-const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || "";
+const RAZORPAY_KEY_ID = process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID || process.env.EXPO_PUBLIC_RAZORPAY_KEY || "";
 
 /* ================= TYPES ================= */
 

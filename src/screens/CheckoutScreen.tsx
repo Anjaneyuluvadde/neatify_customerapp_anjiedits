@@ -31,6 +31,7 @@ import { supabase } from "../lib/supabase";
 import { invokeFunction } from "../lib/backendClient";
 import { RootStackParamList, SelectedService } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
+import { clearClaimedOffer, getClaimedOffer } from "../utils/priceUtils";
 
 /* ================= TYPES ================= */
 
@@ -91,7 +92,13 @@ export default function CheckoutScreen({ route }: Props) {
   const navigation = useNavigation<any>();
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
-  const { services, bookingDateText } = route.params;
+  const { services: initialServices, bookingDateText } = route.params;
+  const [checkoutServices, setCheckoutServices] = useState<SelectedService[]>(initialServices || []);
+
+  useEffect(() => {
+    // ❌ Removed applyClaimedOfferToCheckout that modifies service prices directly.
+    // We now apply it as a coupon code automatically.
+  }, []);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -136,6 +143,27 @@ export default function CheckoutScreen({ route }: Props) {
   const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage?: number; discount_amount?: number } | null>(null);
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
+
+  // ✅ Auto-apply Claimed Offer as a Coupon
+  useEffect(() => {
+    const applyClaimedOfferAsCoupon = async () => {
+      const claimed = await getClaimedOffer();
+      if (!claimed) return;
+
+      const pct = claimed.offerPercentage || 40;
+      setCoupon({
+        id: "claimed_new_user",
+        coupon_code: `NEW${pct}_OFFER`,
+        discount_percentage: pct,
+        discount_amount: 0,
+      });
+      setCouponDiscount(pct);
+      setCouponApplied(true);
+      setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off` });
+    };
+
+    applyClaimedOfferAsCoupon();
+  }, []);
 
   // ✅ Wallet state
   const [walletBalance, setWalletBalance] = useState(0);
@@ -248,6 +276,13 @@ export default function CheckoutScreen({ route }: Props) {
   /* ================= FETCH COUPON ================= */
 
   const fetchUserCoupon = async (phone: string) => {
+    // Prevent overwriting if a session-claimed offer is present
+    const claimed = await getClaimedOffer();
+    if (claimed) {
+      console.log("ℹ️ Skipping DB coupon fetch because a claimed offer exists.");
+      return;
+    }
+
     if (!phone) return;
 
     const userPhone10 = formatDisplayPhone(phone);
@@ -567,22 +602,22 @@ export default function CheckoutScreen({ route }: Props) {
   /* ================= TOTALS ================= */
 
   const totalPrice = useMemo(
-    () => services.reduce((sum, s) => {
+    () => checkoutServices.reduce((sum, s) => {
       const qty = s.quantity || 1;
       return sum + (parsePrice(s.price) * qty);
     }, 0),
-    [services]
+    [checkoutServices]
   );
 
   const totalOriginalPrice = useMemo(
-    () => services.reduce((sum, s) => {
+    () => checkoutServices.reduce((sum, s) => {
       const qty = s.quantity || 1;
       if (s.original_price && Number(String(s.original_price).replace(/[^\d.]/g, '')) > 0) {
         return sum + (Number(String(s.original_price).replace(/[^\d.]/g, '')) * qty);
       }
       return sum + (parsePrice(s.price) * qty);
     }, 0),
-    [services]
+    [checkoutServices]
   );
 
   const totalSavings = useMemo(
@@ -593,16 +628,16 @@ export default function CheckoutScreen({ route }: Props) {
   const totalDuration = useMemo(
     () =>
       formatMinutes(
-        services.reduce((sum, s) => {
+        checkoutServices.reduce((sum, s) => {
           const qty = s.quantity || 1;
           return sum + (parseDurationToMinutes(s.duration) * qty);
         }, 0)
       ),
-    [services]
+    [checkoutServices]
   );
 
   const totalTax = useMemo(
-    () => services.reduce((sum, s) => {
+    () => checkoutServices.reduce((sum, s) => {
       const qty = s.quantity || 1;
       const servicePrice = parsePrice(s.price);
       // Parse tax_percent - handle text type with "%" symbol
@@ -610,7 +645,7 @@ export default function CheckoutScreen({ route }: Props) {
       const taxPercent = Number(taxPercentStr) || 0;
       return sum + ((servicePrice * taxPercent) / 100) * qty;
     }, 0),
-    [services]
+    [checkoutServices]
   );
 
   const grandTotal = useMemo(() => {
@@ -798,7 +833,7 @@ export default function CheckoutScreen({ route }: Props) {
             full_address: fullAddress,
             latitude: finalLat,
             longitude: finalLng,
-            services: services,
+            services: checkoutServices,
             booking_date: datePart,
             booking_time: timePart,
             booking_schedule_at: `${datePart} ${timePart} +05:30`,
@@ -882,7 +917,7 @@ export default function CheckoutScreen({ route }: Props) {
         .eq("id", bookingId);
 
       // ✅ Mark coupon as used (if applied)
-      if (couponApplied && coupon) {
+      if (couponApplied && coupon && coupon.id !== "claimed_new_user") {
         await supabase
           .from("coupons")
           .update({ is_used: true })
@@ -931,7 +966,7 @@ export default function CheckoutScreen({ route }: Props) {
             customer_phone: profile.phone,
             customer_name: profile.full_name,
             amount_paid: String(grandTotal.toFixed(2)),
-            service_name: services[0]?.title || 'Service'
+            service_name: checkoutServices[0]?.title || 'Service'
           },
         });
         console.log("✅ WhatsApp payment confirmation sent");
@@ -945,7 +980,7 @@ export default function CheckoutScreen({ route }: Props) {
           body: {
             customer_phone: profile.phone,
             customer_name: profile.full_name,
-            service_name: services[0]?.title || 'Service',
+            service_name: checkoutServices[0]?.title || 'Service',
             booking_date: bookingDateText || 'Your scheduled date'
           },
         });
@@ -954,8 +989,9 @@ export default function CheckoutScreen({ route }: Props) {
         console.error("WhatsApp booking sending failed (non-critical):", waBookingError);
       }
 
-      // Clear cart
+      // Clear cart & session-claimed offer
       await supabase.from("cart").delete().eq("user_id", userId);
+      await clearClaimedOffer();
 
       setIsProcessing(false);
 
@@ -1051,7 +1087,7 @@ export default function CheckoutScreen({ route }: Props) {
               <Text style={[styles.sectionTitle, { color: theme.text }]}>{t("checkout.orderSummary")}</Text>
             </View>
 
-            {services.map((s: SelectedService) => (
+            {checkoutServices.map((s: SelectedService) => (
               <View key={s.id} style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.serviceTitle, { color: theme.text }]}>
@@ -1244,169 +1280,126 @@ export default function CheckoutScreen({ route }: Props) {
           <Text style={[styles.sectionHeading, { color: theme.text }]}>{t("checkout.serviceAddress")}</Text>
 
           <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            {/* User Details */}
-            <View style={{ marginBottom: 12 }}>
-              <Text style={[styles.label, { color: theme.text }]}>{t("checkout.name")}</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
-                value={profile?.full_name}
-                placeholderTextColor={theme.textLight}
-                onChangeText={(text) =>
-                  setProfile((prev) => (prev ? { ...prev, full_name: text } : null))
-                }
-              />
-
-              <Text style={[styles.label, { color: theme.text }]}>{t("checkout.phone")}</Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
-                value={profile?.phone}
-                onChangeText={(text) => {
-                  const onlyDigits = text.replace(/\D/g, "");
-                  setProfile((prev) => (prev ? { ...prev, phone: onlyDigits } : null));
-                }}
-                keyboardType="phone-pad"
-                maxLength={10}
-                placeholder="10-digit mobile number"
-                placeholderTextColor={theme.textLight}
-              />
-            </View>
-
-            {/* Address Inputs */}
-            <View style={{ marginTop: 8 }}>
-
-              <View style={[styles.addressSection, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                {/* ✅ SMART ADDRESS CARD (Shown after Use Location) */}
-                {isAddressSummaryMode && hasUsedLocationFetch ? (
-                  <View style={[styles.summaryCard, { backgroundColor: theme.surfaceVariant }]}>
-                    <View style={styles.summaryContent}>
-                      <Pressable
-                        style={[styles.locationIconCircle, { backgroundColor: theme.background, borderColor: theme.border }]}
-                        onPress={handleViewOnMap}
-                      >
-                        <Ionicons name="location" size={20} color={theme.text} />
-                      </Pressable>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.summaryTitle, { color: theme.textLight }]}>Selected Location</Text>
-                        <Text style={[styles.summaryText, { color: theme.text }]}>
-                          {`${manualAddress}${pincode ? " - " + pincode : ""}`}
-                        </Text>
-                      </View>
-                      <Pressable
-                        style={[styles.editButton, { backgroundColor: theme.background, borderColor: theme.border }]}
-                        onPress={() => setIsAddressSummaryMode(false)}
-                      >
-                        <Ionicons name="create-outline" size={18} color={theme.text} />
-                        <Text style={[styles.editButtonText, { color: theme.text }]}>Edit</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={{ padding: 16 }}>
-                    <Text style={[styles.label, { color: theme.text }]}>{t("checkout.fullAddress")}</Text>
-                    <TextInput
-                      style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12, backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
-                      value={manualAddress}
-                      onChangeText={setManualAddress}
-                      placeholder="Plot No, Flat No, Building Name, Area, City"
-                      placeholderTextColor={theme.textLight}
-                      multiline
-                      numberOfLines={4}
-                    />
-
-                    <Text style={[styles.label, { color: theme.text }]}>{t("checkout.pincode")}</Text>
-                    <TextInput
-                      style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
-                      value={pincode}
-                      onChangeText={(text) => {
-                        const onlyDigits = text.replace(/\D/g, "");
-                        setPincode(onlyDigits);
-                      }}
-                      keyboardType="numeric"
-                      maxLength={6}
-                      placeholder="500090"
-                      placeholderTextColor={theme.textLight}
-                    />
-
-                    {/* ✅ DONE BUTTON (Return to summary) */}
-                    {hasUsedLocationFetch && (
-                      <Pressable
-                        style={styles.doneButton}
-                        onPress={async () => {
-                          setIsAddressSummaryMode(true);
-                          // ✅ Instantly geocode when finishing manual entry
-                          handleManualGeocode(`${manualAddress}, ${pincode}`);
-                        }}
-                      >
-                        <Ionicons name="checkmark-done" size={18} color="#fff" />
-                        <Text style={styles.doneButtonText}>Done Editing</Text>
-                      </Pressable>
-                    )}
-                  </View>
-                )}
-              </View>
-
-              {/* ✅ FULL WIDTH PINCODE STATUS BADGE (Always visible or after pincode entered) */}
-              {pincode.length === 6 && (
-                <View
-                  style={[
-                    styles.serviceStatusBox,
-                    checkingPincode
-                      ? styles.serviceCheckingBox
-                      : isPincodeServiceable
-                        ? styles.serviceAvailableBox
-                        : styles.serviceUnavailableBox,
-                    { marginTop: 12 }
-                  ]}
-                >
-                  <Ionicons
-                    name={
-                      checkingPincode
-                        ? "time-outline"
-                        : isPincodeServiceable
-                          ? "checkmark-circle"
-                          : "close-circle"
-                    }
-                    size={18}
-                    color={
-                      checkingPincode
-                        ? "#64748b"
-                        : isPincodeServiceable
-                          ? "#10B981"
-                          : "#EF4444"
-                    }
-                  />
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.serviceStatusText}>
-                      {checkingPincode
-                        ? t("checkout.checking")
-                        : isPincodeServiceable
-                          ? t("checkout.serviceAvailable")
-                          : t("checkout.serviceNotAvailable")}
-                    </Text>
-
-                    {!checkingPincode && (
-                      <Text style={styles.serviceSubText} numberOfLines={1}>
-                        {isPincodeServiceable
-                          ? "You can continue with booking."
-                          : "We will be available soon in your area."}
+            {/* Address Box */}
+            <View style={[styles.addressSection, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              {/* ✅ SELECTED ADDRESS CARD */}
+              {isAddressSummaryMode && hasUsedLocationFetch ? (
+                <View style={[styles.summaryCard, { backgroundColor: theme.surfaceVariant }]}>
+                  <View style={styles.summaryContent}>
+                    <Pressable
+                      style={[styles.locationIconCircle, { backgroundColor: theme.background, borderColor: theme.border }]}
+                      onPress={handleViewOnMap}
+                    >
+                      <Ionicons name="location" size={20} color={theme.text} />
+                    </Pressable>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.summaryTitle, { color: theme.textLight }]}>Selected Location</Text>
+                      <Text style={[styles.summaryText, { color: theme.text }]}>
+                        {`${manualAddress}${pincode ? " - " + pincode : ""}`}
                       </Text>
-                    )}
+                    </View>
+                    <Pressable
+                      style={[styles.editButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                      onPress={() => setIsAddressSummaryMode(false)}
+                    >
+                      <Ionicons name="create-outline" size={18} color={theme.text} />
+                      <Text style={[styles.editButtonText, { color: theme.text }]}>Edit</Text>
+                    </Pressable>
                   </View>
                 </View>
-              )}
+              ) : (
+                <View style={{ padding: 16 }}>
+                  <Text style={[styles.label, { color: theme.text }]}>{t("checkout.fullAddress")}</Text>
+                  <TextInput
+                    style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12, backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+                    value={manualAddress}
+                    onChangeText={setManualAddress}
+                    placeholder="Plot No, Flat No, Building Name, Area, City"
+                    placeholderTextColor={theme.textLight}
+                    multiline
+                    numberOfLines={4}
+                  />
 
-              <Pressable onPress={fetchCurrentLocation} style={[styles.secondaryBtn, { backgroundColor: theme.background, borderColor: theme.primary }]} disabled={fetchingLocation}>
-                {fetchingLocation ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <ActivityIndicator size="small" color={theme.primary} />
-                    <Text style={[styles.secondaryBtnText, { color: theme.primary }]}>Fetching Location...</Text>
-                  </View>
-                ) : (
-                  <Text style={[styles.secondaryBtnText, { color: theme.primary }]}>{t("checkout.useLocation")}</Text>
-                )}
-              </Pressable>
+                  <Text style={[styles.label, { color: theme.text }]}>{t("checkout.pincode")}</Text>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+                    value={pincode}
+                    onChangeText={(text) => {
+                      const onlyDigits = text.replace(/\D/g, "");
+                      setPincode(onlyDigits);
+                    }}
+                    keyboardType="numeric"
+                    maxLength={6}
+                    placeholder="500090"
+                    placeholderTextColor={theme.textLight}
+                  />
+
+                  {hasUsedLocationFetch && (
+                    <Pressable
+                      style={styles.doneButton}
+                      onPress={async () => {
+                        setIsAddressSummaryMode(true);
+                        handleManualGeocode(`${manualAddress}, ${pincode}`);
+                      }}
+                    >
+                      <Ionicons name="checkmark-done" size={18} color="#fff" />
+                      <Text style={styles.doneButtonText}>Done Editing</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
             </View>
+
+            {/* ✅ FULL WIDTH PINCODE STATUS BADGE */}
+            {pincode.length === 6 && (
+              <View
+                style={[
+                  styles.serviceStatusBox,
+                  checkingPincode
+                    ? styles.serviceCheckingBox
+                    : isPincodeServiceable
+                      ? styles.serviceAvailableBox
+                      : styles.serviceUnavailableBox,
+                  { marginTop: 12 }
+                ]}
+              >
+                <Ionicons
+                  name={
+                    checkingPincode
+                      ? "time-outline"
+                      : isPincodeServiceable
+                        ? "checkmark-circle"
+                        : "close-circle"
+                  }
+                  size={18}
+                  color={
+                    checkingPincode
+                      ? "#64748b"
+                      : isPincodeServiceable
+                        ? "#10B981"
+                        : "#EF4444"
+                  }
+                />
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.serviceStatusText}>
+                    {checkingPincode
+                      ? t("checkout.checking")
+                      : isPincodeServiceable
+                        ? t("checkout.serviceAvailable")
+                        : t("checkout.serviceNotAvailable")}
+                  </Text>
+
+                  {!checkingPincode && (
+                    <Text style={styles.serviceSubText} numberOfLines={1}>
+                      {isPincodeServiceable
+                        ? "You can continue with booking."
+                        : "We will be available soon in your area."}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
           </View>
 
           {/* CHECKBOXES */}

@@ -60,7 +60,11 @@ export default function App() {
           !!(profile?.full_name && profile?.email && profile?.phone);
 
         // Auth must have confirmed email (covers both email and Google users)
-        const hasConfirmedIdentity = !!user.email_confirmed_at;
+        const hasConfirmedIdentity =
+          !!user.email_confirmed_at ||
+          !!user.confirmed_at ||
+          user.app_metadata?.provider === "google" ||
+          (Array.isArray(user.app_metadata?.providers) && user.app_metadata.providers.includes("google"));
 
         const isComplete = hasFullProfile && hasConfirmedIdentity;
 
@@ -163,14 +167,20 @@ export default function App() {
           const accessToken = params.get("access_token");
           const refreshToken = params.get("refresh_token");
           if (accessToken && refreshToken) {
+            hasCheckedOnce = false;
             const { data, error } = await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
             });
             if (!error && data.user) {
-              // Navigation is intentionally removed from here.
-              // The onAuthStateChange listener higher up in this file will automatically
-              // detect this new session and navigate to HomeDrawer safely.
+              handlePushToken(data.user.id);
+              const isComplete = await checkCompleteness(data.user.id);
+              if (isComplete) {
+                navigationRef.current?.reset({
+                  index: 0,
+                  routes: [{ name: "HomeDrawer" }],
+                });
+              }
             }
           }
         }

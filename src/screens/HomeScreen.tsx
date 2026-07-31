@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Clipboard,
   Dimensions,
   FlatList,
   ImageSourcePropType,
@@ -15,22 +17,20 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Clipboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect, useIsFocused } from "@react-navigation/native";
 
-import CategoryTabs from "../components/CategoryTabs";
+import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
 import ServiceCard from "../components/ServiceCard";
-import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import WhyChooseUs from "../components/WhyChooseUs";
 import { useLanguage } from "../context/LanguageContext";
-import { useNotification } from "../hooks/useNotification";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore
+import { useNotification } from "../hooks/useNotification";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { MainCategory, Service } from "../types/service";
+import { setClaimedOffer } from "../utils/priceUtils";
 
 const { width, height } = Dimensions.get("window");
 const SLIDER_HEIGHT = height * 0.25; // Increased height to reduce empty space
@@ -73,7 +73,7 @@ export default function HomeScreen({ navigation }: any) {
   const [mainCategories, setMainCategories] = useState<MainCategory[]>([]);
   const [activeMainCategory, setActiveMainCategory] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState("ALL");
-  const [measuredHeights, setMeasuredHeights] = useState<{[key: string]: number}>({});
+  const [measuredHeights, setMeasuredHeights] = useState<{ [key: string]: number }>({});
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,12 +140,10 @@ export default function HomeScreen({ navigation }: any) {
   const isFocused = useIsFocused();
 
   const fetchServices = useCallback(async () => {
-    setLoading(true);
     const { data, error } = await supabase.from("services").select("*");
 
     if (error) {
       console.log("Supabase error:", error);
-      setLoading(false);
       return;
     }
 
@@ -233,21 +231,24 @@ export default function HomeScreen({ navigation }: any) {
       .select("*")
       .eq("is_active", true);
 
-    if (popupData && popupData.length > 0) {
-      setAppPopups(popupData);
-      setPopupType("APP_POPUP");
-      setShowPopup(true);
-      hasShownPopupThisSession = true;
-      return;
-    }
-
     const { data: offersData } = await supabase
       .from("offers")
       .select("*")
       .eq("is_offer_enabled", true);
 
+    if (popupData && popupData.length > 0) {
+      setAppPopups(popupData);
+    }
+
     if (offersData && offersData.length > 0) {
       setActiveOffers(offersData);
+    }
+
+    if (popupData && popupData.length > 0) {
+      setPopupType("APP_POPUP");
+      setShowPopup(true);
+      hasShownPopupThisSession = true;
+    } else if (offersData && offersData.length > 0) {
       setPopupType("OFFERS");
       setShowPopup(true);
       hasShownPopupThisSession = true;
@@ -258,10 +259,15 @@ export default function HomeScreen({ navigation }: any) {
     useCallback(() => {
       const loadAll = async () => {
         setLoading(true);
-        await Promise.all([fetchMainCategories(), fetchServices()]);
-        await Promise.all([fetchHeroBanners(), fetchPopups()]);
-        await checkWelcomeReward();
-        setLoading(false);
+        try {
+          await Promise.all([fetchMainCategories(), fetchServices()]);
+          await Promise.all([fetchHeroBanners(), fetchPopups()]);
+          await checkWelcomeReward();
+        } catch (err) {
+          console.error("Home load error:", err);
+        } finally {
+          setLoading(false);
+        }
       };
       loadAll();
     }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories, checkWelcomeReward])
@@ -327,7 +333,8 @@ export default function HomeScreen({ navigation }: any) {
             typeMap.set(type, {
               label: type.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
               value: type,
-              icon: s.category_icon_url || existing?.icon || null
+              icon: s.category_icon_url || existing?.icon || null,
+              order: s.category_order ?? existing?.order ?? 9999
             });
           }
         }
@@ -354,6 +361,11 @@ export default function HomeScreen({ navigation }: any) {
         }
       });
     }
+
+    result.sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      return a.label.localeCompare(b.label);
+    });
 
     return result;
   }, [services, selectedMainCategoryForSheet]);
@@ -438,8 +450,8 @@ export default function HomeScreen({ navigation }: any) {
   const activeCategoryServices = getServicesForCategory(activeCategory);
   const CARD_ROW_HEIGHT = 320; // Safe fallback height to prevent any layout cutoffs
   const serviceRows = Math.max(1, Math.ceil(activeCategoryServices.length / 2));
-  const pagerHeight = activeCategoryServices.length === 0 
-    ? 150 
+  const pagerHeight = activeCategoryServices.length === 0
+    ? 150
     : (measuredHeights[activeCategory] || (serviceRows * CARD_ROW_HEIGHT));
 
   // Auto-slide effect
@@ -468,9 +480,7 @@ export default function HomeScreen({ navigation }: any) {
           ref={scrollRef}
           onScroll={(e) => setShowGoUp(e.nativeEvent.contentOffset.y > 200)}
           scrollEventThrottle={16}
-          stickyHeaderIndices={[
-            1 + (heroBanners.length > 0 ? 1 : 0) + (mainCategories.length > 0 ? 1 : 0)
-          ]}
+
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -524,9 +534,34 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           )}
 
+          {/* New User Promo Banner (Matching Website Image 1) */}
+          <View style={promoBannerStyles.container}>
+            <View style={promoBannerStyles.headerRow}>
+              <View style={promoBannerStyles.sparkleCircle}>
+                <Text style={{ fontSize: 16 }}>✨</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={promoBannerStyles.titleText}>
+                  New to Neatify? Get <Text style={promoBannerStyles.highlightText}>40% OFF</Text> Your First Service!
+                </Text>
+                <Text style={promoBannerStyles.subText}>
+                  Register a new account or mobile number to claim 40% OFF on any home cleaning or service booking!
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={promoBannerStyles.claimBtn}
+              activeOpacity={0.8}
+              onPress={() => navigation.navigate("Login", { isRegister: true })}
+            >
+              <Text style={promoBannerStyles.claimBtnText}>Claim 40% OFF →</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* 3. Main Category Grid (Explore all services) */}
           {mainCategories.length > 0 && (
-            <View style={styles.gridContainer}>
+            <View style={styles.gridContainer} onLayout={(e) => setServicesY(e.nativeEvent.layout.y)}>
               <Text style={[styles.sectionTitle, { color: theme.text }]}>Explore all services</Text>
               <View style={styles.grid}>
                 {mainCategories.map((item) => (
@@ -554,35 +589,6 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           )}
 
-          {/* 4. Category Tabs (Sticky) */}
-          <View onLayout={(e) => setServicesY(e.nativeEvent.layout.y)}>
-            <CategoryTabs activeTab={activeCategory} onChange={handleCategoryChange} tabs={tabs} />
-          </View>
-
-          {/* 5. Title Heading */}
-          <View style={[styles.titleRow, { backgroundColor: theme.background }]}>
-            <View style={styles.titleBar} />
-            <Text style={[styles.titleText, { color: theme.text }]}>
-              {activeMainCategory
-                ? mainCategories.find(c => c.id === activeMainCategory)?.name
-                : tabs.find(t => t.value === activeCategory)?.label ?? "Services"}
-            </Text>
-          </View>
-
-          {/* 5. Horizontal Pager with nested non-scrolling service lists */}
-          <View style={{ height: pagerHeight }}>
-            <FlatList
-              ref={pagerRef}
-              data={tabs}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={onPagerScrollEnd}
-              renderItem={renderCategoryPage}
-              initialScrollIndex={Math.max(0, tabs.findIndex(t => t.value === activeCategory))}
-              getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-            />
-          </View>
 
           {/* 6. Why Choose Us Section */}
           <WhyChooseUs onBookNow={() => {
@@ -593,10 +599,22 @@ export default function HomeScreen({ navigation }: any) {
 
       {/* Popups (Festive & Offers) */}
       <Modal visible={showPopup && !!popupType} transparent animationType="fade" onRequestClose={() => setShowPopup(false)}>
-        <Pressable style={popupStyles.overlay} onPress={() => setShowPopup(false)}>
+        <Pressable style={popupStyles.overlay} onPress={() => {
+          if (popupType === "APP_POPUP" && activeOffers.length > 0) {
+            setPopupType("OFFERS");
+          } else {
+            setShowPopup(false);
+          }
+        }}>
           <AnimatedGradientBorder borderRadius={20} borderWidth={2} animationSpeed={3} style={{ width: popupType === "APP_POPUP" ? POPUP_WIDTH : "90%" }}>
             <Pressable onPress={(e) => e.stopPropagation()} style={[popupStyles.container, { backgroundColor: theme.background }]}>
-              <Pressable style={popupStyles.closeBtn} onPress={() => setShowPopup(false)}>
+              <Pressable style={popupStyles.closeBtn} onPress={() => {
+                if (popupType === "APP_POPUP" && activeOffers.length > 0) {
+                  setPopupType("OFFERS");
+                } else {
+                  setShowPopup(false);
+                }
+              }}>
                 <Ionicons name="close" size={22} color="#fff" />
               </Pressable>
 
@@ -631,12 +649,31 @@ export default function HomeScreen({ navigation }: any) {
                     <Text style={popupStyles.offHeaderText}>🎉 Special Offers</Text>
                   </View>
                   {activeOffers.map((off, i) => (
-                    <Pressable key={i} style={[popupStyles.offItem, { borderBottomColor: theme.border }]} onPress={() => { setShowPopup(false); navigation.navigate("ServiceDetail", { service: services.find(s => s.title === off.title) }) }}>
+                    <Pressable
+                      key={i}
+                      style={[popupStyles.offItem, { borderBottomColor: theme.border }]}
+                      onPress={async () => {
+                        setShowPopup(false);
+                        const matchingSvc = services.find((s) => s.title === off.title);
+                        if (matchingSvc) {
+                          await setClaimedOffer({
+                            serviceId: matchingSvc.id,
+                            serviceTitle: matchingSvc.title,
+                            offerPercentage: off.offer_percentage || 40,
+                            offerPrice: (off as any).offer_price || (off as any).fixed_price,
+                            claimedAt: new Date().toISOString(),
+                          });
+                          navigation.navigate("ServiceDetail", { service: matchingSvc });
+                        }
+                      }}
+                    >
                       <View style={{ flex: 1 }}>
                         <Text style={popupStyles.offType}>{off.service_type}</Text>
                         <Text style={[popupStyles.offTitle, { color: theme.text }]}>{off.title}</Text>
                       </View>
-                      <View style={[popupStyles.offBadge, { backgroundColor: theme.primary + "20", borderColor: theme.primary }]}><Text style={{ color: theme.primary, fontWeight: '800' }}>{off.offer_percentage}% OFF</Text></View>
+                      <View style={[popupStyles.offBadge, { backgroundColor: theme.primary + "20", borderColor: theme.primary }]}>
+                        <Text style={{ color: theme.primary, fontWeight: '800' }}>{off.offer_percentage}% OFF</Text>
+                      </View>
                     </Pressable>
                   ))}
                   <Pressable style={[popupStyles.footerBtn, { backgroundColor: theme.primary }]} onPress={() => setShowPopup(false)}><Text style={{ fontWeight: '700' }}>Browse Services</Text></Pressable>
@@ -923,5 +960,74 @@ const goUpStyles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
     shadowRadius: 6,
+  },
+});
+
+const promoBannerStyles = StyleSheet.create({
+  container: {
+    marginHorizontal: 12,
+    marginTop: 14,
+    marginBottom: 6,
+    backgroundColor: "#161F33",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.1)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 12,
+  },
+  sparkleCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255, 255, 255, 0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  titleText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+    lineHeight: 20,
+  },
+  highlightText: {
+    color: "#FACC15",
+    fontWeight: "900",
+  },
+  subText: {
+    color: "#94A3B8",
+    fontSize: 11,
+    fontWeight: "500",
+    marginTop: 4,
+    lineHeight: 16,
+  },
+  claimBtn: {
+    backgroundColor: "#FACC15",
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    alignSelf: "flex-end",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#FACC15",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  claimBtnText: {
+    color: "#0F172A",
+    fontWeight: "900",
+    fontSize: 13,
   },
 });

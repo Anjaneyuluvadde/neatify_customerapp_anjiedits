@@ -1,14 +1,21 @@
-import { RouteProp, useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
+import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
+import * as Location from "expo-location";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Linking,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -25,6 +32,7 @@ import {
 } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
+import { getClaimedOffer } from "../utils/priceUtils";
 
 /* ================= ROUTE ================= */
 
@@ -51,6 +59,28 @@ type AddOn = {
   tax_percent?: number | null;
   max_quantity?: number | null; // max times this addon can be added (from db)
   is_active?: boolean; // only show addon if true
+};
+
+type Profile = {
+  full_name: string;
+  email?: string;
+  phone: string;
+  address?: string;
+  pincode?: string;
+};
+
+type Policies = {
+  user_policies: string;
+  terms_and_conditions: string;
+};
+
+const formatDisplayPhone = (phone: string | undefined | null) => {
+  if (!phone) return "";
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length === 12 && digits.startsWith("91")) {
+    return digits.slice(2);
+  }
+  return digits.length > 10 ? digits.slice(-10) : digits;
 };
 
 /**
@@ -124,6 +154,58 @@ const today = new Date();
 
 /* ================= HELPERS ================= */
 
+const normalizeCategory = (catStr?: string) => {
+  if (!catStr) return "";
+  let c = String(catStr).toUpperCase().trim().replace(/_/g, " ");
+  if (c.includes("BATHROOM")) return "BATHROOM";
+  if (c.includes("KITCHEN UTENSIL") || c.includes("UTENSIL")) return "KITCHEN_UTENSIL_CLEANING";
+  if (c.includes("KITCHEN")) return "KITCHEN";
+  if (c.includes("DEEP CLEANING")) return "DEEP CLEANING";
+  if (c.includes("BALCONY")) return "BALCONY CLEANING";
+  if (c.includes("CLOTHES FOLDING") || c.includes("FOLDING")) return "CLOTHES_FOLDING";
+  if (c.includes("CLOTHES IRONING") || c.includes("IRONING")) return "CLOTHES_IRONING";
+  if (c.includes("FLOOR MOPPING") || c.includes("MOPPING")) return "FLOOR_MOPPING";
+  return c;
+};
+
+const parseDurationToMinutes = (duration?: any): number => {
+  if (!duration) return 0;
+  if (typeof duration === "number") return duration;
+
+  const str = String(duration).trim().toLowerCase();
+  if (/^\d+$/.test(str)) return Number(str);
+
+  let total = 0;
+  const hrMatch = str.match(/(\d+(?:\.\d+)?)\s*hr/);
+  if (hrMatch) total += parseFloat(hrMatch[1]) * 60;
+
+  let remaining = str;
+  if (hrMatch) {
+    remaining = str.replace(/.*hr[s]?/, "");
+  }
+
+  const minMatch = remaining.match(/(\d+)/);
+  if (minMatch) total += Number(minMatch[1]);
+
+  return Math.round(total);
+};
+
+const timeToMinutes = (timeStr?: string) => {
+  if (!timeStr) return 0;
+  const normalized = String(timeStr).toLowerCase().trim();
+  const isPm = normalized.includes("pm");
+  const timePart = normalized.replace(/[ap]m/g, "").trim();
+  if (!timePart) return 0;
+
+  let [h, m] = timePart.split(":").map(Number);
+  m = m || 0;
+
+  if (isPm && h !== 12) h += 12;
+  if (!isPm && h === 12) h = 0;
+
+  return h * 60 + m;
+};
+
 const isPastDate = (year: number, month: number, day: number) => {
   const d = new Date(year, month, day);
   const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -175,63 +257,50 @@ const isTimeSlotValid = (
 
   const slotDate = new Date(year, month, day, hours, minutes);
   const now = new Date();
-  const cutoff = new Date(now.getTime() + 90 * 60000); // Now + 1 hour 30 mins
+  const cutoff = new Date(now.getTime() + 90 * 60000); // Now + 90 mins
 
   // 1. Basic delay check (Now + 90 mins)
   if (slotDate <= cutoff) return false;
 
   // 2. Service-specific last booking time check
-  if (serviceTimeRules.length > 0 && selectedServices.length > 0) {
-    const selectedServiceNames = selectedServices.map(s => s.title.toLowerCase().trim());
-    const selectedServiceTypes = selectedServices.map(s => (s.service_type || "").toLowerCase().trim());
-    const matchingRules = serviceTimeRules.filter(rule => {
-      const ruleServiceName = String(rule.service_name || rule.service || "").toLowerCase().trim();
-      if (!ruleServiceName) return false;
+  if (selectedServices && selectedServices.length > 0) {
+    const firstService = selectedServices[0];
+    const selectedCategoryNorm = normalizeCategory(
+      firstService?.service_type || (firstService as any)?.category || firstService?.title
+    );
+    const selectedServiceNames = selectedServices.map((s) => (s.title || "").toLowerCase().trim());
+    const slotMinutesTotal = hours * 60 + minutes;
 
-      // 1. Match against service_type (category) exactly
-      if (selectedServiceTypes.some(type => type && type === ruleServiceName)) return true;
-
-      // 2. Match against title strictly (no keyword splitting)
-      return selectedServiceNames.some(name => {
-        return name.includes(ruleServiceName) || ruleServiceName.includes(name);
-      });
-    });
-
-    if (matchingRules.length > 0) {
-      let earliestLimitInMinutes: number | null = null;
-
-      matchingRules.forEach(rule => {
-        const lbTimeRaw = rule.last_booking_time;
-        if (!lbTimeRaw) return;
-
-        const normalized = String(lbTimeRaw).toLowerCase().trim();
-        const lbModifier = normalized.includes("pm") ? "pm" : "am";
-        const timePart = normalized.replace(/[ap]m/g, "").trim();
-
-        let lbHours = 0;
-        let lbMinutes = 0;
-
-        if (timePart.includes(":")) {
-          const parts = timePart.split(":").map(Number);
-          lbHours = parts[0] || 0;
-          lbMinutes = parts[1] || 0;
-        } else {
-          lbHours = Number(timePart) || 0;
+    if (serviceTimeRules && serviceTimeRules.length > 0) {
+      const matchingRules = serviceTimeRules.filter((rule) => {
+        const ruleCategoryNorm = normalizeCategory(rule.service_name || rule.service || rule.category);
+        if (selectedCategoryNorm && ruleCategoryNorm && selectedCategoryNorm === ruleCategoryNorm) {
+          return true;
         }
-
-        if (lbModifier === "pm" && lbHours < 12) lbHours += 12;
-        if (lbModifier === "am" && lbHours === 12) lbHours = 0;
-
-        const limitInMinutes = lbHours * 60 + lbMinutes;
-        if (earliestLimitInMinutes === null || limitInMinutes < earliestLimitInMinutes) {
-          earliestLimitInMinutes = limitInMinutes;
-        }
+        const ruleServiceName = String(rule.service_name || rule.service || "").toLowerCase().trim();
+        if (!ruleServiceName) return false;
+        return selectedServiceNames.some((name) => name.includes(ruleServiceName) || ruleServiceName.includes(name));
       });
 
-      if (earliestLimitInMinutes !== null) {
-        const slotMinutesTotal = hours * 60 + minutes;
-        if (slotMinutesTotal > earliestLimitInMinutes) {
-          return false;
+      if (matchingRules.length > 0) {
+        let earliestLimitInMinutes: number | null = null;
+
+        matchingRules.forEach((rule) => {
+          const lbTimeRaw = rule.last_booking_time;
+          if (!lbTimeRaw) return;
+
+          const limitInMinutes = timeToMinutes(String(lbTimeRaw));
+          if (limitInMinutes > 0) {
+            if (earliestLimitInMinutes === null || limitInMinutes < earliestLimitInMinutes) {
+              earliestLimitInMinutes = limitInMinutes;
+            }
+          }
+        });
+
+        if (earliestLimitInMinutes !== null) {
+          if (slotMinutesTotal > earliestLimitInMinutes) {
+            return false;
+          }
         }
       }
     }
@@ -285,6 +354,11 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const [editServices, setEditServices] =
     useState<SelectedService[]>(services);
 
+  useEffect(() => {
+    // ❌ Removed applyClaimedOfferToSchedule that modifies service prices directly.
+    // We now apply it as a coupon code automatically in CheckoutScreen.
+  }, []);
+
   const [allServices, setAllServices] = useState<Service[]>([]);
 
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
@@ -304,12 +378,270 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const [selectedAddonDetail, setSelectedAddonDetail] = useState<AddOn | null>(null);
   const [addons, setAddons] = useState<AddOn[]>([]);
 
-  // Dynamic schedule config from Supabase
+  // Dynamic schedule config & capacity state from Supabase
   const [timeSlots, setTimeSlots] = useState<string[]>(DEFAULT_TIMES);
+  const [timeSlotsConfig, setTimeSlotsConfig] = useState<any[]>([]);
   const [dateTimeSlotsConfig, setDateTimeSlotsConfig] = useState<Record<string, string[]>>({});
+  const [rawDateTimeSlotsConfig, setRawDateTimeSlotsConfig] = useState<Record<string, any[]>>({});
+  const [dateBookings, setDateBookings] = useState<any[]>([]);
+  const [categoryStaffCount, setCategoryStaffCount] = useState<number>(1);
   const [availableYears, setAvailableYears] = useState<number[]>(DEFAULT_YEARS);
   const [serviceTimeRules, setServiceTimeRules] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Service Address & Profile State
+  const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [manualAddress, setManualAddress] = useState("");
+  const [pincode, setPincode] = useState("");
+  const [bookingLatitude, setBookingLatitude] = useState<number | null>(null);
+  const [bookingLongitude, setBookingLongitude] = useState<number | null>(null);
+  const [fetchingLocation, setFetchingLocation] = useState(false);
+  const [isAddressSummaryMode, setIsAddressSummaryMode] = useState(false);
+  const [hasUsedLocationFetch, setHasUsedLocationFetch] = useState(false);
+
+  // Pincode Verification State
+  const [isPincodeServiceable, setIsPincodeServiceable] = useState<boolean>(false);
+  const [checkingPincode, setCheckingPincode] = useState<boolean>(false);
+
+
+
+  // Custom Alert Modal State
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    title: string;
+    message: string;
+    type: 'error' | 'info' | 'warning';
+  }>({ title: '', message: '', type: 'error' });
+
+  // Manual Geocode Helper
+  const handleManualGeocode = async (addressToGeocode: string) => {
+    if (!addressToGeocode || !addressToGeocode.trim()) return null;
+    try {
+      const geoResults = await Location.geocodeAsync(addressToGeocode);
+      if (geoResults && geoResults.length > 0) {
+        const { latitude, longitude } = geoResults[0];
+        setBookingLatitude(latitude);
+        setBookingLongitude(longitude);
+        return { latitude, longitude };
+      }
+    } catch (err) {
+      console.log("Geocoding failed for:", addressToGeocode, err);
+    }
+    return null;
+  };
+
+  // View on map helper
+  const handleViewOnMap = async () => {
+    let currentLat = bookingLatitude;
+    let currentLng = bookingLongitude;
+
+    if (!currentLat || !currentLng) {
+      const result = await handleManualGeocode(`${manualAddress}, ${pincode}`);
+      if (result) {
+        currentLat = result.latitude;
+        currentLng = result.longitude;
+      }
+    }
+
+    if (!currentLat || !currentLng) {
+      setAlertConfig({
+        title: "Location Missing",
+        message: "Please fetch or enter your address first.",
+        type: "warning"
+      });
+      setShowAlertModal(true);
+      return;
+    }
+
+    const scheme = Platform.select({ ios: 'maps:0,0?q=', android: 'geo:0,0?q=' });
+    const latLng = `${currentLat},${currentLng}`;
+    const label = 'Service Location';
+    const url = Platform.select({
+      ios: `${scheme}${label}@${latLng}`,
+      android: `${scheme}${latLng}(${label})`
+    });
+
+    if (url) {
+      Linking.openURL(url).catch(err => {
+        console.error("Failed to open map:", err);
+      });
+    }
+  };
+
+  // Pincode Serviceability Check
+  const checkPincodeServiceable = async (pin: string) => {
+    const cleanedPin = pin.trim();
+    if (cleanedPin.length !== 6) {
+      setIsPincodeServiceable(false);
+      return;
+    }
+    try {
+      setCheckingPincode(true);
+      const { data, error } = await supabase
+        .from("neatify_service_areas")
+        .select("id")
+        .eq("pincode", cleanedPin)
+        .limit(1);
+
+      if (error) {
+        setIsPincodeServiceable(false);
+        return;
+      }
+      setIsPincodeServiceable(!!(data && data.length > 0));
+    } catch (err) {
+      setIsPincodeServiceable(false);
+    } finally {
+      setCheckingPincode(false);
+    }
+  };
+
+  useEffect(() => {
+    checkPincodeServiceable(pincode);
+  }, [pincode]);
+
+  // Load Profile from Supabase
+  const loadProfile = useCallback(async () => {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return;
+
+    setUserId(data.user.id);
+
+    const { data: profileData, error } = await supabase
+      .from("profile")
+      .select("full_name,email,phone,address,pincode")
+      .eq("id", data.user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Profile load error:", error);
+      setLoadingProfile(false);
+      return;
+    }
+
+    if (profileData) {
+      const cleanedProfile = {
+        ...profileData,
+        phone: formatDisplayPhone(profileData.phone)
+      };
+      setProfile(cleanedProfile);
+      setPincode(profileData.pincode || "");
+
+      if (profileData.address) {
+        const addressWithoutPincode = profileData.address
+          .replace(/\s*-\s*\d{6}\s*$/, "")
+          .trim();
+
+        setManualAddress(addressWithoutPincode);
+
+        handleManualGeocode(`${addressWithoutPincode}, ${profileData.pincode || ""}`);
+      } else {
+        setIsAddressSummaryMode(false);
+      }
+    } else {
+      setIsAddressSummaryMode(false);
+    }
+    setLoadingProfile(false);
+  }, []);
+
+  // Fetch Policies
+  const fetchPolicies = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("app_policies")
+      .select("user_policies, terms_and_conditions")
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      setPolicies(data as Policies);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProfile();
+    fetchPolicies();
+  }, [loadProfile, fetchPolicies]);
+
+  useFocusEffect(
+    useCallback(() => {
+      Location.requestForegroundPermissionsAsync().catch((err) => {
+        console.log("Location permission pre-request failed:", err);
+      });
+      return () => {};
+    }, [])
+  );
+
+  // Fetch Current Location
+  const fetchCurrentLocation = async () => {
+    if (!userId) return;
+
+    const { status } = await Location.requestForegroundPermissionsAsync();
+
+    if (status !== "granted") {
+      setAlertConfig({
+        title: 'Permission Denied',
+        message: 'Location access is required to use this feature',
+        type: 'warning'
+      });
+      setShowAlertModal(true);
+      return;
+    }
+
+    setFetchingLocation(true);
+
+    try {
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      const { latitude, longitude } = location.coords;
+      setBookingLatitude(latitude);
+      setBookingLongitude(longitude);
+
+      try {
+        const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
+
+        if (addressList[0]) {
+          const addr: any = addressList[0];
+          const fullAddr: string = addr.formattedAddress || "";
+
+          if (fullAddr) {
+            const parts = fullAddr.split(",").map((p: string) => p.trim()).filter((p: string) => p);
+            let pinIdx = -1;
+            for (let i = parts.length - 1; i >= 0; i--) {
+              const pinMatch = parts[i].match(/\b(\d{6})\b/);
+              if (pinMatch) {
+                setPincode(pinMatch[1]);
+                pinIdx = i;
+                break;
+              }
+            }
+            if (pinIdx === -1 && addr.postalCode) setPincode(addr.postalCode);
+            setManualAddress(fullAddr || "");
+            setIsAddressSummaryMode(true);
+            setHasUsedLocationFetch(true);
+          } else {
+            setManualAddress(addr.street || addr.district || addr.subregion || "");
+            if (addr.postalCode) setPincode(addr.postalCode);
+            setIsAddressSummaryMode(false);
+          }
+        }
+      } catch (geoErr) {
+        console.log("Geocoding failed:", geoErr);
+      }
+    } catch (err) {
+      console.error("Location fetch error:", err);
+      setAlertConfig({
+        title: 'Location Error',
+        message: 'Could not fetch your location. Please try again or enter manually.',
+        type: 'error'
+      });
+      setShowAlertModal(true);
+    } finally {
+      setFetchingLocation(false);
+    }
+  };
 
   const calendar = useMemo(() => getCalendarMatrix(year, month), [year, month]);
 
@@ -350,11 +682,11 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
     if (configData) {
       configData.forEach((row: { config_key: string; config_value: any }) => {
         if (row.config_key === "time_slots" && Array.isArray(row.config_value)) {
+          setTimeSlotsConfig(row.config_value);
           const normalized = row.config_value
             .map((slot: any) => {
               if (typeof slot === "string") return slot.trim();
               if (slot && typeof slot === "object" && slot.value) {
-                if (slot.active === false) return null;
                 const val = String(slot.value).trim();
                 return val || null;
               }
@@ -365,6 +697,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         }
         if (row.config_key === "date_time_slots" && typeof row.config_value === "object" && row.config_value !== null) {
           const rawObj = row.config_value as Record<string, any[]>;
+          setRawDateTimeSlotsConfig(rawObj);
           const normalizedObj: Record<string, string[]> = {};
 
           Object.keys(rawObj).forEach((dateKey) => {
@@ -425,27 +758,372 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
     setRefreshing(false);
   };
 
+  /* ================= HUB LOCATION & STAFF CAPACITY RESOLUTION ================= */
+  const resolveHubFromLocation = useCallback(async (pinStr: string, addressStr: string = "") => {
+    const cleanPin = String(pinStr || "").replace(/\D/g, "").slice(0, 6);
+
+    // 1. Match by pincode in hub_locations table
+    if (cleanPin.length === 6) {
+      const { data: pinLocs, error } = await supabase
+        .from("hub_locations")
+        .select("hub_name, location_name, is_active")
+        .eq("pincode", cleanPin);
+
+      if (!error && pinLocs && pinLocs.length > 0) {
+        if (addressStr) {
+          const addrUpper = addressStr.toUpperCase();
+          const specificMatch = pinLocs.find((hl: any) => {
+            const locName = (hl.location_name || "").toUpperCase().trim();
+            return locName && addrUpper.includes(locName);
+          });
+          if (specificMatch) {
+            return { hubName: specificMatch.hub_name, isActive: specificMatch.is_active !== false };
+          }
+        }
+
+        const activeMatch = pinLocs.find((hl: any) => hl.is_active !== false) || pinLocs[0];
+        return { hubName: activeMatch.hub_name, isActive: activeMatch.is_active !== false };
+      }
+    }
+
+    // 2. Fallback: Match by location_name or address substring in hub_locations table
+    if (addressStr) {
+      const addrUpper = addressStr.toUpperCase();
+      const { data: allHubLocs } = await supabase
+        .from("hub_locations")
+        .select("hub_name, location_name, pincode, is_active");
+
+      if (allHubLocs && allHubLocs.length > 0) {
+        const match = allHubLocs.find((hl: any) => {
+          const locName = (hl.location_name || "").toUpperCase().trim();
+          return locName && addrUpper.includes(locName);
+        });
+
+        if (match) {
+          return { hubName: match.hub_name, isActive: match.is_active !== false };
+        }
+      }
+    }
+
+    return { hubName: null, isActive: false };
+  }, []);
+
+  const fetchHubCategoryStaffCount = useCallback(async (hubName: string, servicesList: any[]) => {
+    if (!hubName || !servicesList || servicesList.length === 0) return 0;
+
+    const firstService = servicesList[0];
+    let rawType = (firstService?.service_type || (firstService as any)?.category || firstService?.title || "").toUpperCase().trim();
+
+    if (!rawType && firstService?.id) {
+      try {
+        const { data: sRow } = await supabase
+          .from("services")
+          .select("service_type, category")
+          .eq("id", firstService.id)
+          .maybeSingle();
+
+        if (sRow) {
+          rawType = (sRow.service_type || sRow.category || "").toUpperCase().trim();
+        }
+      } catch (e) {
+        console.error("Error fetching service_type from DB:", e);
+      }
+    }
+
+    if (!rawType) return 0;
+
+    const normalizedTarget = normalizeCategory(rawType);
+    const spaceType = rawType.replace(/_/g, " ").trim();
+    const underscoreType = rawType.replace(/\s+/g, "_").trim();
+
+    let mappedSpaceType = spaceType;
+    if (mappedSpaceType === "KITCHEN CLEANING") mappedSpaceType = "KITCHEN";
+    if (mappedSpaceType === "FULL HOME DEEP CLEANING") mappedSpaceType = "DEEP CLEANING";
+
+    try {
+      const { data: rows } = await supabase
+        .from("hub_category_counts")
+        .select("count, category, hub")
+        .ilike("hub", hubName.trim());
+
+      if (!rows || rows.length === 0) return 0;
+
+      // Step 1: Canonical normalized category match (Strict exact category token match)
+      let match = rows.find((r: any) => {
+        const catNorm = normalizeCategory(r.category);
+        return catNorm === normalizedTarget;
+      });
+
+      // Step 2: Strict raw string equality as secondary check
+      if (!match) {
+        match = rows.find((r: any) => {
+          const cat = (r.category || "").toUpperCase().trim();
+          return (
+            cat === rawType ||
+            cat === spaceType ||
+            cat === underscoreType ||
+            cat === mappedSpaceType
+          );
+        });
+      }
+
+      // Step 3: Strict word boundary fallback match (never matching substrings like KITCHEN inside KITCHEN_UTENSIL_CLEANING)
+      if (!match) {
+        match = rows.find((r: any) => {
+          const cat = (r.category || "").toUpperCase().trim();
+          const regex = new RegExp(`\\b${rawType.replace(/[^A-Z0-9]/g, "")}\\b`, "i");
+          const cleanCat = cat.replace(/[^A-Z0-9]/g, "");
+          return regex.test(cleanCat) && cleanCat === rawType.replace(/[^A-Z0-9]/g, "");
+        });
+      }
+
+      if (match && match.count !== null && match.count !== undefined) {
+        return Number(match.count);
+      }
+      return 0;
+    } catch (e) {
+      console.error("Error fetching hub category staff count:", e);
+      return 0;
+    }
+  }, []);
 
   // Reset selectedTime when date, month, or year changes
   useEffect(() => {
     setSelectedTime(null);
   }, [selectedDate, month, year]);
 
-  // ✅ Compute available time slots based on selected date
+  // Fetch active bookings for selected date
+  useEffect(() => {
+    const fetchDateBookings = async () => {
+      if (selectedDate === null) {
+        setDateBookings([]);
+        return;
+      }
+      const dStr = String(selectedDate).padStart(2, "0");
+      const mStr = String(month + 1).padStart(2, "0");
+      const dateString = `${year}-${mStr}-${dStr}`;
+
+      try {
+        const { data: bData, error } = await supabase
+          .from("bookings")
+          .select("*");
+
+        if (error) throw error;
+
+        const activeBookings = (bData || []).filter((b: any) => {
+          const ws = String(b.work_status || b.status || "").toUpperCase();
+          const ps = String(b.payment_status || "").toUpperCase();
+          if (ws === "CANCELLED" || ps === "FAILED") return false;
+
+          const bDateStr = String(b.booking_date || "").trim();
+          return bDateStr.includes(dateString) || bDateStr === dateString;
+        });
+
+        setDateBookings(activeBookings);
+      } catch (err) {
+        console.error("Error fetching date bookings:", err);
+      }
+    };
+
+    fetchDateBookings();
+  }, [selectedDate, month, year]);
+
+  // Fetch hub-based staff capacity for selected service category & user location hub
+  const [selectedHubName, setSelectedHubName] = useState<string>("");
+
+  useEffect(() => {
+    const updateCategoryServiceability = async () => {
+      if (selectedServices && selectedServices.length > 0) {
+        const { hubName, isActive } = await resolveHubFromLocation(pincode, manualAddress);
+        if (!hubName || !isActive) {
+          setSelectedHubName(hubName || "");
+          setCategoryStaffCount(0);
+          setIsPincodeServiceable(false);
+          return;
+        }
+
+        setSelectedHubName(hubName);
+        const count = await fetchHubCategoryStaffCount(hubName, selectedServices);
+        setCategoryStaffCount(count);
+        if (pincode.trim().length === 6) {
+          setIsPincodeServiceable(count > 0);
+        }
+      }
+    };
+
+    updateCategoryServiceability();
+  }, [selectedServices, pincode, manualAddress, fetchHubCategoryStaffCount, resolveHubFromLocation]);
+
+  // Compute total service duration in minutes
+  const totalDurationMinutes = useMemo(() => {
+    if (!selectedServices || selectedServices.length === 0) return 45;
+    const dur = selectedServices.reduce((acc, s) => {
+      const singleDur = parseDurationToMinutes(s.duration) || 45;
+      const qty = s.quantity || 1;
+      return acc + singleDur * qty;
+    }, 0);
+    return dur > 0 ? dur : 45;
+  }, [selectedServices]);
+
+  const isDefaultSlotDisabled = useCallback(
+    (timeStr: string) => {
+      const config = timeSlotsConfig.find(
+        (slot) =>
+          (typeof slot === "string" && slot === timeStr) ||
+          (typeof slot === "object" && slot && slot.value === timeStr)
+      );
+      return Boolean(config && typeof config === "object" && config.active === false);
+    },
+    [timeSlotsConfig]
+  );
+
+  /* ================= CAPACITY & TIME SLOT AVAILABILITY CHECK ================= */
+  const isSlotDisabledByCapacity = useCallback(
+    (timeStr: string) => {
+      if (categoryStaffCount <= 0) return true;
+      if (!dateBookings || dateBookings.length === 0) return false;
+
+      const firstService = selectedServices[0];
+      const selectedCategoryNorm = normalizeCategory(
+        firstService?.service_type || (firstService as any)?.category || firstService?.title
+      );
+
+      const candidateStart = timeToMinutes(timeStr);
+      const newDuration = totalDurationMinutes || 45;
+      const candidateEnd = candidateStart + newDuration + 60; // candidate duration + 1 hr buffer
+
+      // 1. Filter active dateBookings matching selected service category
+      const categoryBookings = dateBookings.filter((b) => {
+        let bServices: any[] = [];
+        if (b.services) {
+          try {
+            bServices = typeof b.services === "string" ? JSON.parse(b.services) : b.services;
+          } catch (e) {}
+        }
+        const bFirst = Array.isArray(bServices) && bServices.length > 0 ? bServices[0] : null;
+        const rawCat =
+          bFirst?.service_type ||
+          bFirst?.category ||
+          bFirst?.service_name ||
+          bFirst?.title ||
+          bFirst?.service ||
+          bFirst?.name ||
+          b.service_type ||
+          b.category ||
+          b.service_name ||
+          b.title ||
+          b.service ||
+          "";
+
+        const bCategoryNorm = normalizeCategory(rawCat);
+
+        if (selectedCategoryNorm) {
+          if (!bCategoryNorm || selectedCategoryNorm !== bCategoryNorm) {
+            return false;
+          }
+        }
+        return true;
+      });
+
+      if (categoryBookings.length === 0) return false;
+
+      // 2. Build time intervals for existing category bookings [bStart, bEnd)
+      const bookedWindows = categoryBookings.map((b) => {
+        let bDur = parseDurationToMinutes(b.total_duration || b.service_duration);
+        if (!bDur && b.services) {
+          try {
+            const parsed = typeof b.services === "string" ? JSON.parse(b.services) : b.services;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              bDur = parsed.reduce(
+                (acc: number, s: any) => acc + (parseDurationToMinutes(s.duration) || 45) * (s.quantity || 1),
+                0
+              );
+            }
+          } catch (e) {}
+        }
+        bDur = bDur || 45;
+
+        const bStart = timeToMinutes(b.booking_time);
+        const bEnd = bStart + bDur + 60; // service duration + 1 hr buffer
+        return { start: bStart, end: bEnd };
+      });
+
+      // 3. Check if candidate interval causes staff count to reach/exceed capacity
+      for (let m = candidateStart; m < candidateEnd; m += 15) {
+        let occupiedStaffAtM = 0;
+        for (const w of bookedWindows) {
+          if (m >= w.start && m < w.end) {
+            occupiedStaffAtM++;
+          }
+        }
+        if (occupiedStaffAtM >= categoryStaffCount) {
+          return true; // Slot is DISABLED due to staff capacity
+        }
+      }
+
+      return false; // Slot is ENABLED
+    },
+    [dateBookings, categoryStaffCount, totalDurationMinutes, selectedServices]
+  );
+
+  // Compute available time slots (all times default + custom sorted)
   const availableTimeSlots = useMemo(() => {
-    if (selectedDate === null) return timeSlots;
-
-    // Format: YYYY-MM-DD
-    const dateString = `${year}-${String(month + 1).padStart(2, '0')}-${String(selectedDate).padStart(2, '0')}`;
-
-    // If we have specific slots for this date, use them (even if empty list)
-    if (dateTimeSlotsConfig[dateString]) {
-      return dateTimeSlotsConfig[dateString];
+    let list = [...timeSlots];
+    if (selectedDate !== null) {
+      const dateString = `${year}-${String(month + 1).padStart(2, "0")}-${String(selectedDate).padStart(2, "0")}`;
+      const customTimes = rawDateTimeSlotsConfig[dateString] || [];
+      const customStrings = customTimes
+        .map((slot: any) => (typeof slot === "string" ? slot : slot?.value))
+        .filter(Boolean);
+      list = Array.from(new Set([...list, ...customStrings]));
     }
+    return list.sort((a, b) => timeToMinutes(a) - timeToMinutes(b));
+  }, [selectedDate, month, year, rawDateTimeSlotsConfig, timeSlots]);
 
-    // Otherwise fallback to default slots
-    return timeSlots;
-  }, [selectedDate, month, year, dateTimeSlotsConfig, timeSlots]);
+  const isSlotDisabled = useCallback(
+    (timeStr: string) => {
+      if (selectedDate === null) return true;
+
+      const dateString = `${year}-${String(month + 1).padStart(2, "0")}-${String(selectedDate).padStart(2, "0")}`;
+      const hasCustomTimes = !!rawDateTimeSlotsConfig[dateString];
+
+      let isAdminDisabled = false;
+      if (hasCustomTimes) {
+        const customTimesForDate = rawDateTimeSlotsConfig[dateString] || [];
+        const activeCustomTimes = customTimesForDate
+          .filter((slot: any) => slot && (typeof slot === "string" || slot.active !== false))
+          .map((slot: any) => (typeof slot === "string" ? slot : slot.value))
+          .filter(Boolean);
+
+        isAdminDisabled = !activeCustomTimes.includes(timeStr);
+      } else {
+        isAdminDisabled = isDefaultSlotDisabled(timeStr);
+      }
+
+      const isValidByServiceRules = isTimeSlotValid(
+        year,
+        month,
+        selectedDate,
+        timeStr,
+        selectedServices,
+        serviceTimeRules
+      );
+
+      const isCapacityDisabled = isSlotDisabledByCapacity(timeStr);
+
+      return isAdminDisabled || !isValidByServiceRules || isCapacityDisabled;
+    },
+    [
+      selectedDate,
+      year,
+      month,
+      rawDateTimeSlotsConfig,
+      isDefaultSlotDisabled,
+      selectedServices,
+      serviceTimeRules,
+      isSlotDisabledByCapacity,
+    ]
+  );
 
   // ✅ Filter addons to match the main service's service_type (case-insensitive)
   const filteredAddons = useMemo(() => {
@@ -626,7 +1304,229 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
           />
         }
       >
-        <Text style={[styles.pageTitle, { color: theme.text }]}>{t("schedule.title")}</Text>
+        {/* SERVICE DETAILS */}
+        <View style={styles.headerRow}>
+          <Text style={[styles.section, { color: theme.text, marginTop: 0 }]}>{t("schedule.serviceDetails")}</Text>
+          <Pressable onPress={() => setShowSummary(true)}>
+            <Text style={[styles.edit, { color: theme.text }]}>{t("schedule.edit")}</Text>
+          </Pressable>
+        </View>
+
+        {selectedServices.map((s: SelectedService) => (
+          <View key={s.id} style={[styles.serviceCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <Text style={[styles.bold, { color: theme.text }]}>
+              {s.title}
+              {s.quantity && s.quantity > 1 ? ` (x${s.quantity})` : ""}
+            </Text>
+
+            {/* ✅ Pricing Display - Calculate total based on quantity */}
+            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>
+                ₹{(parseFloat(s.price.replace(/[^\d]/g, "")) * (s.quantity || 1)).toLocaleString("en-IN")}
+              </Text>
+
+              {(s.discount_label || (s.discount_percent && Number(s.discount_percent) > 0)) ? (
+                <View style={{ backgroundColor: "#E9F7EF", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                  <Text style={{ color: "#1E7E34", fontWeight: "700", fontSize: 10 }}>
+                    {s.discount_label || `${s.discount_percent}% off`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+
+            <Text style={[styles.meta, { color: theme.textLight }]}>
+              {selectedDate && selectedTime
+                ? `${selectedDayName}, ${selectedDate} ${MONTHS[month]} ${year} at ${selectedTime}`
+                : ""}
+            </Text>
+            <Text style={[styles.meta, { color: theme.textLight }]}>{s.duration}</Text>
+          </View>
+        ))}
+
+        {/* SERVICE ADDRESS */}
+        <Text style={[styles.sectionHeading, { color: theme.text, marginTop: 24, marginBottom: 12 }]}>{t("checkout.serviceAddress")}</Text>
+
+        <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+          {/* User Details */}
+          <View style={{ marginBottom: 12 }}>
+            <Text style={[styles.label, { color: theme.text }]}>{t("checkout.name")}</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+              value={profile?.full_name || ""}
+              placeholderTextColor={theme.textLight}
+              placeholder="Enter your name"
+              onChangeText={(text) =>
+                setProfile((prev) => (prev ? { ...prev, full_name: text } : { full_name: text, phone: "" }))
+              }
+            />
+
+            <Text style={[styles.label, { color: theme.text }]}>{t("checkout.phone")}</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+              value={profile?.phone || ""}
+              onChangeText={(text) => {
+                const onlyDigits = text.replace(/\D/g, "");
+                setProfile((prev) => (prev ? { ...prev, phone: onlyDigits } : { full_name: "", phone: onlyDigits }));
+              }}
+              keyboardType="phone-pad"
+              maxLength={10}
+              placeholder="10-digit mobile number"
+              placeholderTextColor={theme.textLight}
+            />
+          </View>
+
+          {/* Address Inputs */}
+          <View style={{ marginTop: 8 }}>
+            <View style={[styles.addressSection, { backgroundColor: theme.background, borderColor: theme.border }]}>
+              {/* SMART ADDRESS CARD */}
+              {/* SMART ADDRESS CARD */}
+              <View style={[styles.summaryCard, { backgroundColor: theme.surfaceVariant }]}>
+                <View style={styles.summaryContent}>
+                  <Pressable
+                    style={[styles.locationIconCircle, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={handleViewOnMap}
+                  >
+                    <Ionicons name="location" size={20} color={theme.text} />
+                  </Pressable>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.summaryTitle, { color: theme.textLight }]}>Selected Location</Text>
+                    <Text style={[styles.summaryText, { color: theme.text }]}>
+                      {manualAddress || pincode ? `${manualAddress}${pincode ? " - " + pincode : ""}` : "No Address Provided"}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={[styles.editButton, { backgroundColor: theme.background, borderColor: theme.border }]}
+                    onPress={() => setIsAddressSummaryMode(false)}
+                  >
+                    <Ionicons name="create-outline" size={18} color={theme.text} />
+                    <Text style={[styles.editButtonText, { color: theme.text }]}>{manualAddress || pincode ? "Edit" : "Add"}</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              {/* ADDRESS EDIT MODAL POPUP */}
+              <Modal visible={!isAddressSummaryMode} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setIsAddressSummaryMode(true)}>
+                <View style={styles.pickerOverlay}>
+                  <View style={[styles.pickerModal, { width: '90%', maxHeight: '80%', padding: 20, backgroundColor: theme.background }]}>
+                    <Text style={[styles.addTitle, { color: theme.text, marginBottom: 15 }]}>{t("checkout.serviceAddress")}</Text>
+                    
+                    <Text style={[styles.label, { color: theme.text }]}>{t("checkout.fullAddress")}</Text>
+                    <TextInput
+                      style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12, backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+                      value={manualAddress}
+                      onChangeText={setManualAddress}
+                      placeholder="Plot No, Flat No, Building Name, Area, City"
+                      placeholderTextColor={theme.textLight}
+                      multiline
+                      numberOfLines={4}
+                    />
+
+                    <Text style={[styles.label, { color: theme.text, marginTop: 15 }]}>{t("checkout.pincode")}</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
+                      value={pincode}
+                      onChangeText={(text) => {
+                        const onlyDigits = text.replace(/\D/g, "");
+                        setPincode(onlyDigits);
+                      }}
+                      keyboardType="numeric"
+                      maxLength={6}
+                      placeholder="500090"
+                      placeholderTextColor={theme.textLight}
+                    />
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 15 }}>
+                      <Pressable onPress={fetchCurrentLocation} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        {fetchingLocation ? (
+                          <ActivityIndicator size="small" color={theme.primary} />
+                        ) : (
+                          <Ionicons name="location" size={18} color={theme.primary} />
+                        )}
+                        <Text style={{ color: theme.primary, fontWeight: '600' }}>
+                          {fetchingLocation ? "Fetching..." : t("checkout.useLocation")}
+                        </Text>
+                      </Pressable>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 25, gap: 12 }}>
+                      {hasUsedLocationFetch && (
+                        <Pressable
+                          style={{ padding: 12, borderRadius: 8, justifyContent: 'center' }}
+                          onPress={() => setIsAddressSummaryMode(true)}
+                        >
+                          <Text style={{ color: theme.text, fontWeight: "600" }}>Cancel</Text>
+                        </Pressable>
+                      )}
+                      <Pressable
+                        style={{ backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 }}
+                        onPress={async () => {
+                          setIsAddressSummaryMode(true);
+                          setHasUsedLocationFetch(true);
+                          handleManualGeocode(`${manualAddress}, ${pincode}`);
+                        }}
+                      >
+                        <Text style={{ color: '#000', fontWeight: '700' }}>Save Address</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
+            </View>
+
+            {/* PINCODE STATUS BADGE */}
+            {pincode.length === 6 && (
+              <View
+                style={[
+                  styles.serviceStatusBox,
+                  checkingPincode
+                    ? styles.serviceCheckingBox
+                    : isPincodeServiceable
+                      ? styles.serviceAvailableBox
+                      : styles.serviceUnavailableBox,
+                  { marginTop: 12 }
+                ]}
+              >
+                <Ionicons
+                  name={
+                    checkingPincode
+                      ? "time-outline"
+                      : isPincodeServiceable
+                        ? "checkmark-circle"
+                        : "close-circle"
+                  }
+                  size={18}
+                  color={
+                    checkingPincode
+                      ? "#64748b"
+                      : isPincodeServiceable
+                        ? "#10B981"
+                        : "#EF4444"
+                  }
+                />
+
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.serviceStatusText}>
+                    {checkingPincode
+                      ? t("checkout.checking")
+                      : isPincodeServiceable
+                        ? t("checkout.serviceAvailable")
+                        : t("checkout.serviceNotAvailable")}
+                  </Text>
+
+                  {!checkingPincode && (
+                    <Text style={styles.serviceSubText} numberOfLines={1}>
+                      {isPincodeServiceable
+                        ? "You can continue with booking."
+                        : "We will be available soon in your area."}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+
+        <Text style={[styles.pageTitle, { color: theme.text, marginTop: 28 }]}>{t("schedule.title")}</Text>
 
         {/* MONTH / YEAR */}
         <View style={styles.dropdownRow}>
@@ -728,95 +1628,86 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
             <Text style={[styles.section, { color: theme.text }]}>{t("schedule.selectTime")}</Text>
 
             <View style={styles.timeGrid}>
-              {availableTimeSlots
-                .filter((time) => isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules))
-                .map((time) => {
-                  const valid = isTimeSlotValid(year, month, selectedDate, time, selectedServices, serviceTimeRules);
-                  return (
-                    <Pressable
-                      key={time}
-                      disabled={!valid}
-                      onPress={() => setSelectedTime(time)}
+              {availableTimeSlots.map((time) => {
+                const disabled = isSlotDisabled(time);
+                return (
+                  <Pressable
+                    key={time}
+                    disabled={disabled}
+                    onPress={() => setSelectedTime(time)}
+                    style={[
+                      styles.timeBox,
+                      { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
+                      disabled && {
+                        backgroundColor: isDark ? "#2a2a2a" : "#f0f0f0",
+                        borderColor: isDark ? "#333" : "#ddd",
+                        opacity: 0.5,
+                      },
+                      selectedTime === time && styles.selectedTime,
+                    ]}
+                  >
+                    <Text
                       style={[
-                        styles.timeBox,
-                        { backgroundColor: theme.surfaceVariant, borderColor: theme.border },
-                        !valid && { backgroundColor: isDark ? '#2a2a2a' : '#f0f0f0', borderColor: isDark ? '#333' : '#ddd' },
-                        selectedTime === time && styles.selectedTime,
+                        styles.timeText,
+                        { color: theme.text },
+                        disabled && { color: theme.textLight },
+                        selectedTime === time && styles.selectedText,
                       ]}
                     >
-                      <Text
-                        style={[
-                          styles.timeText,
-                          { color: theme.text },
-                          !valid && { color: theme.textLight },
-                          selectedTime === time && styles.selectedText,
-                        ]}
-                      >
-                        {time}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
+                      {time}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </>
         )}
-
-        {/* SERVICE DETAILS */}
-        <View style={styles.headerRow}>
-          <Text style={[styles.section, { color: theme.text }]}>{t("schedule.serviceDetails")}</Text>
-          <Pressable onPress={() => setShowSummary(true)}>
-            <Text style={[styles.edit, { color: theme.text }]}>{t("schedule.edit")}</Text>
-          </Pressable>
-        </View>
-
-        {selectedServices.map((s: SelectedService) => (
-          <View key={s.id} style={[styles.serviceCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            <Text style={[styles.bold, { color: theme.text }]}>
-              {s.title}
-              {s.quantity && s.quantity > 1 ? ` (x${s.quantity})` : ""}
-            </Text>
-
-            {/* ✅ Pricing Display - Calculate total based on quantity */}
-            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>
-                ₹{(parseFloat(s.price.replace(/[^\d]/g, "")) * (s.quantity || 1)).toLocaleString("en-IN")}
-              </Text>
-
-              {(s.discount_label || (s.discount_percent && Number(s.discount_percent) > 0)) ? (
-                <View style={{ backgroundColor: "#E9F7EF", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
-                  <Text style={{ color: "#1E7E34", fontWeight: "700", fontSize: 10 }}>
-                    {s.discount_label || `${s.discount_percent}% off`}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-
-            <Text style={[styles.meta, { color: theme.textLight }]}>
-              {selectedDate && selectedTime
-                ? `${selectedDayName}, ${selectedDate} ${MONTHS[month]} ${year} at ${selectedTime}`
-                : ""}
-            </Text>
-            <Text style={[styles.meta, { color: theme.textLight }]}>{s.duration}</Text>
-          </View>
-        ))}
 
         {/* PROCEED */}
         <Pressable
           disabled={
             !selectedDate ||
             !selectedTime ||
-            selectedServices.length === 0
+            selectedServices.length === 0 ||
+            !profile?.full_name?.trim() ||
+            !profile?.phone?.trim() ||
+            profile.phone.replace(/\D/g, "").length !== 10 ||
+            !manualAddress?.trim() ||
+            pincode.trim().length !== 6 ||
+            checkingPincode ||
+            !isPincodeServiceable
           }
           style={[
             styles.primaryBtn,
-            { backgroundColor: theme.primary },
+            { backgroundColor: theme.primary, marginTop: 20 },
             (!selectedDate ||
               !selectedTime ||
-              selectedServices.length === 0) &&
+              selectedServices.length === 0 ||
+              !profile?.full_name?.trim() ||
+              !profile?.phone?.trim() ||
+              profile.phone.replace(/\D/g, "").length !== 10 ||
+              !manualAddress?.trim() ||
+              pincode.trim().length !== 6 ||
+              checkingPincode ||
+              !isPincodeServiceable) &&
             styles.disabledBtn,
           ]}
-          onPress={() => {
+          onPress={async () => {
             const bookingDateText = `${selectedDayName}, ${selectedDate} ${MONTHS[month]} ${year} at ${selectedTime}`;
+
+            // Save/Update Profile in Supabase
+            if (userId) {
+              const fullAddressStr = `${manualAddress.trim()} - ${pincode.trim()}`;
+              await supabase
+                .from("profile")
+                .update({
+                  full_name: profile?.full_name?.trim(),
+                  phone: profile?.phone?.trim(),
+                  address: fullAddressStr,
+                  pincode: pincode.trim(),
+                })
+                .eq("id", userId);
+            }
 
             navigation.navigate("Checkout", {
               services: selectedServices,
@@ -1490,6 +2381,21 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
           </View>
         </Modal>
       )}
+
+
+
+        {/* Custom Alert Modal */}
+        <Modal visible={showAlertModal} transparent animationType="fade" onRequestClose={() => setShowAlertModal(false)}>
+          <View style={styles.alertOverlay}>
+            <View style={[styles.alertContent, { backgroundColor: theme.background }]}>
+              <Text style={[styles.alertTitle, { color: theme.text }]}>{alertConfig.title}</Text>
+              <Text style={[styles.alertMessage, { color: theme.textLight }]}>{alertConfig.message}</Text>
+              <Pressable style={[styles.alertButton, { backgroundColor: theme.primary }]} onPress={() => setShowAlertModal(false)}>
+                <Text style={[styles.alertButtonText, { color: theme.background }]}>OK</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
     </SafeAreaView>
   );
 }
@@ -1636,13 +2542,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
   },
 
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-
-  modalTitle: { fontSize: 18, fontWeight: "700" },
   close: { fontSize: 18 },
 
   summaryRow: {
@@ -1685,5 +2584,242 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  sectionHeading: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  card: {
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 6,
+    marginTop: 10,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  addressSection: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  summaryCard: {
+    padding: 16,
+  },
+  summaryContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  locationIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  summaryTitle: {
+    fontSize: 12,
+    marginBottom: 2,
+    textTransform: "uppercase",
+  },
+  summaryText: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  editButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 4,
+  },
+  editButtonText: {
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  doneButton: {
+    backgroundColor: "#1e293b",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    gap: 8,
+  },
+  doneButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  secondaryBtn: {
+    borderWidth: 1,
+    padding: 12,
+    borderRadius: 12,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  secondaryBtnText: {
+    fontWeight: "700",
+    fontSize: 14,
+  },
+  serviceStatusBox: {
+    width: "100%",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+  },
+  serviceAvailableBox: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#10B981",
+  },
+  serviceUnavailableBox: {
+    backgroundColor: "#FEF2F2",
+    borderColor: "#EF4444",
+  },
+  serviceCheckingBox: {
+    backgroundColor: "#F1F5F9",
+    borderColor: "#94A3B8",
+  },
+  serviceStatusText: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  serviceSubText: {
+    marginTop: 3,
+    fontSize: 12,
+    color: "#64748b",
+    lineHeight: 16,
+  },
+  checkboxContainer: {
+    marginTop: 20,
+    gap: 12,
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  linkText: {
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "flex-end",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f1f5f9",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+  },
+  modalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "85%",
+    paddingBottom: 20,
+  },
+  modalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    maxHeight: "70%",
+  },
+  modalHeading: {
+    fontSize: 16,
+    fontWeight: "700",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  modalText: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  modalCloseButton: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  modalCloseButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  alertOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  alertContent: {
+    borderRadius: 20,
+    padding: 28,
+    alignItems: "center",
+    width: "100%",
+  },
+  alertTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  alertMessage: {
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  alertButton: {
+    width: "100%",
+    padding: 16,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  alertButtonText: {
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

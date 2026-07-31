@@ -27,6 +27,7 @@ import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { useTheme } from "../context/ThemeContext";
 import { generateReferralCode, validateReferralCode } from "../utils/referralUtils";
+import { setClaimedOffer } from "../utils/priceUtils";
 
 
 export default function LoginScreen(props: any) {
@@ -36,8 +37,14 @@ export default function LoginScreen(props: any) {
   const { theme, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(!props.route?.params?.isRegister);
   const [showPassword, setShowPassword] = useState(false);
+
+  React.useEffect(() => {
+    if (props.route?.params?.isRegister) {
+      setIsLogin(false);
+    }
+  }, [props.route?.params]);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -245,6 +252,14 @@ export default function LoginScreen(props: any) {
                 balance: 0
             })
           ]);
+
+          // Save 40% OFF claimed offer for new user registration
+          await setClaimedOffer({
+            serviceId: null,
+            serviceTitle: null,
+            offerPercentage: 40,
+            claimedAt: new Date().toISOString(),
+          });
 
           // If referred, create the tracking record AND the ₹50 coupon
           if (referrerId) {

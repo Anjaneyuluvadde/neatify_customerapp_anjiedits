@@ -24,6 +24,7 @@ import { supabase } from "../lib/supabase";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
+import { getClaimedOffer } from "../utils/priceUtils";
 
 /* ================= TYPES ================= */
 
@@ -354,6 +355,8 @@ export default function ServiceDetailScreen({ route }: Props) {
 
   const fetchActiveOffer = useCallback(async (currentService: Service | null) => {
     if (!currentService) return;
+
+    // Session-claimed offers are now applied as coupons at checkout.
 
     const { data: offerData } = await supabase
       .from("offers")
