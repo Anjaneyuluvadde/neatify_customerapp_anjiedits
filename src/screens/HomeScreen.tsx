@@ -319,7 +319,7 @@ export default function HomeScreen({ navigation }: any) {
     if (!selectedMainCategoryForSheet) return [];
 
     // Use a map to track unique types AND their first found icon
-    const typeMap = new Map<string, { label: string, value: string, icon: string | null }>();
+    const typeMap = new Map<string, { label: string, value: string, icon: string | null, order?: number }>();
 
     services
       .filter(s => s.main_category_id === selectedMainCategoryForSheet.id)
@@ -356,14 +356,17 @@ export default function HomeScreen({ navigation }: any) {
           result.push({
             label,
             value: label.toUpperCase().replace(/\s+/g, "_"),
-            icon: null
+            icon: null,
+            order: 9999
           });
         }
       });
     }
 
     result.sort((a, b) => {
-      if (a.order !== b.order) return a.order - b.order;
+      const orderA = a.order ?? 9999;
+      const orderB = b.order ?? 9999;
+      if (orderA !== orderB) return orderA - orderB;
       return a.label.localeCompare(b.label);
     });
 

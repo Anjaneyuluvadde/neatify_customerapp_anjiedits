@@ -2,8 +2,21 @@ import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = (process.env.EXPO_PUBLIC_SUPABASE_URL || "").trim();
-const SUPABASE_ANON_KEY = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+const SUPABASE_URL = (
+  process.env.EXPO_PUBLIC_SUPABASE_URL ||
+  process.env.REACT_APP_SUPABASE_URL ||
+  ""
+).trim();
+
+const SUPABASE_ANON_KEY = (
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.REACT_APP_SUPABASE_ANON_KEY ||
+  ""
+).trim();
+
+if (!SUPABASE_URL) {
+  console.warn("⚠️ [Supabase] EXPO_PUBLIC_SUPABASE_URL is missing in environment variables!");
+}
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {

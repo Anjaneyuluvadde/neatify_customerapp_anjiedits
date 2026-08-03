@@ -201,7 +201,7 @@ export default function CompleteProfileScreen() {
                     email: email.trim(),
                     phone: cleanDigits,
                     referral_code: myReferralCode,
-                    referred_by_id: referrerId
+                    referred_by_id: referrerId,
                 }),
                 supabase.from("signup").upsert({
                     id: currentUser?.id,

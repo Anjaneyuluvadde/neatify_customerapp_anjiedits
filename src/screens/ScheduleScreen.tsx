@@ -6,7 +6,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -16,6 +15,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -32,7 +32,6 @@ import {
 } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
-import { getClaimedOffer } from "../utils/priceUtils";
 
 /* ================= ROUTE ================= */
 
@@ -404,6 +403,12 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   // Pincode Verification State
   const [isPincodeServiceable, setIsPincodeServiceable] = useState<boolean>(false);
   const [checkingPincode, setCheckingPincode] = useState<boolean>(false);
+  const [isPincodeInArea, setIsPincodeInArea] = useState<boolean>(false);
+  const [isHubCapacityAvailable, setIsHubCapacityAvailable] = useState<boolean>(true);
+  const [showEmergencyModal, setShowEmergencyModal] = useState<boolean>(false);
+
+  // Policies State
+  const [policies, setPolicies] = useState<Policies | null>(null);
 
 
 
@@ -475,31 +480,42 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
     const cleanedPin = pin.trim();
     if (cleanedPin.length !== 6) {
       setIsPincodeServiceable(false);
+      setIsPincodeInArea(false);
       return;
     }
     try {
       setCheckingPincode(true);
       const { data, error } = await supabase
         .from("neatify_service_areas")
-        .select("id")
-        .eq("pincode", cleanedPin)
+        .select("id, pincode")
+        .ilike("pincode", `%${cleanedPin}%`)
         .limit(1);
 
       if (error) {
-        setIsPincodeServiceable(false);
+        console.log("⚠️ Pincode check DB/RLS error:", error.message);
+        setIsPincodeServiceable(true);
+        setIsPincodeInArea(true);
         return;
       }
-      setIsPincodeServiceable(!!(data && data.length > 0));
+      const inArea = !!(data && data.length > 0);
+      setIsPincodeInArea(inArea);
+      setIsPincodeServiceable(inArea && isHubCapacityAvailable);
     } catch (err) {
-      setIsPincodeServiceable(false);
+      setIsPincodeServiceable(true);
+      setIsPincodeInArea(true);
     } finally {
       setCheckingPincode(false);
     }
   };
 
   useEffect(() => {
-    checkPincodeServiceable(pincode);
-  }, [pincode]);
+    const pinMatch = manualAddress.match(/\b(\d{6})\b/);
+    const pinToCheck = pincode.trim() || (pinMatch ? pinMatch[1] : "");
+    if (pinMatch && !pincode) {
+      setPincode(pinMatch[1]);
+    }
+    checkPincodeServiceable(pinToCheck);
+  }, [pincode, manualAddress]);
 
   // Load Profile from Supabase
   const loadProfile = useCallback(async () => {
@@ -568,7 +584,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
       Location.requestForegroundPermissionsAsync().catch((err) => {
         console.log("Location permission pre-request failed:", err);
       });
-      return () => {};
+      return () => { };
     }, [])
   );
 
@@ -938,21 +954,30 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         if (!hubName || !isActive) {
           setSelectedHubName(hubName || "");
           setCategoryStaffCount(0);
+          setIsHubCapacityAvailable(false);
           setIsPincodeServiceable(false);
+          if (pincode.trim().length === 6 && isPincodeInArea) {
+            setShowEmergencyModal(true);
+          }
           return;
         }
 
         setSelectedHubName(hubName);
         const count = await fetchHubCategoryStaffCount(hubName, selectedServices);
         setCategoryStaffCount(count);
+        const hasStaff = count > 0;
+        setIsHubCapacityAvailable(hasStaff);
         if (pincode.trim().length === 6) {
-          setIsPincodeServiceable(count > 0);
+          setIsPincodeServiceable(hasStaff);
+          if (!hasStaff && isPincodeInArea) {
+            setShowEmergencyModal(true);
+          }
         }
       }
     };
 
     updateCategoryServiceability();
-  }, [selectedServices, pincode, manualAddress, fetchHubCategoryStaffCount, resolveHubFromLocation]);
+  }, [selectedServices, pincode, manualAddress, fetchHubCategoryStaffCount, resolveHubFromLocation, isPincodeInArea]);
 
   // Compute total service duration in minutes
   const totalDurationMinutes = useMemo(() => {
@@ -998,7 +1023,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         if (b.services) {
           try {
             bServices = typeof b.services === "string" ? JSON.parse(b.services) : b.services;
-          } catch (e) {}
+          } catch (e) { }
         }
         const bFirst = Array.isArray(bServices) && bServices.length > 0 ? bServices[0] : null;
         const rawCat =
@@ -1039,7 +1064,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                 0
               );
             }
-          } catch (e) {}
+          } catch (e) { }
         }
         bDur = bDur || 45;
 
@@ -1409,7 +1434,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                 <View style={styles.pickerOverlay}>
                   <View style={[styles.pickerModal, { width: '90%', maxHeight: '80%', padding: 20, backgroundColor: theme.background }]}>
                     <Text style={[styles.addTitle, { color: theme.text, marginBottom: 15 }]}>{t("checkout.serviceAddress")}</Text>
-                    
+
                     <Text style={[styles.label, { color: theme.text }]}>{t("checkout.fullAddress")}</Text>
                     <TextInput
                       style={[styles.input, { height: 100, textAlignVertical: 'top', paddingTop: 12, backgroundColor: theme.surfaceVariant, borderColor: theme.border, color: theme.text }]}
@@ -1475,14 +1500,18 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
             {/* PINCODE STATUS BADGE */}
             {pincode.length === 6 && (
-              <View
+              <Pressable
+                disabled={checkingPincode || isPincodeServiceable || !isPincodeInArea}
+                onPress={() => setShowEmergencyModal(true)}
                 style={[
                   styles.serviceStatusBox,
                   checkingPincode
                     ? styles.serviceCheckingBox
                     : isPincodeServiceable
                       ? styles.serviceAvailableBox
-                      : styles.serviceUnavailableBox,
+                      : isPincodeInArea
+                        ? { backgroundColor: "#FFF3E0", borderColor: "#FFE0B2" }
+                        : styles.serviceUnavailableBox,
                   { marginTop: 12 }
                 ]}
               >
@@ -1492,7 +1521,9 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                       ? "time-outline"
                       : isPincodeServiceable
                         ? "checkmark-circle"
-                        : "close-circle"
+                        : isPincodeInArea
+                          ? "alert-circle"
+                          : "close-circle"
                   }
                   size={18}
                   color={
@@ -1500,7 +1531,9 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                       ? "#64748b"
                       : isPincodeServiceable
                         ? "#10B981"
-                        : "#EF4444"
+                        : isPincodeInArea
+                          ? "#F57C00"
+                          : "#EF4444"
                   }
                 />
 
@@ -1510,18 +1543,22 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                       ? t("checkout.checking")
                       : isPincodeServiceable
                         ? t("checkout.serviceAvailable")
-                        : t("checkout.serviceNotAvailable")}
+                        : isPincodeInArea
+                          ? "No Partners Available Right Now"
+                          : t("checkout.serviceNotAvailable")}
                   </Text>
 
                   {!checkingPincode && (
                     <Text style={styles.serviceSubText} numberOfLines={1}>
                       {isPincodeServiceable
                         ? "You can continue with booking."
-                        : "We will be available soon in your area."}
+                        : isPincodeInArea
+                          ? "Tap for Emergency Booking (+91 7617618567)"
+                          : "We will be available soon in your area."}
                     </Text>
                   )}
                 </View>
-              </View>
+              </Pressable>
             )}
           </View>
         </View>
@@ -2384,18 +2421,127 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
 
 
-        {/* Custom Alert Modal */}
-        <Modal visible={showAlertModal} transparent animationType="fade" onRequestClose={() => setShowAlertModal(false)}>
-          <View style={styles.alertOverlay}>
-            <View style={[styles.alertContent, { backgroundColor: theme.background }]}>
-              <Text style={[styles.alertTitle, { color: theme.text }]}>{alertConfig.title}</Text>
-              <Text style={[styles.alertMessage, { color: theme.textLight }]}>{alertConfig.message}</Text>
-              <Pressable style={[styles.alertButton, { backgroundColor: theme.primary }]} onPress={() => setShowAlertModal(false)}>
-                <Text style={[styles.alertButtonText, { color: theme.background }]}>OK</Text>
-              </Pressable>
-            </View>
+      {/* Custom Alert Modal */}
+      <Modal visible={showAlertModal} transparent animationType="fade" onRequestClose={() => setShowAlertModal(false)}>
+        <View style={styles.alertOverlay}>
+          <View style={[styles.alertContent, { backgroundColor: theme.background }]}>
+            <Text style={[styles.alertTitle, { color: theme.text }]}>{alertConfig.title}</Text>
+            <Text style={[styles.alertMessage, { color: theme.textLight }]}>{alertConfig.message}</Text>
+            <Pressable style={[styles.alertButton, { backgroundColor: theme.primary }]} onPress={() => setShowAlertModal(false)}>
+              <Text style={[styles.alertButtonText, { color: theme.background }]}>OK</Text>
+            </Pressable>
           </View>
-        </Modal>
+        </View>
+      </Modal>
+
+      {/* Emergency Partner Contact Modal Popup */}
+      <Modal
+        visible={showEmergencyModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowEmergencyModal(false)}
+      >
+        <Pressable
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20
+          }}
+          onPress={() => setShowEmergencyModal(false)}
+        >
+          <Pressable
+            style={{
+              backgroundColor: theme.background,
+              borderRadius: 20,
+              padding: 24,
+              width: "100%",
+              maxWidth: 360,
+              alignItems: "center",
+              elevation: 8,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 10
+            }}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: "#FFF3E0",
+                justifyContent: "center",
+                alignItems: "center",
+                marginBottom: 16
+              }}
+            >
+              <Ionicons name="call" size={28} color="#F57C00" />
+            </View>
+
+            <Text
+              style={{
+                fontSize: 18,
+                fontWeight: "800",
+                color: theme.text,
+                textAlign: "center",
+                marginBottom: 10
+              }}
+            >
+              No Partners Available
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 14,
+                color: theme.textLight,
+                textAlign: "center",
+                lineHeight: 20,
+                marginBottom: 20
+              }}
+            >
+              We regret, No partners are available at this moment. Please Contact us +91 7617618567 for emergency booking.
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#F57C00",
+                width: "100%",
+                paddingVertical: 14,
+                borderRadius: 12,
+                flexDirection: "row",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 10
+              }}
+              onPress={() => {
+                Linking.openURL("tel:7617618567").catch(() => {});
+              }}
+            >
+              <Ionicons name="call-outline" size={20} color="#FFF" />
+              <Text style={{ color: "#FFF", fontWeight: "700", fontSize: 15 }}>
+                Call Emergency Support (+91 7617618567)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                paddingVertical: 10,
+                width: "100%",
+                alignItems: "center"
+              }}
+              onPress={() => setShowEmergencyModal(false)}
+            >
+              <Text style={{ color: theme.textLight, fontWeight: "600", fontSize: 14 }}>
+                Close
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -144,11 +144,31 @@ export default function CheckoutScreen({ route }: Props) {
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
 
-  // ✅ Auto-apply Claimed Offer as a Coupon
+  // ✅ Auto-apply Claimed Offer as a Coupon (Only for the selected service)
   useEffect(() => {
     const applyClaimedOfferAsCoupon = async () => {
       const claimed = await getClaimedOffer();
       if (!claimed) return;
+
+      // Check if the offer is tied to a specific service
+      if (claimed.serviceId || claimed.serviceTitle) {
+        const matchesService = checkoutServices.some((s) => {
+          if (claimed.serviceId && s.id === claimed.serviceId) return true;
+          if (
+            claimed.serviceTitle &&
+            (s.title?.toLowerCase().trim() === claimed.serviceTitle?.toLowerCase().trim() ||
+              s.service_type?.toLowerCase().trim() === claimed.serviceTitle?.toLowerCase().trim())
+          ) {
+            return true;
+          }
+          return false;
+        });
+
+        if (!matchesService) {
+          console.log("ℹ️ 40% Welcome Offer is restricted to a different service. Discount not applied.");
+          return;
+        }
+      }
 
       const pct = claimed.offerPercentage || 40;
       setCoupon({
@@ -159,11 +179,11 @@ export default function CheckoutScreen({ route }: Props) {
       });
       setCouponDiscount(pct);
       setCouponApplied(true);
-      setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off` });
+      setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off for ${claimed.serviceTitle || "selected service"}` });
     };
 
     applyClaimedOfferAsCoupon();
-  }, []);
+  }, [checkoutServices]);
 
   // ✅ Wallet state
   const [walletBalance, setWalletBalance] = useState(0);
@@ -250,28 +270,34 @@ export default function CheckoutScreen({ route }: Props) {
 
       const { data, error } = await supabase
         .from("neatify_service_areas")
-        .select("id")
-        .eq("pincode", cleanedPin)
+        .select("id, pincode")
+        .ilike("pincode", `%${cleanedPin}%`)
         .limit(1);
 
       if (error) {
-        console.log("Pincode check error:", error.message);
-        setIsPincodeServiceable(false);
+        console.log("⚠️ Pincode check DB/RLS error:", error.message);
+        // Fallback to true if RLS blocks query so users aren't blocked incorrectly
+        setIsPincodeServiceable(true);
         return;
       }
 
       setIsPincodeServiceable(!!(data && data.length > 0));
     } catch (err) {
       console.log("Pincode check failed:", err);
-      setIsPincodeServiceable(false);
+      setIsPincodeServiceable(true);
     } finally {
       setCheckingPincode(false);
     }
   };
 
   useEffect(() => {
-    checkPincodeServiceable(pincode);
-  }, [pincode]);
+    const pinMatch = manualAddress.match(/\b(\d{6})\b/);
+    const pinToCheck = pincode.trim() || (pinMatch ? pinMatch[1] : "");
+    if (pinMatch && !pincode) {
+      setPincode(pinMatch[1]);
+    }
+    checkPincodeServiceable(pinToCheck);
+  }, [pincode, manualAddress]);
 
   /* ================= FETCH COUPON ================= */
 

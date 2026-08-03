@@ -1,13 +1,15 @@
-import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import { Eye, EyeOff, Gift, Lock, Mail, Phone, User } from "lucide-react-native";
+import { ChevronDown, Eye, EyeOff, Gift, Lock, Mail, Phone, Sparkles, User } from "lucide-react-native";
 import React, { useState } from "react";
 
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -18,16 +20,16 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import NeatifyLogo from "../../assets/images/neatifylogo.png";
 import DarkThemeLogo from "../../assets/images/Dark Theme logo.png";
+import NeatifyLogo from "../../assets/images/neatifylogo.png";
 import { signInWithGoogle } from "../auth/useGoogleAuth";
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
-import { useTheme } from "../context/ThemeContext";
-import { generateReferralCode, validateReferralCode } from "../utils/referralUtils";
 import { setClaimedOffer } from "../utils/priceUtils";
+import { generateReferralCode, validateReferralCode } from "../utils/referralUtils";
 
 
 export default function LoginScreen(props: any) {
@@ -51,6 +53,36 @@ export default function LoginScreen(props: any) {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [referralCode, setReferralCode] = useState("");
+
+  // Eligible Services for 40% OFF Dropdown
+  const [eligibleServices, setEligibleServices] = useState<any[]>([]);
+  const [selectedService, setSelectedService] = useState<any | null>(null);
+  const [showServiceDropdown, setShowServiceDropdown] = useState(false);
+
+  React.useEffect(() => {
+    fetchEligibleServices();
+  }, []);
+
+  const fetchEligibleServices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("services")
+        .select("id, title, service_type, price, is_welcome_offer_eligible")
+        .eq("is_welcome_offer_eligible", true)
+        .order("sort_order", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching eligible services:", error);
+        setEligibleServices([]);
+        return;
+      }
+
+      setEligibleServices(data || []);
+    } catch (err) {
+      console.log("Error fetching eligible services:", err);
+      setEligibleServices([]);
+    }
+  };
 
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -160,6 +192,16 @@ export default function LoginScreen(props: any) {
           return;
         }
 
+        if (eligibleServices.length > 0 && !selectedService) {
+          showAlert({
+            type: "warning",
+            title: "Select Service",
+            message: "Please select a service for your 40% OFF discount."
+          });
+          setLoading(false);
+          return;
+        }
+
         if (!isValidPassword(password)) {
           showAlert({
             type: "error",
@@ -174,12 +216,12 @@ export default function LoginScreen(props: any) {
         // Validate Referral Code if provided
         let referrerId = null;
         if (referralCode.trim()) {
-            referrerId = await validateReferralCode(referralCode.trim());
-            if (!referrerId) {
-                showAlert({ type: "warning", title: "Invalid Referral", message: "The referral code you entered is invalid. You can continue without it." });
-                setLoading(false);
-                return;
-            }
+          referrerId = await validateReferralCode(referralCode.trim());
+          if (!referrerId) {
+            showAlert({ type: "warning", title: "Invalid Referral", message: "The referral code you entered is invalid. You can continue without it." });
+            setLoading(false);
+            return;
+          }
         }
         if (!isValidEmail(email)) {
           showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
@@ -230,7 +272,9 @@ export default function LoginScreen(props: any) {
         // Upsert profile and signup tables immediately so completeness check passes
         if (authUser) {
           const myReferralCode = generateReferralCode(fullName.trim());
-          
+          const selectedServiceTitle = selectedService?.title || null;
+          const selectedServiceId = selectedService?.id || null;
+
           await Promise.all([
             supabase.from("profile").upsert({
               id: authUser.id,
@@ -238,25 +282,27 @@ export default function LoginScreen(props: any) {
               email: email.trim(),
               phone: cleanPhone,
               referral_code: myReferralCode,
-              referred_by_id: referrerId
+              referred_by_id: referrerId,
+              service_selected: selectedServiceTitle,
             }),
             supabase.from("signup").upsert({
               id: authUser.id,
               full_name: fullName.trim(),
               email: email.trim(),
               phone: cleanPhone,
+              service_selected: selectedServiceTitle,
             }),
             // Initialize Wallet
             supabase.from("wallet").upsert({
-                user_id: authUser.id,
-                balance: 0
+              user_id: authUser.id,
+              balance: 0
             })
           ]);
 
           // Save 40% OFF claimed offer for new user registration
           await setClaimedOffer({
-            serviceId: null,
-            serviceTitle: null,
+            serviceId: selectedServiceId,
+            serviceTitle: selectedServiceTitle,
             offerPercentage: 40,
             claimedAt: new Date().toISOString(),
           });
@@ -265,27 +311,27 @@ export default function LoginScreen(props: any) {
           if (referrerId) {
             // 1. Referral tracking
             await supabase.from("referrals").insert({
-                referrer_id: referrerId,
-                referred_user_id: authUser.id,
-                status: 'pending',
-                reward_amount: 50
+              referrer_id: referrerId,
+              referred_user_id: authUser.id,
+              status: 'pending',
+              reward_amount: 50
             });
 
             // 2. Create the ₹50 Welcome Coupon for the new user
             const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
             await supabase.from("coupons").insert({
-                coupon_code: welcomeCouponCode,
-                discount_amount: 50,
-                is_used: false,
-                phone_number: cleanPhone // Link to user's phone
+              coupon_code: welcomeCouponCode,
+              discount_amount: 50,
+              is_used: false,
+              phone_number: cleanPhone // Link to user's phone
             });
-            
+
             // Store in user metadata so Home Screen knows to show the popup
             await supabase.auth.updateUser({
-                data: { 
-                    show_welcome_reward: true,
-                    welcome_coupon_code: welcomeCouponCode
-                }
+              data: {
+                show_welcome_reward: true,
+                welcome_coupon_code: welcomeCouponCode
+              }
             });
           }
         }
@@ -376,7 +422,7 @@ export default function LoginScreen(props: any) {
             />
 
             {/* SIGNUP: Phone Number (no verification) */}
-              {!isLogin && (
+            {!isLogin && (
               <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
                 <Phone size={20} color={theme.textLight} />
                 <Text style={{ marginLeft: 10, fontSize: 16, color: theme.text, fontWeight: '600' }}>+91</Text>
@@ -414,6 +460,44 @@ export default function LoginScreen(props: any) {
                   autoCapitalize="characters"
                 />
               </View>
+            )}
+
+            {/* SIGNUP: Select Service for 40% OFF */}
+            {!isLogin && (
+              eligibleServices.length > 0 ? (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: COLORS.saffron, marginBottom: 6, marginLeft: 2 }}>
+                    🎁 Select Service for 40% OFF:
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.inputContainer,
+                      { backgroundColor: theme.background, borderColor: selectedService ? COLORS.saffron : theme.border }
+                    ]}
+                    onPress={() => setShowServiceDropdown(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Sparkles size={20} color={COLORS.saffron} />
+                    <Text
+                      style={[
+                        styles.input,
+                        { color: selectedService ? theme.text : theme.textLight, textAlignVertical: "center" }
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {selectedService ? selectedService.title : "Select a service for 40% OFF"}
+                    </Text>
+                    <ChevronDown size={20} color={theme.textLight} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={{ marginBottom: 12, padding: 10, backgroundColor: theme.surfaceVariant, borderRadius: 8, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Sparkles size={16} color={theme.textLight} />
+                  <Text style={{ fontSize: 12, color: theme.textLight, fontWeight: "600" }}>
+                    40% Welcome Offer is currently expired / inactive.
+                  </Text>
+                </View>
+              )
             )}
 
             {/* PASSWORD */}
@@ -471,8 +555,8 @@ export default function LoginScreen(props: any) {
               )}
             </TouchableOpacity>
 
-            {/* GOOGLE */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginVertical: 10 }}>
+            {/* DIVIDER */}
+            <View style={{ flexDirection: "row", alignItems: "center", marginVertical: 20 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
               <Text style={{ marginHorizontal: 10, color: theme.textLight, fontSize: 12 }}>OR</Text>
               <View style={{ flex: 1, height: 1, backgroundColor: theme.border }} />
@@ -514,6 +598,55 @@ export default function LoginScreen(props: any) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Service Selection Dropdown Modal */}
+      <Modal
+        visible={showServiceDropdown}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowServiceDropdown(false)}
+      >
+        <Pressable style={dropdownStyles.overlay} onPress={() => setShowServiceDropdown(false)}>
+          <View style={[dropdownStyles.container, { backgroundColor: theme.background }]}>
+            <View style={[dropdownStyles.header, { borderBottomColor: theme.border }]}>
+              <Text style={[dropdownStyles.title, { color: theme.text }]}>Choose Service for 40% OFF 🎉</Text>
+              <TouchableOpacity onPress={() => setShowServiceDropdown(false)}>
+                <Ionicons name="close" size={24} color={theme.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+              {eligibleServices.map((svc) => {
+                const isSelected = selectedService?.id === svc.id;
+                return (
+                  <TouchableOpacity
+                    key={svc.id}
+                    style={[
+                      dropdownStyles.item,
+                      { borderBottomColor: theme.border },
+                      isSelected && { backgroundColor: COLORS.saffron + "15" }
+                    ]}
+                    onPress={() => {
+                      setSelectedService(svc);
+                      setShowServiceDropdown(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={[dropdownStyles.itemTitle, { color: theme.text }]}>{svc.title}</Text>
+                      {svc.service_type && (
+                        <Text style={{ fontSize: 12, color: theme.textLight, marginTop: 2 }}>{svc.service_type}</Text>
+                      )}
+                    </View>
+                    <View style={[dropdownStyles.badge, { backgroundColor: COLORS.saffron + "20" }]}>
+                      <Text style={{ color: COLORS.saffron, fontWeight: "800", fontSize: 12 }}>40% OFF</Text>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -536,10 +669,10 @@ function Input({ icon, placeholder, value, onChange, theme }: any) {
 function PolicyRow({ label, isMet, theme }: { label: string, isMet: boolean, theme: any }) {
   return (
     <View style={styles.policyRow}>
-      <Ionicons 
-        name={isMet ? "checkmark-circle" : "close-circle"} 
-        size={16} 
-        color={isMet ? "#4CAF50" : "#F44336"} 
+      <Ionicons
+        name={isMet ? "checkmark-circle" : "close-circle"}
+        size={16}
+        color={isMet ? "#4CAF50" : "#F44336"}
       />
       <Text style={[styles.policyText, { color: isMet ? "#4CAF50" : theme.textLight }]}>
         {label}
@@ -629,4 +762,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
   },
-});
+});
+
+const dropdownStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  container: {
+    width: "100%",
+    borderRadius: 16,
+    padding: 20,
+    maxHeight: 450,
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    marginBottom: 10,
+  },
+  title: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  item: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    borderBottomWidth: 0.5,
+    borderRadius: 8,
+  },
+  itemTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+});
