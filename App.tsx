@@ -30,6 +30,9 @@ export default function App() {
   };
 
   useEffect(() => {
+    // Flag to prevent re-triggering on token refreshes
+    let hasCheckedOnce = false;
+
     // Helper: check DB + Auth completeness
     // Returns false and redirects if profile is incomplete
     // useNav=true  → reset live navigation (post-mount, e.g. deep links)
@@ -124,8 +127,6 @@ export default function App() {
     initApp();
 
     // 2. Auth state changes — only handle SIGNED_IN once per session
-    // Use a flag to prevent re-triggering on token refreshes
-    let hasCheckedOnce = false;
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         // Reset skip flag when user signs out (after password reset completes)

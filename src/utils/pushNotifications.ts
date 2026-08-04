@@ -47,7 +47,7 @@ export async function registerForPushNotificationsAsync() {
     }
 
     try {
-      const projectId = "bfabbd61-2830-4b59-a336-32826235d2d6";
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId || "38a64c1b-a244-4f07-ae9c-f2e285e307ea";
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     } catch (e) {
       console.error('Error getting push token:', e);

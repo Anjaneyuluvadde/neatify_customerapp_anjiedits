@@ -65,16 +65,21 @@ export default function LoginScreen(props: any) {
 
   const fetchEligibleServices = async () => {
     try {
-      const { data, error } = await supabase
+      let { data, error } = await supabase
         .from("services")
         .select("id, title, service_type, price, is_welcome_offer_eligible")
         .eq("is_welcome_offer_eligible", true)
         .order("sort_order", { ascending: true });
 
-      if (error) {
-        console.error("Error fetching eligible services:", error);
-        setEligibleServices([]);
-        return;
+      if (error || !data || data.length === 0) {
+        // Fallback: fetch all active services if no specific welcome offer flag is set
+        const { data: allServices } = await supabase
+          .from("services")
+          .select("id, title, service_type, price, is_welcome_offer_eligible")
+          .order("sort_order", { ascending: true })
+          .limit(30);
+
+        data = allServices;
       }
 
       setEligibleServices(data || []);
@@ -604,13 +609,27 @@ export default function LoginScreen(props: any) {
         visible={showServiceDropdown}
         transparent
         animationType="fade"
+        statusBarTranslucent={true}
         onRequestClose={() => setShowServiceDropdown(false)}
       >
         <Pressable style={dropdownStyles.overlay} onPress={() => setShowServiceDropdown(false)}>
-          <View style={[dropdownStyles.container, { backgroundColor: theme.background }]}>
+          <Pressable 
+            style={[
+              dropdownStyles.container, 
+              { 
+                backgroundColor: theme.surface || theme.background,
+                borderColor: theme.border,
+                borderWidth: 1,
+              }
+            ]} 
+            onPress={(e) => e.stopPropagation()}
+          >
             <View style={[dropdownStyles.header, { borderBottomColor: theme.border }]}>
               <Text style={[dropdownStyles.title, { color: theme.text }]}>Choose Service for 40% OFF 🎉</Text>
-              <TouchableOpacity onPress={() => setShowServiceDropdown(false)}>
+              <TouchableOpacity 
+                onPress={() => setShowServiceDropdown(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Ionicons name="close" size={24} color={theme.text} />
               </TouchableOpacity>
             </View>
@@ -624,7 +643,7 @@ export default function LoginScreen(props: any) {
                     style={[
                       dropdownStyles.item,
                       { borderBottomColor: theme.border },
-                      isSelected && { backgroundColor: COLORS.saffron + "15" }
+                      isSelected && { backgroundColor: COLORS.saffron + "20" }
                     ]}
                     onPress={() => {
                       setSelectedService(svc);
@@ -632,19 +651,19 @@ export default function LoginScreen(props: any) {
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={[dropdownStyles.itemTitle, { color: theme.text }]}>{svc.title}</Text>
+                      <Text style={[dropdownStyles.itemTitle, { color: theme.text, fontWeight: isSelected ? "800" : "600" }]}>{svc.title}</Text>
                       {svc.service_type && (
                         <Text style={{ fontSize: 12, color: theme.textLight, marginTop: 2 }}>{svc.service_type}</Text>
                       )}
                     </View>
-                    <View style={[dropdownStyles.badge, { backgroundColor: COLORS.saffron + "20" }]}>
+                    <View style={[dropdownStyles.badge, { backgroundColor: COLORS.saffron + "25" }]}>
                       <Text style={{ color: COLORS.saffron, fontWeight: "800", fontSize: 12 }}>40% OFF</Text>
                     </View>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-          </View>
+          </Pressable>
         </Pressable>
       </Modal>
     </SafeAreaView>
@@ -767,21 +786,23 @@ const styles = StyleSheet.create({
 const dropdownStyles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+    zIndex: 9999,
   },
   container: {
     width: "100%",
     borderRadius: 16,
     padding: 20,
     maxHeight: 450,
-    elevation: 5,
+    elevation: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    zIndex: 10000,
   },
   header: {
     flexDirection: "row",
