@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as Location from "expo-location";
+import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -144,45 +145,108 @@ export default function CheckoutScreen({ route }: Props) {
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
 
-  // ✅ Auto-apply Claimed Offer as a Coupon (Only for the selected service)
+  /* ================= TOTALS (PRE-DECLARED FOR EFFECT) ================= */
+
+  const totalPrice = useMemo(
+    () => checkoutServices.reduce((sum, s) => {
+      const qty = s.quantity || 1;
+      return sum + (parsePrice(s.price) * qty);
+    }, 0),
+    [checkoutServices]
+  );
+
+  const totalOriginalPrice = useMemo(
+    () => checkoutServices.reduce((sum, s) => {
+      const qty = s.quantity || 1;
+      if (s.original_price && Number(String(s.original_price).replace(/[^\d.]/g, '')) > 0) {
+        return sum + (Number(String(s.original_price).replace(/[^\d.]/g, '')) * qty);
+      }
+      return sum + (parsePrice(s.price) * qty);
+    }, 0),
+    [checkoutServices]
+  );
+
+  const calculatedCouponDiscountAmount = useMemo(() => {
+    if (!couponApplied || !coupon) return 0;
+    if (coupon.discount_amount && coupon.discount_amount > 0) {
+      return coupon.discount_amount;
+    }
+    const baseForDiscount = totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice;
+    return Number(((baseForDiscount * couponDiscount) / 100).toFixed(2));
+  }, [couponApplied, coupon, totalOriginalPrice, totalPrice, couponDiscount]);
+
+  const effectiveSubtotal = useMemo(() => {
+    if (couponApplied && coupon) {
+      const baseForDiscount = totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice;
+      return Math.max(0, baseForDiscount - calculatedCouponDiscountAmount);
+    }
+    return totalPrice;
+  }, [couponApplied, coupon, totalOriginalPrice, totalPrice, calculatedCouponDiscountAmount]);
+
+  const totalEffectiveSavings = useMemo(() => {
+    const baseOrig = totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice;
+    return Math.max(0, baseOrig - effectiveSubtotal);
+  }, [totalOriginalPrice, totalPrice, effectiveSubtotal]);
+
+  // ✅ Auto-apply Claimed Offer / Active Service Discount as a Coupon
   useEffect(() => {
+    let isMounted = true;
     const applyClaimedOfferAsCoupon = async () => {
       const claimed = await getClaimedOffer();
-      if (!claimed) return;
 
-      // Check if the offer is tied to a specific service
-      if (claimed.serviceId || claimed.serviceTitle) {
-        const matchesService = checkoutServices.some((s) => {
-          if (claimed.serviceId && s.id === claimed.serviceId) return true;
-          if (
-            claimed.serviceTitle &&
-            (s.title?.toLowerCase().trim() === claimed.serviceTitle?.toLowerCase().trim() ||
-              s.service_type?.toLowerCase().trim() === claimed.serviceTitle?.toLowerCase().trim())
-          ) {
-            return true;
+      if (claimed) {
+        if (claimed.serviceId || claimed.serviceTitle) {
+          const matchesService = checkoutServices.some((s) => {
+            if (claimed.serviceId && s.id === claimed.serviceId) return true;
+            if (
+              claimed.serviceTitle &&
+              (s.title?.toLowerCase().trim() === claimed.serviceTitle?.toLowerCase().trim() ||
+                s.service_type?.toLowerCase().trim() === claimed.serviceTitle?.toLowerCase().trim())
+            ) {
+              return true;
+            }
+            return false;
+          });
+
+          if (!matchesService) {
+            console.log("ℹ️ 40% Welcome Offer is restricted to a different service. Discount not applied.");
+            return;
           }
-          return false;
-        });
-
-        if (!matchesService) {
-          console.log("ℹ️ 40% Welcome Offer is restricted to a different service. Discount not applied.");
-          return;
         }
+
+        const pct = claimed.offerPercentage || 40;
+        if (!isMounted) return;
+        setCoupon({
+          id: "claimed_new_user",
+          coupon_code: `NEW${pct}_OFFER`,
+          discount_percentage: pct,
+          discount_amount: 0,
+        });
+        setCouponDiscount(pct);
+        setCouponApplied(true);
+        setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off for ${claimed.serviceTitle || "selected service"}` });
+        return;
       }
 
-      const pct = claimed.offerPercentage || 40;
-      setCoupon({
-        id: "claimed_new_user",
-        coupon_code: `NEW${pct}_OFFER`,
-        discount_percentage: pct,
-        discount_amount: 0,
-      });
-      setCouponDiscount(pct);
-      setCouponApplied(true);
-      setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off for ${claimed.serviceTitle || "selected service"}` });
+      // If no claimed offer, check if any service in checkout has discount_percent > 0 (e.g. 40% OFF)
+      const serviceWithDiscount = checkoutServices.find(s => s.discount_percent && Number(s.discount_percent) > 0);
+      if (serviceWithDiscount && Number(serviceWithDiscount.discount_percent) > 0) {
+        const pct = Number(serviceWithDiscount.discount_percent);
+        if (!isMounted) return;
+        setCoupon({
+          id: "service_discount_offer",
+          coupon_code: serviceWithDiscount.discount_label ? String(serviceWithDiscount.discount_label).toUpperCase().replace(/\s+/g, '') : `OFFER_${pct}%`,
+          discount_percentage: pct,
+          discount_amount: 0,
+        });
+        setCouponDiscount(pct);
+        setCouponApplied(true);
+        setCouponStatus({ type: 'success', message: `Special ${pct}% offer applied!` });
+      }
     };
 
     applyClaimedOfferAsCoupon();
+    return () => { isMounted = false; };
   }, [checkoutServices]);
 
   // ✅ Wallet state
@@ -559,11 +623,12 @@ export default function CheckoutScreen({ route }: Props) {
 
   const applyCoupon = () => {
     if (!coupon) return;
-    setCouponDiscount(coupon.discount_percentage || 0);
+    const discountPct = coupon.discount_percentage || 0;
+    setCouponDiscount(discountPct);
     setCouponApplied(true);
     const msg = coupon.discount_amount && coupon.discount_amount > 0
       ? `Coupon applied! ₹${coupon.discount_amount} off`
-      : `Coupon applied! ${coupon.discount_percentage}% off`;
+      : `Coupon applied! ${discountPct}% off`;
     setCouponStatus({ type: 'success', message: msg });
   };
 
@@ -601,11 +666,12 @@ export default function CheckoutScreen({ route }: Props) {
             discount_percentage: data.discount_percentage || data.discount_p || 0,
             discount_amount: data.discount_amount || 0
           });
-          setCouponDiscount(data.discount_percentage || data.discount_p || 0);
+          const discountPct = data.discount_percentage || data.discount_p || 0;
+          setCouponDiscount(discountPct);
           setCouponApplied(true);
           const msg = data.discount_amount && data.discount_amount > 0
             ? `Coupon applied! ₹${data.discount_amount} off`
-            : `Coupon applied! ${data.discount_percentage || data.discount_p}% off`;
+            : `Coupon applied! ${discountPct}% off`;
           setCouponStatus({ type: "success", message: msg });
         }
       }
@@ -626,25 +692,6 @@ export default function CheckoutScreen({ route }: Props) {
   };
 
   /* ================= TOTALS ================= */
-
-  const totalPrice = useMemo(
-    () => checkoutServices.reduce((sum, s) => {
-      const qty = s.quantity || 1;
-      return sum + (parsePrice(s.price) * qty);
-    }, 0),
-    [checkoutServices]
-  );
-
-  const totalOriginalPrice = useMemo(
-    () => checkoutServices.reduce((sum, s) => {
-      const qty = s.quantity || 1;
-      if (s.original_price && Number(String(s.original_price).replace(/[^\d.]/g, '')) > 0) {
-        return sum + (Number(String(s.original_price).replace(/[^\d.]/g, '')) * qty);
-      }
-      return sum + (parsePrice(s.price) * qty);
-    }, 0),
-    [checkoutServices]
-  );
 
   const totalSavings = useMemo(
     () => totalOriginalPrice - totalPrice,
@@ -684,9 +731,10 @@ export default function CheckoutScreen({ route }: Props) {
         // Fixed amount discount
         finalTotal = Math.max(0, baseTotal - coupon.discount_amount);
       } else if (couponDiscount > 0) {
-        // Percentage discount
-        const discountAmount = (baseTotal * couponDiscount) / 100;
-        finalTotal = baseTotal - discountAmount;
+        // Percentage discount calculated on totalOriginalPrice if present
+        const baseForDiscount = totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice;
+        const discountAmount = (baseForDiscount * couponDiscount) / 100;
+        finalTotal = Math.max(0, baseForDiscount - discountAmount + totalTax);
       }
     }
 
@@ -698,7 +746,7 @@ export default function CheckoutScreen({ route }: Props) {
     }
 
     return finalTotal;
-  }, [totalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance, coupon]);
+  }, [totalPrice, totalOriginalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance, coupon]);
 
   const walletDeductionAmount = useMemo(() => {
     if (!useWallet || walletBalance <= 0) return 0;
@@ -709,12 +757,13 @@ export default function CheckoutScreen({ route }: Props) {
       if (coupon.discount_amount && coupon.discount_amount > 0) {
         finalTotal = Math.max(0, baseTotal - coupon.discount_amount);
       } else if (couponDiscount > 0) {
-        const discountAmount = (baseTotal * couponDiscount) / 100;
-        finalTotal = baseTotal - discountAmount;
+        const baseForDiscount = totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice;
+        const discountAmount = (baseForDiscount * couponDiscount) / 100;
+        finalTotal = Math.max(0, baseForDiscount - discountAmount + totalTax);
       }
     }
     return Math.min(finalTotal, walletBalance);
-  }, [totalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance, coupon]);
+  }, [totalPrice, totalOriginalPrice, totalTax, couponApplied, couponDiscount, useWallet, walletBalance, coupon]);
 
 
   /* ================= PAYMENT ================= */
@@ -872,7 +921,11 @@ export default function CheckoutScreen({ route }: Props) {
 
             coupon_code: couponApplied && coupon ? coupon.coupon_code : null,
             coupon_discount_percentage: couponApplied && coupon ? couponDiscount : 0,
-            coupon_discount_amount: couponApplied && coupon ? Number(((totalPrice + totalTax) * couponDiscount / 100).toFixed(2)) : 0,
+            coupon_discount_amount: couponApplied && coupon
+              ? (coupon.discount_amount && coupon.discount_amount > 0
+                  ? coupon.discount_amount
+                  : Number((((totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice) * couponDiscount) / 100).toFixed(2)))
+              : 0,
           }
         ])
         .select("id")
@@ -1140,31 +1193,45 @@ export default function CheckoutScreen({ route }: Props) {
             <View style={[styles.divider, { backgroundColor: theme.border }]} />
             <Text style={[styles.muted, { color: theme.textLight }]}>{t("checkout.totalDuration")}: {totalDuration}</Text>
 
-            {/* ✅ Original Total (strikethrough if there are savings) */}
-            {totalSavings > 0 ? (
-              <View style={{ marginTop: 8 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-                  <Text style={{ color: theme.textLight, fontSize: 14 }}>{t("checkout.originalTotal")}</Text>
-                  <Text style={{ color: theme.textLight, fontSize: 14, textDecorationLine: "line-through" }}>
-                    ₹{totalOriginalPrice.toLocaleString("en-IN")}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-                  <Text style={{ color: "#1E7E34", fontSize: 14, fontWeight: "600" }}>{t("checkout.youSave")}</Text>
-                  <Text style={{ color: "#1E7E34", fontSize: 14, fontWeight: "600" }}>
-                    ₹{totalSavings.toLocaleString("en-IN")}
-                  </Text>
-                </View>
+            {/* 1. Original Total */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
+              <Text style={{ color: theme.textLight, fontSize: 14 }}>{t("checkout.originalTotal") || "Original Total"}</Text>
+              <Text style={{ color: theme.textLight, fontSize: 14, textDecorationLine: (totalOriginalPrice > totalPrice || couponApplied) ? "line-through" : "none" }}>
+                ₹{(totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice).toLocaleString("en-IN")}
+              </Text>
+            </View>
+
+            {/* 2. Coupon Discount Row */}
+            {couponApplied && (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
+                <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
+                  Coupon ({coupon?.coupon_code})
+                </Text>
+                <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
+                  -₹{calculatedCouponDiscountAmount.toLocaleString("en-IN")}{couponDiscount || coupon?.discount_percentage ? ` (${couponDiscount || coupon?.discount_percentage}% OFF)` : ""}
+                </Text>
+              </View>
+            )}
+
+            {/* 3. Subtotal */}
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>Subtotal</Text>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>
+                ₹{effectiveSubtotal.toLocaleString("en-IN")}
+              </Text>
+            </View>
+
+            {/* 4. You Save */}
+            {totalEffectiveSavings > 0 ? (
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6, backgroundColor: "#ECFDF5", paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6 }}>
+                <Text style={{ color: "#047857", fontSize: 14, fontWeight: "700" }}>🎉 {t("checkout.youSave") || "You Save"}</Text>
+                <Text style={{ color: "#047857", fontSize: 14, fontWeight: "700" }}>
+                  ₹{totalEffectiveSavings.toLocaleString("en-IN")}
+                </Text>
               </View>
             ) : null}
 
-            {/* ✅ Subtotal */}
-            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 8 }}>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>Subtotal</Text>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: theme.text }}>₹{totalPrice.toLocaleString("en-IN")}</Text>
-            </View>
-
-            {/* ✅ Tax */}
+            {/* 5. Tax */}
             {totalTax > 0 && (
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
                 <Text style={{ fontSize: 14, color: theme.textLight }}>Tax</Text>
@@ -1172,21 +1239,7 @@ export default function CheckoutScreen({ route }: Props) {
               </View>
             )}
 
-            {/* ✅ Coupon Discount Row */}
-            {couponApplied && (
-              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
-                <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
-                  Coupon ({coupon?.coupon_code})
-                </Text>
-                <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
-                  {coupon?.discount_amount && coupon.discount_amount > 0
-                    ? `-₹${coupon.discount_amount}`
-                    : `-${couponDiscount}%`}
-                </Text>
-              </View>
-            )}
-
-            {/* ✅ Wallet Discount Row */}
+            {/* Wallet Discount Row */}
             {useWallet && walletDeductionAmount > 0 && (
               <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 6 }}>
                 <Text style={{ fontSize: 14, color: "#065F46", fontWeight: "600" }}>
@@ -1198,9 +1251,9 @@ export default function CheckoutScreen({ route }: Props) {
               </View>
             )}
 
-            {/* ✅ Grand Total */}
+            {/* 6. Amount to Pay */}
             <View style={styles.totalRow}>
-              <Text style={[styles.totalLabel, { color: theme.text }]}>{t("checkout.totalAmount")}</Text>
+              <Text style={[styles.totalLabel, { color: theme.text }]}>Amount to Pay</Text>
               <Text style={styles.totalValue}>₹{parseFloat(grandTotal.toFixed(2)).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
             </View>
           </View>
@@ -1269,7 +1322,7 @@ export default function CheckoutScreen({ route }: Props) {
               <Text style={styles.couponSavingText}>
                 You save ₹{coupon.discount_amount && coupon.discount_amount > 0
                   ? coupon.discount_amount
-                  : ((totalPrice + totalTax) * (coupon.discount_percentage || 0) / 100).toFixed(2)} with this coupon!
+                  : (((totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice) * (coupon.discount_percentage || 0)) / 100).toFixed(2)} with this coupon!
               </Text>
             ) : null}
           </View>
@@ -1656,6 +1709,7 @@ export default function CheckoutScreen({ route }: Props) {
           </AnimatedGradientBorder>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }

@@ -161,14 +161,8 @@ export default function HomeScreen({ navigation }: any) {
           (o) => o.title.toLowerCase() === svc.title.toLowerCase()
         );
         if (matchingOffer && matchingOffer.offer_percentage > 0) {
-          const basePrice = parseFloat(String(svc.price).replace(/[^\d.]/g, "")) || 0;
-          const discountedPrice = Math.round(
-            basePrice - (basePrice * matchingOffer.offer_percentage) / 100
-          );
           return {
             ...svc,
-            price: `₹${discountedPrice}`,
-            original_price: basePrice.toString(),
             discount_label: `${matchingOffer.offer_percentage}% OFF`,
             discount_percent: matchingOffer.offer_percentage,
           };
@@ -545,10 +539,10 @@ export default function HomeScreen({ navigation }: any) {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={promoBannerStyles.titleText}>
-                  New to Neatify? Get <Text style={promoBannerStyles.highlightText}>40% OFF</Text> Your First Service!
+                  New to The Neatify Team? Get <Text style={promoBannerStyles.highlightText}>40% OFF</Text> on Your First Booking!
                 </Text>
                 <Text style={promoBannerStyles.subText}>
-                  Register a new account or mobile number to claim 40% OFF on any home cleaning or service booking!
+                  Register with a new mobile number to enjoy 40% OFF on your first eligible service.
                 </Text>
               </View>
             </View>
