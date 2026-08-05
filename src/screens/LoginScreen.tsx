@@ -621,20 +621,20 @@ export default function LoginScreen(props: any) {
         onRequestClose={() => setShowServiceDropdown(false)}
       >
         <Pressable style={dropdownStyles.overlay} onPress={() => setShowServiceDropdown(false)}>
-          <Pressable 
+          <Pressable
             style={[
-              dropdownStyles.container, 
-              { 
+              dropdownStyles.container,
+              {
                 backgroundColor: theme.surface || theme.background,
                 borderColor: theme.border,
                 borderWidth: 1,
               }
-            ]} 
+            ]}
             onPress={(e) => e.stopPropagation()}
           >
             <View style={[dropdownStyles.header, { borderBottomColor: theme.border }]}>
               <Text style={[dropdownStyles.title, { color: theme.text }]}>Choose Service for 40% OFF 🎉</Text>
-              <TouchableOpacity 
+              <TouchableOpacity
                 onPress={() => setShowServiceDropdown(false)}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >

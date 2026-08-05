@@ -2,7 +2,7 @@
   "expo": {
     "name": "The Neatify Team",
     "slug": "the-neatify-team-app",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "orientation": "portrait",
     "scheme": [
       "neatifynation",
@@ -29,7 +29,7 @@
     "android": {
       "package": "com.theneatifyteam.app",
       "googleServicesFile": "./google-services.json",
-      "versionCode": 8,
+      "versionCode": 9,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION"
@@ -92,8 +92,7 @@
         {
           "android": {
             "minSdkVersion": 24,
-            "compileSdkVersion": 36,
-            "targetSdkVersion": 36
+            "targetSdkVersion": 35
           }
         }
       ],
