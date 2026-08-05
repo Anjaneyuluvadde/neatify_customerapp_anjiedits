@@ -312,6 +312,13 @@ export default function LoginScreen(props: any) {
             claimedAt: new Date().toISOString(),
           });
 
+          const userMetadataUpdate: any = {};
+          if (selectedServiceTitle) {
+            userMetadataUpdate.show_signup_offer_popup = true;
+            userMetadataUpdate.signup_service_title = selectedServiceTitle;
+            userMetadataUpdate.signup_service_id = selectedServiceId;
+          }
+
           // If referred, create the tracking record AND the ₹50 coupon
           if (referrerId) {
             // 1. Referral tracking
@@ -331,12 +338,13 @@ export default function LoginScreen(props: any) {
               phone_number: cleanPhone // Link to user's phone
             });
 
-            // Store in user metadata so Home Screen knows to show the popup
+            userMetadataUpdate.show_welcome_reward = true;
+            userMetadataUpdate.welcome_coupon_code = welcomeCouponCode;
+          }
+
+          if (Object.keys(userMetadataUpdate).length > 0) {
             await supabase.auth.updateUser({
-              data: {
-                show_welcome_reward: true,
-                welcome_coupon_code: welcomeCouponCode
-              }
+              data: userMetadataUpdate
             });
           }
         }

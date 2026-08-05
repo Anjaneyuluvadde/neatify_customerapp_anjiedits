@@ -30,7 +30,7 @@ import { useNotification } from "../hooks/useNotification";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { MainCategory, Service } from "../types/service";
-import { setClaimedOffer } from "../utils/priceUtils";
+import { getClaimedOffer, setClaimedOffer } from "../utils/priceUtils";
 
 const { width, height } = Dimensions.get("window");
 const SLIDER_HEIGHT = height * 0.25; // Increased height to reduce empty space
@@ -106,6 +106,10 @@ export default function HomeScreen({ navigation }: any) {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false);
   const [welcomeCoupon, setWelcomeCoupon] = useState("");
 
+  // ✅ Signup 40% OFF Offer Popup state
+  const [showSignupOfferPopup, setShowSignupOfferPopup] = useState(false);
+  const [signupOfferInfo, setSignupOfferInfo] = useState<{ title: string; id?: string } | null>(null);
+
   const checkWelcomeReward = useCallback(async () => {
     try {
       // Safely get the session without forcing a stressful backend refresh
@@ -133,6 +137,66 @@ export default function HomeScreen({ navigation }: any) {
       console.error("Error checking welcome reward:", err);
     }
   }, []);
+
+  const checkSignupOfferReward = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+
+      const serviceTitle = user?.user_metadata?.signup_service_title;
+      const serviceId = user?.user_metadata?.signup_service_id;
+      const shouldShow = user?.user_metadata?.show_signup_offer_popup;
+
+      if (shouldShow && serviceTitle) {
+        setSignupOfferInfo({ title: serviceTitle, id: serviceId });
+
+        setTimeout(() => {
+          setShowSignupOfferPopup(true);
+        }, 800);
+
+        // Update metadata to NOT show it again on future visits
+        await supabase.auth.updateUser({
+          data: { show_signup_offer_popup: false }
+        });
+      }
+    } catch (err) {
+      console.error("Error checking signup offer reward:", err);
+    }
+  }, []);
+
+  const handleGoToSignupService = useCallback(async () => {
+    setShowSignupOfferPopup(false);
+    if (!signupOfferInfo) return;
+
+    // Search in loaded services list
+    let matchingSvc = services.find(
+      (s) =>
+        (signupOfferInfo.id && s.id === signupOfferInfo.id) ||
+        (signupOfferInfo.title && s.title?.toLowerCase().trim() === signupOfferInfo.title?.toLowerCase().trim())
+    );
+
+    // If not found in memory, query database directly
+    if (!matchingSvc) {
+      try {
+        let query = supabase.from("services").select("*");
+        if (signupOfferInfo.id) {
+          query = query.eq("id", signupOfferInfo.id);
+        } else if (signupOfferInfo.title) {
+          query = query.eq("title", signupOfferInfo.title);
+        }
+        const { data } = await query.maybeSingle();
+        if (data) matchingSvc = data;
+      } catch (e) {
+        console.log("Error querying service for signup offer:", e);
+      }
+    }
+
+    if (matchingSvc) {
+      navigation.navigate("ServiceDetail", { service: matchingSvc });
+    } else {
+      showToast("40% OFF discount saved! Browse services to select your booking.", "info");
+    }
+  }, [signupOfferInfo, services, navigation, showToast]);
 
   // ✅ Category Sheet state
   const [categorySheetVisible, setCategorySheetVisible] = useState(false);
@@ -257,6 +321,7 @@ export default function HomeScreen({ navigation }: any) {
           await Promise.all([fetchMainCategories(), fetchServices()]);
           await Promise.all([fetchHeroBanners(), fetchPopups()]);
           await checkWelcomeReward();
+          await checkSignupOfferReward();
         } catch (err) {
           console.error("Home load error:", err);
         } finally {
@@ -264,7 +329,7 @@ export default function HomeScreen({ navigation }: any) {
         }
       };
       loadAll();
-    }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories, checkWelcomeReward])
+    }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories, checkWelcomeReward, checkSignupOfferReward])
   );
 
   const onRefresh = async () => {
@@ -767,6 +832,70 @@ export default function HomeScreen({ navigation }: any) {
           </View>
         </Pressable>
       </Modal>
+
+      {/* 40% OFF Post-Signup Service Claim Popup */}
+      <Modal visible={showSignupOfferPopup} transparent animationType="slide" onRequestClose={() => setShowSignupOfferPopup(false)}>
+        <Pressable style={popupStyles.overlay} onPress={() => setShowSignupOfferPopup(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={[popupStyles.signupCard, { backgroundColor: theme.background }]}>
+            
+            {/* Header Row */}
+            <View style={popupStyles.signupHeaderRow}>
+              <View style={[popupStyles.offerBadgeTag, { backgroundColor: COLORS.saffron + "20", borderColor: COLORS.saffron }]}>
+                <Ionicons name="sparkles" size={16} color={COLORS.saffron} />
+                <Text style={[popupStyles.offerBadgeText, { color: COLORS.saffron }]}>40% OFF UNLOCKED</Text>
+              </View>
+              <Pressable onPress={() => setShowSignupOfferPopup(false)} style={[popupStyles.iconCloseBtn, { backgroundColor: theme.surfaceVariant || "#F0F0F0" }]}>
+                <Ionicons name="close" size={20} color={theme.text} />
+              </Pressable>
+            </View>
+
+            {/* Icon Banner */}
+            <View style={popupStyles.giftIconContainer}>
+              <Ionicons name="sparkles-sharp" size={42} color={COLORS.saffron} />
+            </View>
+
+            {/* Title */}
+            <Text style={[popupStyles.signupModalTitle, { color: theme.text }]}>
+              Claim Your 40% OFF! 🎉
+            </Text>
+
+            {/* Selected Service Highlight Box */}
+            <View style={[popupStyles.serviceHighlightCard, { backgroundColor: theme.surfaceVariant || "#F8FAFC", borderColor: theme.primary + "40" }]}>
+              <Text style={[popupStyles.serviceHighlightLabel, { color: theme.textLight }]}>
+                Selected Service Discount:
+              </Text>
+              <Text style={[popupStyles.serviceHighlightTitle, { color: theme.primary }]}>
+                {signupOfferInfo?.title || "Selected Service"}
+              </Text>
+              <View style={[popupStyles.discountPill, { backgroundColor: theme.primary }]}>
+                <Text style={popupStyles.discountPillText}>40% OFF Discount Active</Text>
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <TouchableOpacity
+              style={[popupStyles.signupPrimaryBtn, { backgroundColor: theme.primary, marginTop: 10 }]}
+              onPress={handleGoToSignupService}
+              activeOpacity={0.85}
+            >
+              <Text style={popupStyles.signupPrimaryBtnText}>
+                Claim Offer
+              </Text>
+              <Ionicons name="arrow-forward" size={18} color="#FFFFFF" style={{ marginLeft: 6 }} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[popupStyles.signupSecondaryBtn, { borderColor: theme.border || "#E2E8F0" }]}
+              onPress={() => setShowSignupOfferPopup(false)}
+              activeOpacity={0.7}
+            >
+              <Text style={[popupStyles.signupSecondaryBtnText, { color: theme.textLight }]}>
+                Browse Services
+              </Text>
+            </TouchableOpacity>
+          </Pressable>
+        </Pressable>
+      </Modal>
       {/* Floating Go Up Button */}
       {showGoUp && (
         <TouchableOpacity
@@ -872,6 +1001,122 @@ const popupStyles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "800",
     letterSpacing: 1,
+  },
+  signupCard: {
+    width: "88%",
+    padding: 22,
+    borderRadius: 24,
+    alignItems: "center",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+  },
+  signupHeaderRow: {
+    width: "100%",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  offerBadgeTag: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    gap: 6,
+  },
+  offerBadgeText: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  iconCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  giftIconContainer: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: "rgba(244, 196, 48, 0.18)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  signupModalTitle: {
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 14,
+  },
+  serviceHighlightCard: {
+    width: "100%",
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  serviceHighlightLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  serviceHighlightTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  discountPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  discountPillText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+  },
+  signupModalDesc: {
+    fontSize: 13,
+    textAlign: "center",
+    lineHeight: 19,
+    marginBottom: 20,
+  },
+  signupPrimaryBtn: {
+    flexDirection: "row",
+    width: "100%",
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+    elevation: 2,
+  },
+  signupPrimaryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  signupSecondaryBtn: {
+    width: "100%",
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  signupSecondaryBtnText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });
 

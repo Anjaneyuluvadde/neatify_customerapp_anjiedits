@@ -77,7 +77,6 @@
     },
     "plugins": [
       "expo-font",
-      "expo-router",
       [
         "expo-notifications",
         {
@@ -93,6 +92,7 @@
         {
           "android": {
             "minSdkVersion": 24,
+            "compileSdkVersion": 36,
             "targetSdkVersion": 36
           }
         }
@@ -102,9 +102,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "ff581e1b-4533-4d5f-9add-a6c9a6f6b8e7"
+        "projectId": "38a64c1b-a244-4f07-ae9c-f2e285e307ea"
       }
     },
-    "owner": "harini_reddy"
+    "owner": "akshitha0909"
   }
 }
