@@ -111,6 +111,7 @@ function HomeTabStack() {
     <HomeStack.Navigator 
       screenOptions={{ 
         headerShown: false,
+        animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }
       }}
     >
@@ -130,6 +131,7 @@ function BookingsTabStack() {
     <BookingsStack.Navigator 
       screenOptions={{ 
         headerShown: false,
+        animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }
       }}
     >
@@ -230,6 +232,7 @@ function AuthenticatedScreens() {
     <AuthenticatedStack.Navigator 
       screenOptions={{ 
         headerShown: false,
+        animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }
       }}
     >
@@ -268,6 +271,7 @@ export default function AppNavigator({ initialRouteName }: AppNavigatorProps) {
       initialRouteName={initialRouteName as any}
       screenOptions={{ 
         headerShown: false,
+        animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }
       }}
     >

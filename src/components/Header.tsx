@@ -1,119 +1,190 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, DrawerActions } from "@react-navigation/native";
+import { DrawerActions, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import { TextInput, TouchableOpacity, View, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { useLanguage } from "../context/LanguageContext";
-import { useAuthGuard } from "../hooks/useAuthGuard";
 import { useTheme } from "../context/ThemeContext";
-import { COLORS } from "../theme/colors";
+import { useAuthGuard } from "../hooks/useAuthGuard";
+import { supabase } from "../lib/supabase";
 
 type HeaderProps = {
-  searchText?: string;
-  onSearchChange?: (text: string) => void;
+  isCurved?: boolean;
 };
 
-export default function Header({ searchText, onSearchChange }: HeaderProps) {
+export default function Header({ isCurved = false }: HeaderProps) {
   const navigation = useNavigation<any>();
   const { checkAuth } = useAuthGuard();
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
 
+  const [profile, setProfile] = useState<{ full_name: string; email: string } | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) fetchProfile(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profile')
+        .select('full_name, email')
+        .eq('id', userId)
+        .single();
+
+      if (data) {
+        setProfile(data);
+      }
+    } catch (error) {
+      console.error('Error fetching profile for header:', error);
+    }
+  };
 
   const handleMenuPress = () => {
     const drawerNav = navigation.getParent("root-drawer") || navigation;
     drawerNav.dispatch(DrawerActions.toggleDrawer());
   };
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]} pointerEvents="box-none">
-      {/* ✅ TOP ROW */}
-      <View style={styles.topRow} pointerEvents="box-none">
-        {/* ✅ LOGO LEFT */}
-        <View style={{ flex: 1 }} pointerEvents="box-none">
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => navigation.reset({ index: 0, routes: [{ name: "HomeDrawer" }] })}
-          >
-            <Image
-              source={isDark ? require("../../assets/images/Dark Theme logo.png") : require("../../assets/images/neatifylogo.png")}
-              contentFit="contain"
-              style={styles.logo}
-              pointerEvents="none"
-            />
-          </TouchableOpacity>
-        </View>
+  const userName = profile?.full_name || "Anjaneyulu";
 
-        {/* ✅ ICONS RIGHT */}
-        <View style={styles.iconContainer}>
-          <TouchableOpacity
-            onPress={handleMenuPress}
-            activeOpacity={0.8}
-            style={styles.iconButton}
-          >
-            <Ionicons name="menu-outline" size={30} color={theme.text} />
+  return (
+    <View style={[styles.container, isCurved && styles.curved]}>
+      {/* TOP ROW */}
+      <View style={styles.topRow}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() =>
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "HomeDrawer" }],
+            })
+          }
+          style={styles.brandContainer}
+        >
+          <Image
+            source={require("../../assets/images/neatifylogo.png")}
+            contentFit="contain"
+            style={styles.logo}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.rightActions}>
+          <TouchableOpacity style={styles.actionButton}>
+            <Ionicons
+              name="notifications"
+              size={25}
+              color="#111111"
+            />
+
+            <View style={styles.notificationBadge}>
+              <Text style={styles.notificationBadgeText}>
+                2
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.profileButton} onPress={handleMenuPress}>
+            <Ionicons
+              name="person"
+              size={22}
+              color="#111111"
+            />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ✅ SEARCH BOX */}
-      {onSearchChange && (
-        <View style={[styles.searchContainer, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
-          <Ionicons name="search" size={20} color={theme.textLight} />
-
-          <TextInput
-            value={searchText}
-            onChangeText={onSearchChange}
-            placeholder={t("home.searchPlaceholder") || "Search for services..."}
-            placeholderTextColor={theme.textLight}
-            style={[styles.searchInput, { color: theme.text }]}
-            returnKeyType="search"
-          />
-        </View>
-      )}
+      {/* GREETING */}
+      <View style={styles.greetingContainer}>
+        <Text style={styles.greeting}>
+          Good Morning, {userName} 
+        </Text>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingTop: 10,
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: "#FFC928",
+  },
+  curved: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingBottom: 24,
   },
   topRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
+  brandContainer: {
+    justifyContent: "center",
+    marginRight: 8,
+  },
   logo: {
-    width: 160,
-    height: 40,
-    marginLeft: "-8%",
+    width: 125,
+    height: 35,
   },
-  iconContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  iconButton: {
-    padding: 6,
-    borderRadius: 12,
-    backgroundColor: "transparent",
-  },
-  searchContainer: {
-    marginTop: 10,
-    borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    height: 52,
+  rightActions: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
+  actionButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  profileButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 17,
+    height: 17,
+    borderRadius: 9,
+    backgroundColor: "#F4B400",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notificationBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: "#111111",
+  },
+  greetingContainer: {
+    marginTop: 22,
+  },
+  greeting: {
+    fontSize: 16,
     fontWeight: "500",
+    color: "#111111",
   },
 });

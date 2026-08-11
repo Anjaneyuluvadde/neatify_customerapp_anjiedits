@@ -8,6 +8,7 @@ import {
   Dimensions,
   FlatList,
   ImageSourcePropType,
+  InteractionManager,
   Modal,
   Pressable,
   RefreshControl,
@@ -15,6 +16,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -22,6 +24,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
+import HomeHero from "../components/HomeHero";
 import ServiceCard from "../components/ServiceCard";
 import WhyChooseUs from "../components/WhyChooseUs";
 import { useLanguage } from "../context/LanguageContext";
@@ -30,7 +33,7 @@ import { useNotification } from "../hooks/useNotification";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { MainCategory, Service } from "../types/service";
-import { getClaimedOffer, setClaimedOffer } from "../utils/priceUtils";
+import { setClaimedOffer } from "../utils/priceUtils";
 
 const { width, height } = Dimensions.get("window");
 const SLIDER_HEIGHT = height * 0.25; // Increased height to reduce empty space
@@ -316,7 +319,6 @@ export default function HomeScreen({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       const loadAll = async () => {
-        setLoading(true);
         try {
           await Promise.all([fetchMainCategories(), fetchServices()]);
           await Promise.all([fetchHeroBanners(), fetchPopups()]);
@@ -328,7 +330,13 @@ export default function HomeScreen({ navigation }: any) {
           setLoading(false);
         }
       };
-      loadAll();
+
+      // Wait for navigation transition to finish before fetching
+      const interactionPromise = InteractionManager.runAfterInteractions(() => {
+        loadAll();
+      });
+
+      return () => interactionPromise.cancel();
     }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories, checkWelcomeReward, checkSignupOfferReward])
   );
 
@@ -432,6 +440,66 @@ export default function HomeScreen({ navigation }: any) {
     return result;
   }, [services, selectedMainCategoryForSheet]);
 
+  // ✅ New hook to precalculate all subcategories for all main categories to render on HomeScreen
+  const allSubCategoriesByMainCategory = useMemo(() => {
+    const result = new Map<string, { label: string, value: string, icon: string | null, order?: number }[]>();
+
+    mainCategories.forEach(mainCat => {
+      const typeMap = new Map<string, { label: string, value: string, icon: string | null, order?: number }>();
+
+      services
+        .filter(s => s.main_category_id === mainCat.id)
+        .forEach(s => {
+          if (s.service_type) {
+            const type = s.service_type;
+            const existing = typeMap.get(type);
+
+            if (!existing || (!existing.icon && s.category_icon_url)) {
+              typeMap.set(type, {
+                label: type.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+                value: type,
+                icon: s.category_icon_url || existing?.icon || null,
+                order: s.category_order ?? existing?.order ?? 9999
+              });
+            }
+          }
+        });
+
+      const catSubs = Array.from(typeMap.values());
+
+      if (mainCat.name === "Insta Help" || mainCat.name === "Express Home Cleaning") {
+        const instaItems = [
+          "Kitchen Utensil Cleaning",
+          "Clothes Ironing",
+          "Clothes Folding",
+          "Floor Mopping"
+        ];
+
+        instaItems.forEach(label => {
+          if (!catSubs.some(r => r.label === label)) {
+            catSubs.push({
+              label,
+              value: label.toUpperCase().replace(/\s+/g, "_"),
+              icon: null,
+              order: 9999
+            });
+          }
+        });
+      }
+
+      catSubs.sort((a, b) => {
+        const orderA = a.order ?? 9999;
+        const orderB = b.order ?? 9999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.label.localeCompare(b.label);
+      });
+
+      result.set(mainCat.id, catSubs);
+    });
+
+    return result;
+  }, [mainCategories, services]);
+
   const getServicesForCategory = useCallback(
     (categoryValue: string) => {
       const search = (searchText ?? "").trim().toLowerCase();
@@ -532,8 +600,9 @@ export default function HomeScreen({ navigation }: any) {
   }, [heroBanners.length, isUserSwiping]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
-      <StatusBar barStyle={theme.background === "#FFFFFF" ? "dark-content" : "light-content"} />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <SafeAreaView style={{ backgroundColor: "#FFC928", flex: 0 }} edges={["top"]} />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFC928" />
 
       {loading ? (
         <View style={styles.center}><ActivityIndicator size="large" color={COLORS.saffron} /></View>
@@ -556,97 +625,136 @@ export default function HomeScreen({ navigation }: any) {
           contentContainerStyle={{ backgroundColor: theme.background, paddingBottom: 0 }}
         >
           {/* 1. Header (Logo + Search) */}
-          <Header
-            searchText={searchText}
-            onSearchChange={(text) => {
-              setSearchText(text);
-              const match = tabs.find(t => t.value !== "ALL" && t.label.toLowerCase() === text.trim().toLowerCase());
-              if (match) handleCategoryChange(match.value);
-            }}
-          />
+          <Header />
 
           {/* 2. Hero Slider */}
-          {heroBanners.length > 0 && (
-            <View
-              style={{ height: SLIDER_HEIGHT, marginHorizontal: 12, marginTop: 4, borderRadius: 20, overflow: "hidden", backgroundColor: theme.surfaceVariant }}
-            >
-              <FlatList
-                ref={sliderRef}
-                data={heroBanners}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                onMomentumScrollEnd={(e) => setCurrentSlide(Math.round(e.nativeEvent.contentOffset.x / (width - 24)))}
-                onScrollBeginDrag={() => setIsUserSwiping(true)}
-                onScrollEndDrag={() => setIsUserSwiping(false)}
-                renderItem={({ item }) => (
-                  <Pressable
-                    onPress={() => scrollRef.current?.scrollTo({ y: servicesY, animated: true })}
-                    style={{ width: width - 24, height: SLIDER_HEIGHT }}
-                  >
-                    <Image source={item} style={{ width: "100%", height: "100%" }} contentFit="cover" />
-                  </Pressable>
-                )}
-              />
-              <View style={styles.dots} pointerEvents="none">
-                {heroBanners.map((_, i) => (
-                  <View key={i} style={[styles.dot, { backgroundColor: currentSlide === i ? "#fff" : "rgba(255,255,255,0.4)", width: currentSlide === i ? 20 : 8 }]} />
-                ))}
-              </View>
-            </View>
-          )}
+          <HomeHero />
 
           {/* New User Promo Banner (Matching Website Image 1) */}
           <View style={promoBannerStyles.container}>
-            <View style={promoBannerStyles.headerRow}>
-              <View style={promoBannerStyles.sparkleCircle}>
-                <Text style={{ fontSize: 16 }}>✨</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={promoBannerStyles.titleText}>
-                  New to The Neatify Team? Get <Text style={promoBannerStyles.highlightText}>40% OFF</Text> on Your First Booking!
-                </Text>
-                <Text style={promoBannerStyles.subText}>
-                  Register with a new mobile number to enjoy 40% OFF on your first eligible service.
-                </Text>
-              </View>
+            <View style={promoBannerStyles.leftContent}>
+              <Text style={promoBannerStyles.discountText}>40% OFF</Text>
+              <Text style={promoBannerStyles.subTitleText}>On Your First Service</Text>
+              <Text style={promoBannerStyles.descriptionText}>
+                Book now and enjoy professional{"\n"}cleaning at a great price!
+              </Text>
+
+              <TouchableOpacity
+                style={promoBannerStyles.claimBtn}
+                activeOpacity={0.8}
+                onPress={() => navigation.navigate("Login", { isRegister: true })}
+              >
+                <Text style={promoBannerStyles.claimBtnText}>Claim 40% OFF  <Ionicons name="arrow-forward" size={12} color="#0F172A" /></Text>
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={promoBannerStyles.claimBtn}
-              activeOpacity={0.8}
-              onPress={() => navigation.navigate("Login", { isRegister: true })}
-            >
-              <Text style={promoBannerStyles.claimBtnText}>Claim 40% OFF →</Text>
-            </TouchableOpacity>
+            <Image
+              source={require("../../assets/images/bannerimg.png")}
+              style={promoBannerStyles.bannerImage}
+              contentFit="contain"
+            />
+
+            {/* LIMITED TIME OFFER Tag */}
+            <View style={promoBannerStyles.tagContainer}>
+              <Text style={promoBannerStyles.tagText}>LIMITED</Text>
+              <Text style={promoBannerStyles.tagText}>TIME</Text>
+              <Text style={promoBannerStyles.tagText}>OFFER</Text>
+            </View>
+          </View>
+
+          {/* Search Box */}
+          <View style={styles.homeSearchContainer}>
+            <Ionicons name="search" size={20} color={theme.textLight} />
+            <TextInput
+              value={searchText}
+              onChangeText={(text) => {
+                setSearchText(text);
+                const match = tabs.find(t => t.value !== "ALL" && t.label.toLowerCase() === text.trim().toLowerCase());
+                if (match) handleCategoryChange(match.value);
+              }}
+              placeholder={t("home.searchPlaceholder") || "Search for services (Sofa, Bathroom, Kitchen...)"}
+              placeholderTextColor={theme.textLight}
+              style={[styles.homeSearchInput, { color: theme.text }]}
+              returnKeyType="search"
+            />
+            <Ionicons name="mic-outline" size={20} color={theme.text} style={{ marginRight: 10 }} />
+            <Ionicons name="options-outline" size={20} color={theme.text} />
           </View>
 
           {/* 3. Main Category Grid (Explore all services) */}
           {mainCategories.length > 0 && (
             <View style={styles.gridContainer} onLayout={(e) => setServicesY(e.nativeEvent.layout.y)}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Explore all services</Text>
-              <View style={styles.grid}>
-                {mainCategories.map((item) => (
-                  <Pressable
-                    key={item.id}
-                    style={[styles.gridItem, activeMainCategory === item.id && styles.gridItemActive]}
-                    onPress={() => {
-                      setSelectedMainCategoryForSheet(item);
-                      setCategorySheetVisible(true);
-                    }}
-                  >
-                    <View style={[styles.gridIconContainer, { backgroundColor: theme.surfaceVariant || "#F5F7FA" }]}>
-                      {item.icon_url ? (
-                        <Image source={{ uri: item.icon_url }} style={styles.gridIcon} contentFit="cover" />
-                      ) : (
-                        <Ionicons name="apps-outline" size={32} color={theme.primary} />
-                      )}
+              <View>
+                {mainCategories.map((mainCat) => {
+                  const subs = allSubCategoriesByMainCategory.get(mainCat.id) || [];
+                  if (subs.length === 0) return null;
+
+                  return (
+                    <View key={mainCat.id} style={{ marginBottom: 28 }}>
+                      <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text, marginBottom: 16, textAlign: "center" }}>
+                        {mainCat.name}
+                      </Text>
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
+                        {subs.map((cat) => (
+                          <Pressable
+                            key={cat.value}
+                            style={{ width: "33.33%", alignItems: "center", marginBottom: 20, paddingHorizontal: 6 }}
+                            onPress={() => {
+                              navigation.navigate("CategoryDetail", {
+                                category: cat.value,
+                                label: cat.label
+                              });
+                            }}
+                          >
+                            {({ pressed }) => (
+                              <>
+                                <View style={{
+                                  width: "100%",
+                                  aspectRatio: 1,
+                                  borderRadius: 20,
+                                  backgroundColor: "#FFFFFF",
+                                  borderWidth: 2,
+                                  borderColor: pressed ? "#FFC928" : "#F3F4F6", // subtle border default, yellow when pressed
+                                  borderBottomWidth: pressed ? 2 : 6, // 3D physical edge
+                                  borderBottomColor: pressed ? "#FFC928" : "#E5E7EB",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  marginBottom: 8,
+                                  shadowColor: pressed ? "#FFC928" : "#000",
+                                  shadowOffset: { width: 0, height: pressed ? 2 : 6 },
+                                  shadowOpacity: pressed ? 0.4 : 0.08,
+                                  shadowRadius: pressed ? 4 : 8,
+                                  elevation: pressed ? 2 : 4,
+                                  transform: [
+                                    { translateY: pressed ? 4 : 0 }, // Pushes down into the screen
+                                    { scale: pressed ? 0.98 : 1 }
+                                  ],
+                                }}>
+                                  {cat.icon ? (
+                                    <Image source={{ uri: cat.icon }} style={{ width: "65%", height: "65%", opacity: pressed ? 0.8 : 1 }} contentFit="contain" />
+                                  ) : (
+                                    <Ionicons name="apps-outline" size={28} color={theme.primary} />
+                                  )}
+                                </View>
+                                <Text style={{
+                                  fontSize: 12,
+                                  fontWeight: "600",
+                                  color: theme.text,
+                                  textAlign: "center",
+                                  lineHeight: 16,
+                                  opacity: pressed ? 0.7 : 1,
+                                  transform: [{ translateY: pressed ? 2 : 0 }] // Text moves down slightly with the button
+                                }} numberOfLines={2}>
+                                  {cat.label}
+                                </Text>
+                              </>
+                            )}
+                          </Pressable>
+                        ))}
+                      </View>
                     </View>
-                    <Text style={[styles.gridLabel, { color: theme.text }]} numberOfLines={2}>
-                      {item.name}
-                    </Text>
-                  </Pressable>
-                ))}
+                  );
+                })}
               </View>
             </View>
           )}
@@ -837,7 +945,7 @@ export default function HomeScreen({ navigation }: any) {
       <Modal visible={showSignupOfferPopup} transparent animationType="slide" onRequestClose={() => setShowSignupOfferPopup(false)}>
         <Pressable style={popupStyles.overlay} onPress={() => setShowSignupOfferPopup(false)}>
           <Pressable onPress={(e) => e.stopPropagation()} style={[popupStyles.signupCard, { backgroundColor: theme.background }]}>
-            
+
             {/* Header Row */}
             <View style={popupStyles.signupHeaderRow}>
               <View style={[popupStyles.offerBadgeTag, { backgroundColor: COLORS.saffron + "20", borderColor: COLORS.saffron }]}>
@@ -906,12 +1014,36 @@ export default function HomeScreen({ navigation }: any) {
           <Ionicons name="arrow-up" size={24} color={COLORS.saffron} />
         </TouchableOpacity>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
+  homeSearchContainer: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    height: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  homeSearchInput: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: "500",
+  },
   dots: { position: "absolute", bottom: 12, alignSelf: "center", flexDirection: "row", gap: 6 },
   dot: { height: 8, borderRadius: 4 },
   titleRow: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
@@ -1207,69 +1339,78 @@ const goUpStyles = StyleSheet.create({
 
 const promoBannerStyles = StyleSheet.create({
   container: {
-    marginHorizontal: 12,
+    marginHorizontal: 16,
     marginTop: 14,
     marginBottom: 6,
-    backgroundColor: "#161F33",
+    backgroundColor: "#0F172A",
     borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255, 255, 255, 0.1)",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  headerRow: {
+    paddingVertical: 20,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    marginBottom: 12,
+    overflow: "hidden",
   },
-  sparkleCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(255, 255, 255, 0.12)",
+  leftContent: {
+    flex: 0.65,
     justifyContent: "center",
-    alignItems: "center",
-    marginTop: 2,
   },
-  titleText: {
+  discountText: {
+    color: "#FFC928",
+    fontSize: 28,
+    fontWeight: "900",
+    marginBottom: 2,
+    letterSpacing: -0.5,
+  },
+  subTitleText: {
     color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: "800",
-    lineHeight: 20,
+    fontWeight: "700",
+    marginBottom: 8,
   },
-  highlightText: {
-    color: "#FACC15",
-    fontWeight: "900",
-  },
-  subText: {
+  descriptionText: {
     color: "#94A3B8",
     fontSize: 11,
     fontWeight: "500",
-    marginTop: 4,
     lineHeight: 16,
+    marginBottom: 16,
   },
   claimBtn: {
-    backgroundColor: "#FACC15",
+    backgroundColor: "#FFC928",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 24,
-    alignSelf: "flex-end",
+    alignSelf: "flex-start",
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#FACC15",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
   },
   claimBtnText: {
     color: "#0F172A",
-    fontWeight: "900",
-    fontSize: 13,
+    fontWeight: "700",
+    fontSize: 12,
   },
+  bannerImage: {
+    width: "45%",
+    height: "140%",
+    position: "absolute",
+    right: -10,
+    bottom: -15,
+  },
+  tagContainer: {
+    position: "absolute",
+    top: 0,
+    right: 16,
+    backgroundColor: "#FFC928",
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
+    alignItems: "center",
+    zIndex: 10,
+  },
+  tagText: {
+    color: "#0F172A",
+    fontSize: 8,
+    fontWeight: "800",
+    textAlign: "center",
+    lineHeight: 11,
+  }
 });

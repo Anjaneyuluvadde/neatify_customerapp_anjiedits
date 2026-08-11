@@ -354,7 +354,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
-      <Header />
+      <Header isCurved={true} />
       <KeyboardAvoidingView
         style={[styles.container, { backgroundColor: theme.background }]}
         behavior={Platform.OS === "ios" ? "padding" : "height"}

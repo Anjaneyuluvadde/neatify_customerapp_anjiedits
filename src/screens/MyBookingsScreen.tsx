@@ -105,7 +105,7 @@ export default function MyBookingsScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
 
       {/* ── APP HEADER (logo + icons) ── */}
-      <Header />
+      <Header isCurved={true} />
 
       {/* ── FIXED TITLE + TABS ── */}
       <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.border }]}>
