@@ -1,15 +1,16 @@
+import { Ionicons } from "@expo/vector-icons";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useNavigation } from "@react-navigation/native";
-import { Ionicons } from "@expo/vector-icons";
 import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme } from "../context/ThemeContext";
 
 import CustomDrawerContent from "../components/CustomDrawerContent";
+import CustomTabBar from "../components/CustomTabBar";
 import BookingDetailsScreen from "../screens/BookingDetailsScreen";
 import BookingScreen from "../screens/BookingScreen";
+import CategoryDetailScreen from "../screens/CategoryDetailScreen";
 import CheckoutScreen from "../screens/CheckoutScreen";
 import CompleteProfileScreen from "../screens/CompleteProfileScreen";
 import HomeScreen from "../screens/HomeScreen";
@@ -19,11 +20,9 @@ import ProfileScreen from "../screens/ProfileScreen";
 import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
-import CategoryDetailScreen from "../screens/CategoryDetailScreen";
 
-import { Service } from "../types/service";
-import { COLORS } from "../theme/colors";
 import { useAuthGuard } from "../hooks/useAuthGuard";
+import { Service } from "../types/service";
 
 /* ================= TYPES ================= */
 
@@ -108,8 +107,8 @@ const Tab = createBottomTabNavigator();
 function HomeTabStack() {
   const { theme } = useTheme();
   return (
-    <HomeStack.Navigator 
-      screenOptions={{ 
+    <HomeStack.Navigator
+      screenOptions={{
         headerShown: false,
         animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }
@@ -128,8 +127,8 @@ function HomeTabStack() {
 function BookingsTabStack() {
   const { theme } = useTheme();
   return (
-    <BookingsStack.Navigator 
-      screenOptions={{ 
+    <BookingsStack.Navigator
+      screenOptions={{
         headerShown: false,
         animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }
@@ -142,62 +141,31 @@ function BookingsTabStack() {
 }
 
 function MainTabs() {
-  const insets = useSafeAreaInsets();
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
   const { checkAuth } = useAuthGuard();
 
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
         headerShown: false,
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: any;
-          if (route.name === "HomeTab") {
-            iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "MyBookingsTab") {
-            iconName = focused ? "calendar" : "calendar-outline";
-          } else if (route.name === "ProfileTab") {
-            iconName = focused ? "person" : "person-outline";
-          }
-          return <Ionicons name={iconName} size={size} color={color} />;
-        },
-        tabBarActiveTintColor: theme.primary,
-        tabBarInactiveTintColor: isDark ? theme.textLight : "gray",
-        tabBarStyle: {
-          height: 65 + (insets.bottom > 0 ? insets.bottom : 0),
-          paddingBottom: insets.bottom > 0 ? insets.bottom : 12,
-          paddingTop: 8,
-          borderTopWidth: 1,
-          borderTopColor: theme.border,
-          backgroundColor: theme.background,
-          elevation: 8,
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -2 },
-          shadowOpacity: isDark ? 0.3 : 0.1,
-          shadowRadius: 4,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "700",
-          marginBottom: insets.bottom > 0 ? -4 : 4,
-        },
-        sceneContainerStyle: { backgroundColor: theme.background }
-      })}
+        sceneStyle: { backgroundColor: theme.background },
+      }}
     >
-      <Tab.Screen 
-        name="HomeTab" 
-        component={HomeTabStack} 
-        options={{ tabBarLabel: "Home" }} 
+      <Tab.Screen
+        name="HomeTab"
+        component={HomeTabStack}
+        options={{ tabBarLabel: "Home" }}
         listeners={({ navigation }) => ({
           tabPress: () => {
             navigation.navigate("HomeTab", { screen: "HomeMain" });
           },
         })}
       />
-      <Tab.Screen 
-        name="MyBookingsTab" 
-        component={BookingsTabStack} 
-        options={{ tabBarLabel: "Bookings" }} 
+      <Tab.Screen
+        name="MyBookingsTab"
+        component={BookingsTabStack}
+        options={{ tabBarLabel: "Bookings" }}
         listeners={({ navigation }) => ({
           tabPress: async (e) => {
             e.preventDefault();
@@ -208,10 +176,10 @@ function MainTabs() {
           },
         })}
       />
-      <Tab.Screen 
-        name="ProfileTab" 
-        component={ProfileScreen as any} 
-        options={{ tabBarLabel: "Profile" }} 
+      <Tab.Screen
+        name="ProfileTab"
+        component={ProfileScreen as any}
+        options={{ tabBarLabel: "Profile" }}
         listeners={({ navigation }) => ({
           tabPress: async (e) => {
             e.preventDefault();
@@ -229,8 +197,8 @@ function MainTabs() {
 function AuthenticatedScreens() {
   const { theme } = useTheme();
   return (
-    <AuthenticatedStack.Navigator 
-      screenOptions={{ 
+    <AuthenticatedStack.Navigator
+      screenOptions={{
         headerShown: false,
         animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }
@@ -269,7 +237,7 @@ export default function AppNavigator({ initialRouteName }: AppNavigatorProps) {
   return (
     <Stack.Navigator
       initialRouteName={initialRouteName as any}
-      screenOptions={{ 
+      screenOptions={{
         headerShown: false,
         animation: "slide_from_right",
         contentStyle: { backgroundColor: theme.background }

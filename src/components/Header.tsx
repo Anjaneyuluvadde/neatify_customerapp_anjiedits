@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
+import * as Location from "expo-location";
 import React, { useEffect, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
@@ -20,6 +21,7 @@ export default function Header({ isCurved = false }: HeaderProps) {
   const { theme, isDark } = useTheme();
 
   const [profile, setProfile] = useState<{ full_name: string; email: string } | null>(null);
+  const [locationName, setLocationName] = useState<string>("Fetching location...");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -34,8 +36,38 @@ export default function Header({ isCurved = false }: HeaderProps) {
       }
     });
 
+    fetchCurrentLocation();
+
     return () => subscription.unsubscribe();
   }, []);
+
+  const fetchCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setLocationName("Permission denied");
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced,
+      });
+
+      const { latitude, longitude } = location.coords;
+      const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
+
+      if (addressList && addressList.length > 0) {
+        const address = addressList[0];
+        const name = address.city || address.subregion || address.region || "Unknown Location";
+        setLocationName(name);
+      } else {
+        setLocationName("Unknown Location");
+      }
+    } catch (error) {
+      console.error("Location error:", error);
+      setLocationName("Location unavailable");
+    }
+  };
 
   const fetchProfile = async (userId: string) => {
     try {
@@ -74,11 +106,12 @@ export default function Header({ isCurved = false }: HeaderProps) {
           }
           style={styles.brandContainer}
         >
-          <Image
-            source={require("../../assets/images/neatifylogo.png")}
-            contentFit="contain"
-            style={styles.logo}
-          />
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4 }} />
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#111111' }}>
+              {locationName}
+            </Text>
+          </View>
         </TouchableOpacity>
 
         <View style={styles.rightActions}>
@@ -109,7 +142,7 @@ export default function Header({ isCurved = false }: HeaderProps) {
       {/* GREETING */}
       <View style={styles.greetingContainer}>
         <Text style={styles.greeting}>
-          Good Morning, {userName} 
+          Hello, {userName} 
         </Text>
       </View>
     </View>
@@ -183,8 +216,9 @@ const styles = StyleSheet.create({
     marginTop: 22,
   },
   greeting: {
-    fontSize: 16,
-    fontWeight: "500",
+    fontSize: 22,
+    fontWeight: "800",
     color: "#111111",
+    letterSpacing: 0.5,
   },
 });

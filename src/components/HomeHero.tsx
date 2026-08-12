@@ -1,14 +1,85 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   Dimensions,
+  Animated,
 } from "react-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 
 const { width } = Dimensions.get("window");
+
+const WavyText = ({ text, style, delayOffset = 0 }: { text: string, style: any, delayOffset?: number }) => {
+  const chars = text.split('');
+  const animatedValues = useRef(chars.map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    const animations = chars.map((_, i) =>
+      Animated.sequence([
+        Animated.timing(animatedValues[i], {
+          toValue: 1,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+        Animated.timing(animatedValues[i], {
+          toValue: 0,
+          duration: 350,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    // Initial delay for staggered entry if needed
+    setTimeout(() => {
+      Animated.loop(
+        Animated.stagger(50, animations)
+      ).start();
+    }, delayOffset);
+  }, []);
+
+  const words = text.split(' ');
+  let charIndex = 0;
+
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+      {words.map((word, wIndex) => {
+        const wordNode = (
+          <View key={`word-${wIndex}`} style={{ flexDirection: 'row' }}>
+            {word.split('').map((char) => {
+              const currentIdx = charIndex;
+              charIndex++;
+              return (
+                <Animated.Text
+                  key={`char-${currentIdx}`}
+                  style={[
+                    style,
+                    {
+                      transform: [
+                        {
+                          translateY: animatedValues[currentIdx].interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, -6],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                >
+                  {char}
+                </Animated.Text>
+              );
+            })}
+            {wIndex < words.length - 1 && <Text style={style}>{' '}</Text>}
+          </View>
+        );
+        charIndex++; // Increment for space
+        return wordNode;
+      })}
+    </View>
+  );
+};
 
 export default function HomeHero() {
   return (
@@ -16,13 +87,9 @@ export default function HomeHero() {
 
       <View style={styles.content}>
 
-        <Text style={styles.title}>
-          Professional Home
-        </Text>
-
-        <Text style={styles.title}>
-          Cleaning in Hyderabad
-        </Text>
+        <WavyText text="Professional Home" style={styles.title} />
+        
+        <WavyText text="Cleaning in Hyderabad" style={styles.title} delayOffset={900} />
 
         <View style={styles.badges}>
 
