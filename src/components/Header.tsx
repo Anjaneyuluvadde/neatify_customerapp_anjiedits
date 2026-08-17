@@ -1,9 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { DrawerActions, useNavigation } from "@react-navigation/native";
-import { Image } from "expo-image";
 import * as Location from "expo-location";
-import React, { useEffect, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
@@ -22,6 +21,28 @@ export default function Header({ isCurved = false }: HeaderProps) {
 
   const [profile, setProfile] = useState<{ full_name: string; email: string } | null>(null);
   const [locationName, setLocationName] = useState<string>("Fetching location...");
+
+  const greetingOpacity = useRef(new Animated.Value(0)).current;
+  const greetingTranslateY = useRef(new Animated.Value(15)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(greetingOpacity, {
+        toValue: 1,
+        duration: 300,
+        delay: 0,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(greetingTranslateY, {
+        toValue: 0,
+        duration: 300,
+        delay: 0,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -140,11 +161,12 @@ export default function Header({ isCurved = false }: HeaderProps) {
       </View>
 
       {/* GREETING */}
-      <View style={styles.greetingContainer}>
-        <Text style={styles.greeting}>
-          Hello, {userName} 
+      <Animated.View style={[styles.greetingContainer, { opacity: greetingOpacity, transform: [{ translateY: greetingTranslateY }] }]}>
+        <Text style={styles.greetingWrapper}>
+          <Text style={styles.helloText}>Hello, </Text>
+          <Text style={styles.usernameText}>{userName}</Text>
         </Text>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -213,12 +235,24 @@ const styles = StyleSheet.create({
     color: "#111111",
   },
   greetingContainer: {
-    marginTop: 22,
+    marginTop: 8,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    width: "100%",
+    paddingLeft: 12,
   },
-  greeting: {
+  greetingWrapper: {
+    textAlign: "left",
+  },
+  helloText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#475569",
+  },
+  usernameText: {
     fontSize: 22,
-    fontWeight: "800",
-    color: "#111111",
+    fontWeight: "900",
+    color: "#0F172A",
     letterSpacing: 0.5,
   },
 });
