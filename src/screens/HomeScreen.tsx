@@ -19,7 +19,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
@@ -79,6 +79,7 @@ export default function HomeScreen({ navigation }: any) {
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   // ✅ Hero banners state
   const [heroBanners, setHeroBanners] = useState<ImageSourcePropType[]>([]);
@@ -621,7 +622,7 @@ export default function HomeScreen({ navigation }: any) {
               progressBackgroundColor={theme.background}
             />
           }
-          contentContainerStyle={{ backgroundColor: theme.background, paddingBottom: 0 }}
+          contentContainerStyle={{ backgroundColor: theme.background, paddingBottom: Math.max(insets.bottom + 110, 130) }}
         >
           {/* 1. Header (Logo + Search) */}
           <Header />

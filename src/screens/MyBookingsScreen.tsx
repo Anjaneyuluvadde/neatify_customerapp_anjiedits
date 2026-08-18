@@ -11,7 +11,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Header from "../components/Header";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
@@ -28,6 +28,7 @@ export default function MyBookingsScreen() {
 
   const [bookings, setBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("current");
 
@@ -155,7 +156,7 @@ export default function MyBookingsScreen() {
             <FlatList
               data={item.data}
               keyExtractor={(b) => b.id}
-              contentContainerStyle={{ padding: 16, paddingBottom: 100, flexGrow: 1 }}
+              contentContainerStyle={{ padding: 16, paddingBottom: Math.max(insets.bottom + 110, 130), flexGrow: 1 }}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}
