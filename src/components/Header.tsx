@@ -8,6 +8,7 @@ import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { supabase } from "../lib/supabase";
+import { isServiceable, getServiceAreaMatch } from "../config/serviceAreas";
 
 type HeaderProps = {
   isCurved?: boolean;
@@ -21,9 +22,11 @@ export default function Header({ isCurved = false }: HeaderProps) {
 
   const [profile, setProfile] = useState<{ full_name: string; email: string } | null>(null);
   const [locationName, setLocationName] = useState<string>("Fetching location...");
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const greetingOpacity = useRef(new Animated.Value(0)).current;
   const greetingTranslateY = useRef(new Animated.Value(15)).current;
+  const spinValue = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.parallel([
@@ -57,16 +60,63 @@ export default function Header({ isCurved = false }: HeaderProps) {
       }
     });
 
-    fetchCurrentLocation();
+    handleRefresh(true);
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const fetchCurrentLocation = async () => {
+  const startSpin = () => {
+    spinValue.setValue(0);
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  };
+
+  const stopSpin = () => {
+    spinValue.stopAnimation();
+  };
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const getLocality = (addr: Location.LocationGeocodedAddress) => {
+    // Priority: subLocality/neighborhood -> locality -> district -> city
+    if (addr.district && addr.district.length > 0) return addr.district;
+    if (addr.subregion && addr.subregion.length > 0) return addr.subregion;
+    if (addr.city && addr.city.length > 0) return addr.city;
+    if (addr.name && addr.name.length > 0) return addr.name;
+    if (addr.region && addr.region.length > 0) return addr.region;
+    return "Unknown Location";
+  };
+
+  const handleRefresh = async (isInitial = false) => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    startSpin();
+    
+    const oldLocation = locationName;
+    setLocationName("Fetching location...");
+
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Location.getForegroundPermissionsAsync();
+      let finalStatus = status;
+
       if (status !== 'granted') {
+        const { status: reqStatus } = await Location.requestForegroundPermissionsAsync();
+        finalStatus = reqStatus;
+      }
+
+      if (finalStatus !== 'granted') {
         setLocationName("Permission denied");
+        setIsRefreshing(false);
+        stopSpin();
         return;
       }
 
@@ -75,18 +125,49 @@ export default function Header({ isCurved = false }: HeaderProps) {
       });
 
       const { latitude, longitude } = location.coords;
+
+      // Service Area Check
+      const serviceable = isServiceable(latitude, longitude);
+      if (!serviceable) {
+        setIsRefreshing(false);
+        stopSpin();
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "ComingSoon" }]
+        });
+        return;
+      }
+
+      // Reverse Geocoding
       const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
+      let reverseString = "Unknown Location";
+      let postalCode = null;
 
       if (addressList && addressList.length > 0) {
-        const address = addressList[0];
-        const name = address.city || address.subregion || address.region || "Unknown Location";
-        setLocationName(name);
-      } else {
-        setLocationName("Unknown Location");
+        const addr = addressList[0];
+        postalCode = addr.postalCode;
+        reverseString = getLocality(addr);
       }
+
+      // Check against strict Neatify Sub-Area mappings
+      const matchedArea = getServiceAreaMatch(latitude, longitude, postalCode, reverseString);
+
+      if (matchedArea) {
+        setLocationName(matchedArea.name);
+      } else {
+        setLocationName(reverseString);
+      }
+
     } catch (error) {
-      console.error("Location error:", error);
-      setLocationName("Location unavailable");
+      console.warn("Location error:", error);
+      setLocationName("Unable to update location");
+      // Revert to old location after a brief message if it wasn't the initial load
+      if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
+        setTimeout(() => setLocationName(oldLocation), 2500);
+      }
+    } finally {
+      setIsRefreshing(false);
+      stopSpin();
     }
   };
 
@@ -118,20 +199,19 @@ export default function Header({ isCurved = false }: HeaderProps) {
       {/* TOP ROW */}
       <View style={styles.topRow}>
         <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() =>
-            navigation.reset({
-              index: 0,
-              routes: [{ name: "HomeDrawer" }],
-            })
-          }
+          activeOpacity={0.7}
+          onPress={() => handleRefresh(false)}
           style={styles.brandContainer}
+          disabled={isRefreshing}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
             <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4 }} />
-            <Text style={{ fontSize: 14, fontWeight: '600', color: '#111111' }}>
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#111111' }}>
               {locationName}
             </Text>
+            <Animated.View style={{ transform: [{ rotate: spin }], marginLeft: 6 }}>
+              <Ionicons name="sync" size={14} color="#111111" />
+            </Animated.View>
           </View>
         </TouchableOpacity>
 

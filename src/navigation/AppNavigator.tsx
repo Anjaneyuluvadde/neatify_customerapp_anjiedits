@@ -21,6 +21,8 @@ import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
 import SubservicesScreen from "../screens/SubservicesScreen";
+import LocationAccessScreen from "../screens/LocationAccessScreen";
+import ComingSoonScreen from "../screens/ComingSoonScreen";
 
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { Service } from "../types/service";
@@ -44,6 +46,8 @@ export type SelectedService = {
 };
 
 export type RootStackParamList = {
+  LocationAccess: undefined;
+  ComingSoon: undefined;
   Login: undefined;
   HomeDrawer: {
     screen?: string;
@@ -250,6 +254,8 @@ export default function AppNavigator({ initialRouteName }: AppNavigatorProps) {
         contentStyle: { backgroundColor: theme.background }
       }}
     >
+      <Stack.Screen name="LocationAccess" component={LocationAccessScreen} />
+      <Stack.Screen name="ComingSoon" component={ComingSoonScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="ResetPassword" component={ResetPasswordScreen as any} />
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen as any} />

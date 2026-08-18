@@ -53,12 +53,12 @@ function AnimatedInput({ icon, placeholder, value, onChange, secureTextEntry, ri
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      borderColor: interpolateColor(focusAnim.value, [0, 1], ["#E0E0E0", COLORS.saffron]),
-      shadowOpacity: focusAnim.value * 0.15,
-      shadowRadius: focusAnim.value * 8,
+      borderColor: interpolateColor(focusAnim.value, [0, 1], ["#F0F0F0", COLORS.saffron]),
+      shadowOpacity: focusAnim.value * 0.1,
+      shadowRadius: focusAnim.value * 6,
       shadowColor: COLORS.saffron,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: focusAnim.value * 4,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: focusAnim.value * 3,
       transform: [{ scale: 1 + focusAnim.value * 0.01 }]
     };
   });
@@ -95,12 +95,12 @@ function AnimatedPhoneInput({ value, onChangeText, theme }: any) {
 
   const animatedStyle = useAnimatedStyle(() => {
     return {
-      borderColor: interpolateColor(focusAnim.value, [0, 1], ["#E0E0E0", COLORS.saffron]),
-      shadowOpacity: focusAnim.value * 0.15,
-      shadowRadius: focusAnim.value * 8,
+      borderColor: interpolateColor(focusAnim.value, [0, 1], ["#F0F0F0", COLORS.saffron]),
+      shadowOpacity: focusAnim.value * 0.1,
+      shadowRadius: focusAnim.value * 6,
       shadowColor: COLORS.saffron,
-      shadowOffset: { width: 0, height: 4 },
-      elevation: focusAnim.value * 4,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: focusAnim.value * 3,
       transform: [{ scale: 1 + focusAnim.value * 0.01 }]
     };
   });
@@ -109,7 +109,7 @@ function AnimatedPhoneInput({ value, onChangeText, theme }: any) {
     <Animated.View style={[styles.animatedInputContainer, animatedStyle]}>
       <Phone size={20} color="#888" />
       <Text style={{ marginLeft: 10, fontSize: 16, color: "#111", fontWeight: '600' }}>+91</Text>
-      <View style={{ width: 1, height: 20, backgroundColor: "#E0E0E0", marginHorizontal: 10 }} />
+      <View style={{ width: 1, height: 20, backgroundColor: "#F0F0F0", marginHorizontal: 10 }} />
       <TextInput
         style={styles.input}
         placeholder="Phone Number"
@@ -142,7 +142,7 @@ function AnimatedServiceDropdown({ selectedService, setShowServiceDropdown }: an
 
     const animatedStyle = useAnimatedStyle(() => {
         return {
-            borderColor: selectedService ? COLORS.saffron : interpolateColor(focusAnim.value, [0, 1], ["#E0E0E0", COLORS.saffron]),
+            borderColor: selectedService ? COLORS.saffron : interpolateColor(focusAnim.value, [0, 1], ["#F0F0F0", COLORS.saffron]),
             transform: [{ scale: 1 - focusAnim.value * 0.02 }]
         };
     });
@@ -397,8 +397,8 @@ export default function LoginScreen(props: any) {
   useEffect(() => {
     characterBob.value = withRepeat(
       withSequence(
-        withTiming(-8, { duration: 2000 }),
-        withTiming(0, { duration: 2000 })
+        withTiming(-10, { duration: 1800 }),
+        withTiming(0, { duration: 1800 })
       ),
       -1,
       true
@@ -695,16 +695,19 @@ const styles = StyleSheet.create({
   },
   scrollContainer: { 
     flexGrow: 1, 
-    padding: 20, 
-    paddingTop: 40,
+    paddingHorizontal: "5%", 
+    paddingTop: 30,
     paddingBottom: 40 
   },
   backBtn: {
     position: "absolute",
-    left: 20,
+    left: 16,
     zIndex: 100,
-    padding: 8,
-    borderRadius: 25,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#FFF",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -715,7 +718,8 @@ const styles = StyleSheet.create({
   mobileCharacterContainer: {
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: -20, // Negative margin to overlap with the card
+    marginBottom: -45, // Deeper overlap to place character behind card
+    marginTop: 10,
     zIndex: 1,
   },
   desktopCharacterContainer: {
@@ -725,8 +729,8 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   mobileCharacterImage: {
-    width: 200,
-    height: 180,
+    width: 180, // Scaled down
+    height: 160,
   },
   desktopCharacterImage: {
     width: "100%",
@@ -735,9 +739,10 @@ const styles = StyleSheet.create({
   },
   formContainer: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 28,
-    padding: 24,
-    paddingBottom: 32,
+    borderRadius: 24, // reduced corners slightly
+    padding: 20, // reduced internal padding
+    paddingTop: 24, // Card top spacing
+    paddingBottom: 28,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
@@ -751,32 +756,34 @@ const styles = StyleSheet.create({
     marginVertical: 40,
   },
   header: { 
-    marginBottom: 28,
-    marginTop: 8,
+    marginBottom: 20,
+    alignItems: "center", // Center horizontally
   },
   logo: {
-    width: 160,
-    height: 45,
-    marginBottom: 8,
+    width: 130, // Smaller branding
+    height: 38,
+    marginBottom: 16, // Spacing between logo and heading
   },
   subtitle: { 
-    color: "#666", 
-    fontSize: 15,
-    fontWeight: "500",
-    lineHeight: 22,
+    color: "#111", // Black/dark text
+    fontSize: 14, // more compact
+    fontWeight: "600",
+    lineHeight: 20,
+    textAlign: "center",
+    paddingHorizontal: 8,
   },
   form: { 
-    gap: 14,
+    gap: 12, // reduced gaps
   },
   animatedInputContainer: {
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1.5,
-    borderColor: "#E0E0E0",
+    borderColor: "#F0F0F0", // subtle grey
     backgroundColor: "#FFFFFF",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    borderRadius: 14, // slightly rounder
+    paddingVertical: 12, // shorter height
+    paddingHorizontal: 14,
   },
   input: { 
     flex: 1, 
@@ -800,63 +807,63 @@ const styles = StyleSheet.create({
     alignItems: "center", 
     gap: 8,
     borderWidth: 1,
-    borderColor: "#EAEAEA"
+    borderColor: "#F0F0F0"
   },
   expiredOfferText: {
     fontSize: 13, 
-    color: "#666", 
+    color: "#555", 
     fontWeight: "600",
   },
   primaryBtn: {
     backgroundColor: COLORS.saffron,
-    height: 56,
-    borderRadius: 16,
+    height: 52, // Shorter height
+    borderRadius: 14, // match input border radius
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 8,
+    marginTop: 4,
     shadowColor: COLORS.saffron,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOpacity: 0.2, // subtle shadow
+    shadowRadius: 8,
+    elevation: 4,
   },
   primaryText: { 
     color: "#111", 
     fontWeight: "800",
-    fontSize: 16,
+    fontSize: 15,
     letterSpacing: 0.5,
   },
   forgotPasswordText: {
     color: "#111",
     fontWeight: "700",
-    fontSize: 14,
+    fontSize: 13,
   },
   dividerContainer: {
     flexDirection: "row", 
     alignItems: "center", 
-    marginVertical: 6,
+    marginVertical: 4,
   },
   dividerLine: {
     flex: 1, 
     height: 1, 
-    backgroundColor: "#EAEAEA"
+    backgroundColor: "#F0F0F0"
   },
   dividerText: {
     marginHorizontal: 12, 
-    color: "#999", 
+    color: "#888", 
     fontSize: 13,
     fontWeight: "600",
   },
   googleBtn: {
-    height: 56,
-    borderRadius: 16,
+    height: 52, // Shorter height
+    borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: "#EAEAEA",
+    borderColor: "#F0F0F0",
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
   },
   googleIcon: { 
     width: 22, 

@@ -1,9 +1,19 @@
 import { Ionicons } from "@expo/vector-icons";
-import React from "react";
-import { Modal, Pressable, StyleSheet, Text, Vibration, View } from "react-native";
+import React, { useEffect } from "react";
+import { Modal, Pressable, StyleSheet, Text, View, useWindowDimensions, Vibration } from "react-native";
+import Animated, { 
+    FadeIn, 
+    FadeOut, 
+    SlideInDown, 
+    SlideOutDown, 
+    useAnimatedStyle, 
+    useSharedValue, 
+    withSpring,
+    withTiming,
+    Easing,
+    ZoomIn
+} from "react-native-reanimated";
 import { COLORS } from "../theme/colors";
-import { useTheme } from "../context/ThemeContext";
-import AnimatedGradientBorder from "./AnimatedGradientBorder";
 
 type AlertType = "success" | "error" | "warning" | "info";
 
@@ -19,6 +29,8 @@ interface CustomAlertProps {
     showCancel?: boolean;
 }
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 export default function CustomAlert({
     visible,
     type = "info",
@@ -30,7 +42,8 @@ export default function CustomAlert({
     cancelText = "Cancel",
     showCancel = false,
 }: CustomAlertProps) {
-    const { theme } = useTheme();
+    const { width } = useWindowDimensions();
+
     const handleConfirm = () => {
         if (type === "success") {
             Vibration.vibrate(50);
@@ -40,93 +53,102 @@ export default function CustomAlert({
 
     const getIconName = (): keyof typeof Ionicons.glyphMap => {
         switch (type) {
-            case "success":
-                return "checkmark-circle";
-            case "error":
-                return "close-circle";
-            case "warning":
-                return "alert-circle";
-            default:
-                return "information-circle";
+            case "success": return "checkmark";
+            case "error": return "close";
+            case "warning": return "alert";
+            default: return "information";
         }
     };
 
     const getIconColor = (): string => {
+        // Icon itself is white, the container has the color
+        return "#FFFFFF";
+    };
+
+    const getIconContainerColor = (): string => {
         switch (type) {
-            case "success":
-                return COLORS.success;
-            case "error":
-                return COLORS.error;
-            case "warning":
-                return "#F4C430";
-            default:
-                // Use app theme color (Saffron) for info
-                return COLORS.saffron;
+            case "success": return COLORS.success;
+            case "error": return COLORS.error;
+            case "warning": return "#F4C430";
+            default: return COLORS.saffron;
         }
     };
 
     const getButtonStyle = () => {
         switch (type) {
-            case "success":
-                return styles.confirmButtonSuccess;
-            case "error":
-                return styles.confirmButtonError;
-            case "warning":
-                return styles.confirmButtonWarning;
-            default:
-                return styles.confirmButtonInfo;
+            case "success": return { backgroundColor: COLORS.success, color: "#FFF" };
+            case "error": return { backgroundColor: COLORS.error, color: "#FFF" };
+            case "warning": return { backgroundColor: "#F4C430", color: "#111" };
+            default: return { backgroundColor: COLORS.saffron, color: "#111" };
         }
     };
+
+    // Button animation hooks
+    const primaryScale = useSharedValue(1);
+    const primaryStyle = useAnimatedStyle(() => ({ transform: [{ scale: primaryScale.value }] }));
+    
+    const cancelScale = useSharedValue(1);
+    const cancelStyle = useAnimatedStyle(() => ({ transform: [{ scale: cancelScale.value }] }));
+
+    if (!visible) return null;
+
+    const primaryColors = getButtonStyle();
 
     return (
         <Modal
             visible={visible}
             transparent
-            animationType="fade"
+            animationType="none" // We use Reanimated instead
             onRequestClose={onClose}
         >
-            <View style={styles.overlay}>
-                <AnimatedGradientBorder
-                    borderRadius={20}
-                    borderWidth={2}
-                    animationSpeed={3}
-                    style={{ width: "100%", maxWidth: 360 }}
+            <Animated.View 
+                entering={FadeIn.duration(300)} 
+                exiting={FadeOut.duration(200)} 
+                style={styles.overlay}
+            >
+                <Animated.View 
+                    entering={SlideInDown.duration(400).easing(Easing.out(Easing.back(1.2)))} 
+                    exiting={SlideOutDown.duration(300)} 
+                    style={[styles.card, { width: Math.min(width * 0.9, 420) }]}
                 >
-                    <View style={[styles.content, { width: "100%", maxWidth: undefined, backgroundColor: theme.background }]}>
-                        {/* Icon */}
-                        <View style={styles.iconContainer}>
-                            <Ionicons name={getIconName()} size={64} color={getIconColor()} />
-                        </View>
+                    {/* Icon */}
+                    <Animated.View 
+                        entering={ZoomIn.duration(400).delay(100)}
+                        style={[styles.iconContainer, { backgroundColor: getIconContainerColor() }]}
+                    >
+                        <Ionicons name={getIconName()} size={38} color={getIconColor()} />
+                    </Animated.View>
 
-                        {/* Title and Message */}
-                        <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
-                        <Text style={[styles.message, { color: theme.textLight }]}>{message}</Text>
+                    {/* Content */}
+                    <Text style={styles.title}>{title}</Text>
+                    <Text style={styles.message}>{message}</Text>
 
-                        {/* Buttons */}
-                        <View style={styles.buttonContainer}>
-                            {showCancel && (
-                                <Pressable
-                                    style={[styles.button, styles.cancelButton, { backgroundColor: theme.surfaceVariant }]}
-                                    onPress={onClose}
-                                >
-                                    <Text style={[styles.cancelButtonText, { color: theme.textLight }]}>{cancelText}</Text>
-                                </Pressable>
-                            )}
-                            <Pressable
-                                style={[
-                                    styles.button,
-                                    styles.confirmButton,
-                                    getButtonStyle(),
-                                    showCancel && { flex: 1 },
-                                ]}
-                                onPress={handleConfirm}
+                    {/* Actions */}
+                    <View style={styles.actionContainer}>
+                        <AnimatedPressable
+                            style={[styles.primaryButton, { backgroundColor: primaryColors.backgroundColor }, primaryStyle]}
+                            onPressIn={() => { primaryScale.value = withSpring(0.96); }}
+                            onPressOut={() => { primaryScale.value = withSpring(1); }}
+                            onPress={handleConfirm}
+                        >
+                            <Text style={[styles.primaryButtonText, { color: primaryColors.color }]}>
+                                {confirmText}
+                            </Text>
+                        </AnimatedPressable>
+
+                        {showCancel && (
+                            <AnimatedPressable
+                                style={[styles.cancelButton, cancelStyle]}
+                                onPressIn={() => { cancelScale.value = withSpring(0.96); }}
+                                onPressOut={() => { cancelScale.value = withSpring(1); }}
+                                onPress={onClose}
                             >
-                                <Text style={[styles.confirmButtonText, { color: theme.background }]}>{confirmText}</Text>
-                            </Pressable>
-                        </View>
+                                <Text style={styles.cancelButtonText}>{cancelText}</Text>
+                            </AnimatedPressable>
+                        )}
                     </View>
-                </AnimatedGradientBorder>
-            </View>
+                </Animated.View>
+            </Animated.View>
         </Modal>
     );
 }
@@ -134,75 +156,89 @@ export default function CustomAlert({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: "rgba(0, 0, 0, 0.5)",
+        backgroundColor: "rgba(17, 17, 17, 0.35)",
         justifyContent: "center",
         alignItems: "center",
         padding: 20,
     },
-    content: {
-        backgroundColor: "#fff",
-        borderRadius: 20,
+    card: {
+        backgroundColor: "#FFFFFF",
+        borderRadius: 28,
         padding: 24,
-        width: "100%",
         alignItems: "center",
+        shadowColor: COLORS.saffron,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.15,
+        shadowRadius: 20,
+        elevation: 10,
+        borderWidth: 1,
+        borderColor: "rgba(255, 201, 40, 0.3)", // subtle yellow border
     },
     iconContainer: {
-        marginBottom: 16,
+        width: 68,
+        height: 68,
+        borderRadius: 34,
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 20,
+        marginTop: 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+        elevation: 4,
     },
     title: {
-        fontSize: 20,
-        fontWeight: "700",
-        color: "#333",
-        marginBottom: 8,
+        fontSize: 28,
+        fontWeight: "800",
+        color: "#111111",
+        marginBottom: 12,
         textAlign: "center",
     },
     message: {
-        fontSize: 16,
-        color: "#666",
+        fontSize: 17,
+        color: "#555555",
         textAlign: "center",
-        marginBottom: 24,
-        lineHeight: 22,
+        marginBottom: 28,
+        lineHeight: 24,
+        fontWeight: "500",
+        paddingHorizontal: 8,
     },
-    buttonContainer: {
-        flexDirection: "row",
+    actionContainer: {
         width: "100%",
+        flexDirection: "column",
         gap: 12,
     },
-    button: {
-        paddingVertical: 14,
-        paddingHorizontal: 24,
-        borderRadius: 12,
+    primaryButton: {
+        width: "100%",
+        height: 54,
+        borderRadius: 16,
         alignItems: "center",
         justifyContent: "center",
+        shadowColor: COLORS.saffron,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 8,
+        elevation: 4,
     },
-    confirmButton: {
-        flex: 1,
-    },
-    confirmButtonSuccess: {
-        backgroundColor: COLORS.success,
-    },
-    confirmButtonError: {
-        backgroundColor: COLORS.error,
-    },
-    confirmButtonWarning: {
-        backgroundColor: "#F4C430",
-    },
-    confirmButtonInfo: {
-        // Use app theme color (Saffron)
-        backgroundColor: COLORS.saffron,
-    },
-    confirmButtonText: {
-        color: COLORS.black,
+    primaryButtonText: {
         fontSize: 16,
-        fontWeight: "700",
+        fontWeight: "800",
+        letterSpacing: 0.3,
     },
     cancelButton: {
-        backgroundColor: "#f3f4f6",
-        flex: 1,
+        width: "100%",
+        height: 50,
+        borderRadius: 14,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderColor: "#E5E5E5",
     },
     cancelButtonText: {
-        color: "#666",
+        color: "#111111",
         fontSize: 16,
-        fontWeight: "600",
+        fontWeight: "700",
     },
 });

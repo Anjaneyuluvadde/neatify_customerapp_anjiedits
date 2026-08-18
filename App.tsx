@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import React, { useEffect, useState } from "react";
 import { StatusBar, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { LanguageProvider } from "./src/context/LanguageContext";
 import { NotificationProvider } from "./src/context/NotificationContext";
@@ -13,7 +14,7 @@ import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, savePushTokenToSupabase } from "./src/utils/pushNotifications";
 
 export default function App() {
-  const [initialRoute, setInitialRoute] = useState<"Login" | "HomeDrawer" | "CompleteProfile">("HomeDrawer");
+  const [initialRoute, setInitialRoute] = useState<"LocationAccess" | "Login" | "HomeDrawer" | "CompleteProfile">("HomeDrawer");
   const [loading, setLoading] = useState(true);
   const navigationRef = React.useRef<any>(null);
   const skipAuthRedirect = React.useRef(false);
@@ -97,7 +98,7 @@ export default function App() {
           if (sessionError.message?.includes("Refresh Token") || sessionError.status === 400) {
             console.warn("Broken session detected on init. Clearing...");
             await supabase.auth.signOut();
-            setInitialRoute("Login");
+            setInitialRoute("LocationAccess");
             setLoading(false);
             return;
           }
@@ -108,18 +109,13 @@ export default function App() {
           handlePushToken(session.user.id);
           // Prevent onAuthStateChange from triggering a second reset immediately after this
           hasCheckedOnce = true;
-
-          const isComplete = await checkCompleteness(session.user.id, false);
-          if (!isComplete) {
-            setInitialRoute("CompleteProfile");
-            setLoading(false);
-            return;
-          }
         }
-        setInitialRoute("HomeDrawer");
+        
+        // LocationAccess is the universal startup screen now
+        setInitialRoute("LocationAccess");
       } catch (err) {
         console.error("App init failed:", err);
-        setInitialRoute("Login");
+        setInitialRoute("LocationAccess");
       } finally {
         setLoading(false);
       }
