@@ -20,6 +20,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
+import SubservicesScreen from "../screens/SubservicesScreen";
 
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { Service } from "../types/service";
@@ -74,6 +75,10 @@ export type RootStackParamList = {
     category: string;
     label: string;
   };
+  Subservices: {
+    mainCategoryName: string;
+    subCategories: any[];
+  };
   CompleteProfile: undefined;
 };
 
@@ -84,6 +89,7 @@ export type HomeStackParamList = {
   Schedule: { services: SelectedService[] };
   Checkout: { services: SelectedService[]; total: number; bookingDateText: string };
   CategoryDetail: { category: string; label: string };
+  Subservices: { mainCategoryName: string; subCategories: any[] };
 };
 
 export type BookingsStackParamList = {
@@ -120,6 +126,7 @@ function HomeTabStack() {
       <HomeStack.Screen name="Schedule" component={ScheduleScreen as any} />
       <HomeStack.Screen name="Checkout" component={CheckoutScreen as any} />
       <HomeStack.Screen name="CategoryDetail" component={CategoryDetailScreen as any} />
+      <HomeStack.Screen name="Subservices" component={SubservicesScreen as any} />
     </HomeStack.Navigator>
   );
 }

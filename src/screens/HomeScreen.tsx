@@ -16,9 +16,8 @@ import {
   StatusBar,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -662,99 +661,39 @@ export default function HomeScreen({ navigation }: any) {
             </View>
           </View>
 
-          {/* Search Box */}
-          <View style={styles.homeSearchContainer}>
-            <Ionicons name="search" size={20} color={theme.textLight} />
-            <TextInput
-              value={searchText}
-              onChangeText={(text) => {
-                setSearchText(text);
-                const match = tabs.find(t => t.value !== "ALL" && t.label.toLowerCase() === text.trim().toLowerCase());
-                if (match) handleCategoryChange(match.value);
-              }}
-              placeholder={t("home.searchPlaceholder") || "Search for services (Sofa, Bathroom, Kitchen...)"}
-              placeholderTextColor={theme.textLight}
-              style={[styles.homeSearchInput, { color: theme.text }]}
-              returnKeyType="search"
-            />
-            <Ionicons name="mic-outline" size={20} color={theme.text} style={{ marginRight: 10 }} />
-            <Ionicons name="options-outline" size={20} color={theme.text} />
-          </View>
 
           {/* 3. Main Category Grid (Explore all services) */}
           {mainCategories.length > 0 && (
             <View style={styles.gridContainer} onLayout={(e) => setServicesY(e.nativeEvent.layout.y)}>
-              <View>
-                {mainCategories.map((mainCat) => {
-                  const subs = allSubCategoriesByMainCategory.get(mainCat.id) || [];
-                  if (subs.length === 0) return null;
-
-                  return (
-                    <View key={mainCat.id} style={{ marginBottom: 28 }}>
-                      <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text, marginBottom: 16, textAlign: "center" }}>
-                        {mainCat.name}
-                      </Text>
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 }}>
-                        {subs.map((cat) => (
-                          <Pressable
-                            key={cat.value}
-                            style={{ width: "33.33%", alignItems: "center", marginBottom: 20, paddingHorizontal: 6 }}
-                            onPress={() => {
-                              navigation.navigate("CategoryDetail", {
-                                category: cat.value,
-                                label: cat.label
-                              });
-                            }}
-                          >
-                            {({ pressed }) => (
-                              <>
-                                <View style={{
-                                  width: "100%",
-                                  aspectRatio: 1,
-                                  borderRadius: 20,
-                                  backgroundColor: "#FFFFFF",
-                                  borderWidth: 2,
-                                  borderColor: pressed ? "#FFC928" : "#F3F4F6", // subtle border default, yellow when pressed
-                                  borderBottomWidth: pressed ? 2 : 6, // 3D physical edge
-                                  borderBottomColor: pressed ? "#FFC928" : "#E5E7EB",
-                                  justifyContent: "center",
-                                  alignItems: "center",
-                                  marginBottom: 8,
-                                  shadowColor: pressed ? "#FFC928" : "#000",
-                                  shadowOffset: { width: 0, height: pressed ? 2 : 6 },
-                                  shadowOpacity: pressed ? 0.4 : 0.08,
-                                  shadowRadius: pressed ? 4 : 8,
-                                  elevation: pressed ? 2 : 4,
-                                  transform: [
-                                    { translateY: pressed ? 4 : 0 }, // Pushes down into the screen
-                                    { scale: pressed ? 0.98 : 1 }
-                                  ],
-                                }}>
-                                  {cat.icon ? (
-                                    <Image source={{ uri: cat.icon }} style={{ width: "65%", height: "65%", opacity: pressed ? 0.8 : 1 }} contentFit="contain" />
-                                  ) : (
-                                    <Ionicons name="apps-outline" size={28} color={theme.primary} />
-                                  )}
-                                </View>
-                                <Text style={{
-                                  fontSize: 12,
-                                  fontWeight: "600",
-                                  color: theme.text,
-                                  textAlign: "center",
-                                  lineHeight: 16,
-                                  opacity: pressed ? 0.7 : 1,
-                                  transform: [{ translateY: pressed ? 2 : 0 }] // Text moves down slightly with the button
-                                }} numberOfLines={2}>
-                                  {cat.label}
-                                </Text>
-                              </>
-                            )}
-                          </Pressable>
-                        ))}
-                      </View>
-                    </View>
-                  );
-                })}
+              <View style={styles.grid}>
+                {mainCategories.map((mainCat) => (
+                  <Pressable
+                    key={mainCat.id}
+                    style={styles.gridItem}
+                    onPress={() => {
+                      const subs = allSubCategoriesByMainCategory.get(mainCat.id) || [];
+                      navigation.navigate("Subservices", {
+                        mainCategoryName: mainCat.name,
+                        subCategories: subs
+                      });
+                    }}
+                  >
+                    {({ pressed }) => (
+                      <>
+                        <View style={[styles.gridIconContainer, pressed && styles.gridItemActive]}>
+                          {mainCat.icon_url ? (
+                            <Image source={{ uri: mainCat.icon_url }} style={styles.gridIcon} contentFit="contain" />
+                          ) : (
+                            <Ionicons name="apps-outline" size={32} color={theme.primary} />
+                          )}
+                        </View>
+                        <Text style={[styles.gridLabel, { color: theme.text }]} numberOfLines={2}>
+                          {mainCat.name}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                ))}
               </View>
             </View>
           )}
@@ -854,62 +793,7 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       </Modal>
 
-      <Modal
-        visible={categorySheetVisible && isFocused}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCategorySheetVisible(false)}
-      >
-        <Pressable
-          style={sheetStyles.overlay}
-          onPress={() => setCategorySheetVisible(false)}
-        >
-          <View style={[sheetStyles.sheetContainer, { backgroundColor: theme.background }]}>
-            <View style={sheetStyles.header}>
-              <Text style={[sheetStyles.title, { color: theme.text }]}>
-                {selectedMainCategoryForSheet?.name}
-              </Text>
-              <Pressable
-                onPress={() => setCategorySheetVisible(false)}
-                style={[sheetStyles.closeButton, { backgroundColor: theme.surfaceVariant }]}
-              >
-                <Ionicons name="close" size={24} color={theme.text} />
-              </Pressable>
-            </View>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={sheetStyles.content}
-            >
-              <View style={sheetStyles.categoryGrid}>
-                {subCategories.map((cat) => (
-                  <Pressable
-                    key={cat.value}
-                    style={sheetStyles.categoryItem}
-                    onPress={() => {
-                      navigation.navigate("CategoryDetail", {
-                        category: cat.value,
-                        label: cat.label
-                      });
-                    }}
-                  >
-                    <View style={[sheetStyles.categoryIconContainer, { backgroundColor: theme.surfaceVariant || "#F5F7FA" }]}>
-                      {cat.icon ? (
-                        <Image source={{ uri: cat.icon }} style={sheetStyles.categoryImage} contentFit="contain" />
-                      ) : (
-                        <Ionicons name="apps-outline" size={32} color={theme.primary} />
-                      )}
-                    </View>
-                    <Text style={[sheetStyles.categoryLabel, { color: theme.text }]} numberOfLines={2}>
-                      {cat.label}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          </View>
-        </Pressable>
-      </Modal>
 
       {/* Welcome Reward Popup */}
       <Modal visible={showWelcomePopup} transparent animationType="slide" onRequestClose={() => setShowWelcomePopup(false)}>
@@ -1340,14 +1224,14 @@ const goUpStyles = StyleSheet.create({
 const promoBannerStyles = StyleSheet.create({
   container: {
     marginHorizontal: 16,
-    marginTop: 14,
-    marginBottom: 6,
+    marginTop: 10,
+    marginBottom: 10,
     backgroundColor: "#0F172A",
-    borderRadius: 16,
-    padding: 16,
-    paddingVertical: 20,
+    borderRadius: 12,
+    padding: 12,
     flexDirection: "row",
     overflow: "hidden",
+    alignItems: "center",
   },
   leftContent: {
     flex: 0.65,
@@ -1355,29 +1239,29 @@ const promoBannerStyles = StyleSheet.create({
   },
   discountText: {
     color: "#FFC928",
-    fontSize: 28,
+    fontSize: 22,
     fontWeight: "900",
-    marginBottom: 2,
+    marginBottom: 0,
     letterSpacing: -0.5,
   },
   subTitleText: {
     color: "#FFFFFF",
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: "700",
-    marginBottom: 8,
+    marginBottom: 4,
   },
   descriptionText: {
     color: "#94A3B8",
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "500",
-    lineHeight: 16,
-    marginBottom: 16,
+    lineHeight: 14,
+    marginBottom: 8,
   },
   claimBtn: {
     backgroundColor: "#FFC928",
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 24,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
@@ -1385,22 +1269,22 @@ const promoBannerStyles = StyleSheet.create({
   claimBtnText: {
     color: "#0F172A",
     fontWeight: "700",
-    fontSize: 12,
+    fontSize: 10,
   },
   bannerImage: {
-    width: "45%",
-    height: "140%",
+    width: "40%",
+    height: "120%",
     position: "absolute",
     right: -10,
-    bottom: -15,
+    bottom: -10,
   },
   tagContainer: {
     position: "absolute",
     top: 0,
-    right: 16,
+    right: 12,
     backgroundColor: "#FFC928",
-    paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
     borderBottomLeftRadius: 4,
     borderBottomRightRadius: 4,
     alignItems: "center",
@@ -1408,9 +1292,9 @@ const promoBannerStyles = StyleSheet.create({
   },
   tagText: {
     color: "#0F172A",
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: "800",
     textAlign: "center",
-    lineHeight: 11,
+    lineHeight: 9,
   }
 });

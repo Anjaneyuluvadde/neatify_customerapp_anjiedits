@@ -1,7 +1,7 @@
-import React, { useRef, useEffect } from "react";
-import { View, StyleSheet, TouchableOpacity, Animated, Dimensions, Platform } from "react-native";
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import React, { useEffect, useRef } from "react";
+import { Animated, Dimensions, StyleSheet, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import { useTheme } from "../context/ThemeContext";
@@ -13,7 +13,7 @@ const TabBarBackground = ({ bgColor, shadowColor, isDark }: { bgColor: string, s
   const W = width - 40; // 20px margin on each side
   const H = 70;
   const cx = W / 2;
-  
+
   // Custom SVG path for rounded rectangle with a top-center dip (notch)
   const path = `
     M 24,0
@@ -95,16 +95,16 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
         shadowColor: isDark ? "#000" : "#999",
       }]}>
         <TabBarBackground bgColor={theme.background} shadowColor={theme.border} isDark={isDark} />
-        
+
         <View style={styles.content}>
           {tabs.map((tab, i) => {
             const isCenter = tab.isCenter;
             const isRoute = tab.type === "route" && tab.route;
-            
+
             // For the standard tabs, we find their real route index in state.routes to determine if they are focused
             const routeIndex = isRoute ? state.routes.findIndex((r: any) => r.key === tab.route?.key) : -1;
             const isFocused = routeIndex !== -1 ? state.index === routeIndex : false;
-            
+
             const scaleAnim = routeIndex !== -1 ? scaleAnims[routeIndex] : new Animated.Value(1);
 
             // Animate on focus change (we can do this safely inside map because we are just calling start() on the ref, 
@@ -136,17 +136,17 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                   >
                     <Animated.View style={[
                       styles.centerButton,
-                      { 
+                      {
                         backgroundColor: isFocused ? theme.primary : (isDark ? '#374151' : '#F3F4F6'),
-                        transform: [{ scale: centerScale }] 
+                        transform: [{ scale: centerScale }]
                       },
                       (isFocused && isDark) ? { shadowColor: theme.primary, shadowOpacity: 0.5, shadowRadius: 10 } : {}
                     ]}>
-                      <FontAwesome5 
-                        name="home" 
-                        size={26} 
-                        color={isFocused ? theme.background : (isDark ? theme.textLight : "#9CA3AF")} 
-                        solid={isFocused} 
+                      <FontAwesome5
+                        name="home"
+                        size={26}
+                        color={isFocused ? theme.background : (isDark ? theme.textLight : "#9CA3AF")}
+                        solid={isFocused}
                       />
                     </Animated.View>
                   </TouchableOpacity>
@@ -167,10 +167,10 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                   {tab.icon === "home" ? (
                     <FontAwesome5 name="home" size={22} color={color} solid={isFocused} />
                   ) : (
-                    <Ionicons 
-                      name={isFocused ? (tab.icon as any) : `${tab.icon}-outline` as any} 
-                      size={24} 
-                      color={color} 
+                    <Ionicons
+                      name={isFocused ? (tab.icon as any) : `${tab.icon}-outline` as any}
+                      size={24}
+                      color={color}
                     />
                   )}
                 </Animated.View>
