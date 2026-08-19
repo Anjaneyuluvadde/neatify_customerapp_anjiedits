@@ -675,8 +675,9 @@ export default function HomeScreen({ navigation }: any) {
                     style={styles.gridItem}
                     onPress={() => {
                       const subs = allSubCategoriesByMainCategory.get(mainCat.id) || [];
-                      navigation.navigate("Subservices", {
+                      navigation.navigate("CategoryServices", {
                         mainCategoryName: mainCat.name,
+                        mainCategoryId: mainCat.id,
                         subCategories: subs
                       });
                     }}

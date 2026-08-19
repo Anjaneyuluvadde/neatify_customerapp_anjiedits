@@ -18,6 +18,10 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import AnimatedProcessTimeline from "../components/AnimatedProcessTimeline";
+import DescriptionCard from "../components/DescriptionCard";
+import WorkIncludesCard from "../components/WorkIncludesCard";
+import WorkNotIncludesCard from "../components/WorkNotIncludesCard";
+import FAQAccordion from "../components/FAQAccordion";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
@@ -786,139 +790,16 @@ export default function ServiceDetailScreen({ route }: Props) {
             </Text>
           </Pressable>
 
-          {/* ✅ Description */}
-          {descriptionLines.length > 0 ? (
-            <>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginTop: 26,
-                  color: theme.text,
-                }}
-              >
-                {t("serviceDetail.description")}
-              </Text>
+          <View style={{ marginTop: 24 }}>
+            {/* ✅ Description */}
+            <DescriptionCard description={service.description || ""} />
 
-              {descriptionLines.map((line, index) => (
-                <Text
-                  key={index}
-                  style={{
-                    marginTop: 8,
-                    fontSize: 15,
-                    lineHeight: 22,
-                    color: theme.text,
-                  }}
-                >
-                  {line}
-                </Text>
-              ))}
-            </>
-          ) : null}
+            {/* ✅ Work Includes */}
+            <WorkIncludesCard workIncludes={service.work_includes} />
 
-          {/* ✅ Work Includes */}
-          {service.work_includes && service.work_includes.trim() ? (
-            <>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginTop: 26,
-                  color: COLORS.saffron,
-                }}
-              >
-                {t("serviceDetail.includes")}
-              </Text>
-
-              {service.work_includes
-                .replace(/\r\n/g, "\n")
-                .split("\n")
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((line, index) => (
-                  <View
-                    key={index}
-                    style={{
-                      flexDirection: "row",
-                      marginTop: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.text,
-                        marginRight: 8,
-                      }}
-                    >
-                      •
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.text,
-                        flex: 1,
-                      }}
-                    >
-                      {line}
-                    </Text>
-                  </View>
-                ))}
-            </>
-          ) : null}
-
-          {/* ✅ Work Not Includes */}
-          {service.work_not_included && service.work_not_included.trim() ? (
-            <>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginTop: 26,
-                  color: "#D32F2F",
-                }}
-              >
-                Work Not Includes
-              </Text>
-
-              {service.work_not_included
-                .replace(/\r\n/g, "\n")
-                .split("\n")
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((line, index) => (
-                  <View
-                    key={index}
-                    style={{
-                      flexDirection: "row",
-                      marginTop: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.textLight,
-                        marginRight: 8,
-                      }}
-                    >
-                      •
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.textLight,
-                        flex: 1,
-                      }}
-                    >
-                      {line}
-                    </Text>
-                  </View>
-                ))}
-            </>
-          ) : null}
+            {/* ✅ Work Not Includes */}
+            <WorkNotIncludesCard workNotIncludes={service.work_not_included} />
+          </View>
 
           {/* ✅ How it works */}
           {(() => {
@@ -979,11 +860,9 @@ export default function ServiceDetailScreen({ route }: Props) {
             ) : null;
           })()}
 
-          {/* ✅ FAQs Section (dynamic, service-specific, theme-adapted, below How it Works) */}
+          {/* ✅ FAQs Section */}
           {(() => {
             const faqs = getServiceSpecificFAQs();
-            const activeFAQ = faqs.find((f) => f.id === activeFaqId) || faqs[0];
-            const inactiveFAQs = faqs.filter((f) => f.id !== activeFaqId);
 
             return (
               <View style={{ marginTop: 24, paddingBottom: 16 }}>
@@ -1037,108 +916,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                   Find answers to common questions about our {service?.title || "service"}.
                 </Text>
 
-                {/* Active FAQ Card */}
-                {activeFAQ && (
-                  <View
-                    style={{
-                      backgroundColor: isDark ? "rgba(244, 196, 48, 0.06)" : "#FDFDF6",
-                      borderColor: "rgba(244, 196, 48, 0.25)",
-                      borderWidth: 1,
-                      borderLeftWidth: 5,
-                      borderLeftColor: COLORS.saffron,
-                      borderRadius: 16,
-                      padding: 16,
-                      marginBottom: 14,
-                      shadowColor: COLORS.saffron,
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: isDark ? 0.05 : 0.03,
-                      shadowRadius: 8,
-                      elevation: 1,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 12,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                        <View
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 12,
-                            backgroundColor: COLORS.saffron,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Ionicons name="remove" size={14} color="#000" />
-                        </View>
-                        <Text
-                          style={{
-                            fontSize: 16,
-                            fontWeight: "700",
-                            color: theme.text,
-                            flex: 1,
-                          }}
-                        >
-                          {activeFAQ.question}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-up" size={18} color={COLORS.saffron} />
-                    </View>
-
-                    <View style={{ paddingLeft: 34, marginTop: 8 }}>
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          lineHeight: 21,
-                          color: theme.textLight,
-                        }}
-                      >
-                        {activeFAQ.answer}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* Inactive FAQ cards stack */}
-                {inactiveFAQs.map((faq) => (
-                  <Pressable
-                    key={faq.id}
-                    onPress={() => setActiveFaqId(faq.id)}
-                    style={({ pressed }) => ({
-                      backgroundColor: theme.background,
-                      borderColor: theme.border,
-                      borderWidth: 1,
-                      borderRadius: 12,
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 10,
-                      gap: 12,
-                      opacity: pressed ? 0.8 : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: "600",
-                        color: theme.text,
-                        flex: 1,
-                        lineHeight: 20,
-                      }}
-                    >
-                      {faq.question}
-                    </Text>
-                    <Ionicons name="add" size={18} color={theme.textLight} />
-                  </Pressable>
-                ))}
+                <FAQAccordion faqs={faqs} />
               </View>
             );
           })()}

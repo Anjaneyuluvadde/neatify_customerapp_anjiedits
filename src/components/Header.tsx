@@ -1,14 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
-import { DrawerActions, useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute, DrawerActions } from "@react-navigation/native";
 import * as Location from "expo-location";
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View, LayoutAnimation, Platform, UIManager } from "react-native";
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+import LocationService from "../services/LocationService";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { supabase } from "../lib/supabase";
-import { isServiceable, getServiceAreaMatch } from "../config/serviceAreas";
 
 type HeaderProps = {
   isCurved?: boolean;
@@ -16,12 +20,17 @@ type HeaderProps = {
 
 export default function Header({ isCurved = false }: HeaderProps) {
   const navigation = useNavigation<any>();
+  const route = useRoute();
   const { checkAuth } = useAuthGuard();
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
 
+  const isHome = route.name.toLowerCase().includes('home');
+
   const [profile, setProfile] = useState<{ full_name: string; email: string } | null>(null);
   const [locationName, setLocationName] = useState<string>("Fetching location...");
+  const [fullAddress, setFullAddress] = useState<string>("");
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const greetingOpacity = useRef(new Animated.Value(0)).current;
@@ -86,51 +95,23 @@ export default function Header({ isCurved = false }: HeaderProps) {
     outputRange: ['0deg', '360deg'],
   });
 
-  const getLocality = (addr: Location.LocationGeocodedAddress) => {
-    // Priority: subLocality/neighborhood -> locality -> district -> city
-    if (addr.district && addr.district.length > 0) return addr.district;
-    if (addr.subregion && addr.subregion.length > 0) return addr.subregion;
-    if (addr.city && addr.city.length > 0) return addr.city;
-    if (addr.name && addr.name.length > 0) return addr.name;
-    if (addr.region && addr.region.length > 0) return addr.region;
-    return "Unknown Location";
-  };
-
   const handleRefresh = async (isInitial = false) => {
     if (isRefreshing) return;
     setIsRefreshing(true);
     startSpin();
-    
+
     const oldLocation = locationName;
     setLocationName("Fetching location...");
 
     try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      let finalStatus = status;
+      const result = await LocationService.fetchCurrentLocation();
 
-      if (status !== 'granted') {
-        const { status: reqStatus } = await Location.requestForegroundPermissionsAsync();
-        finalStatus = reqStatus;
-      }
-
-      if (finalStatus !== 'granted') {
+      if (result.status === 'permission_denied') {
         setLocationName("Permission denied");
-        setIsRefreshing(false);
-        stopSpin();
         return;
       }
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      const { latitude, longitude } = location.coords;
-
-      // Service Area Check
-      const serviceable = isServiceable(latitude, longitude);
-      if (!serviceable) {
-        setIsRefreshing(false);
-        stopSpin();
+      if (result.status === 'unserviceable') {
         navigation.reset({
           index: 0,
           routes: [{ name: "ComingSoon" }]
@@ -138,30 +119,22 @@ export default function Header({ isCurved = false }: HeaderProps) {
         return;
       }
 
-      // Reverse Geocoding
-      const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
-      let reverseString = "Unknown Location";
-      let postalCode = null;
-
-      if (addressList && addressList.length > 0) {
-        const addr = addressList[0];
-        postalCode = addr.postalCode;
-        reverseString = getLocality(addr);
+      if (result.status === 'error') {
+        setLocationName("Unable to update location");
+        if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
+          setTimeout(() => setLocationName(oldLocation), 2500);
+        }
+        return;
       }
 
-      // Check against strict Neatify Sub-Area mappings
-      const matchedArea = getServiceAreaMatch(latitude, longitude, postalCode, reverseString);
-
-      if (matchedArea) {
-        setLocationName(matchedArea.name);
-      } else {
-        setLocationName(reverseString);
-      }
+      // Success
+      setLocationName(result.locality);
+      setFullAddress(result.fullAddress);
 
     } catch (error) {
       console.warn("Location error:", error);
       setLocationName("Unable to update location");
-      // Revert to old location after a brief message if it wasn't the initial load
+      setFullAddress("");
       if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
         setTimeout(() => setLocationName(oldLocation), 2500);
       }
@@ -169,6 +142,11 @@ export default function Header({ isCurved = false }: HeaderProps) {
       setIsRefreshing(false);
       stopSpin();
     }
+  };
+
+  const toggleLocation = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded(!isExpanded);
   };
 
   const fetchProfile = async (userId: string) => {
@@ -194,26 +172,42 @@ export default function Header({ isCurved = false }: HeaderProps) {
 
   const userName = profile?.full_name || "Anjaneyulu";
 
+  if (!isHome) {
+    return null;
+  }
+
   return (
     <View style={[styles.container, isCurved && styles.curved]}>
       {/* TOP ROW */}
       <View style={styles.topRow}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => handleRefresh(false)}
-          style={styles.brandContainer}
-          disabled={isRefreshing}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4 }} />
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#111111' }}>
-              {locationName}
-            </Text>
-            <Animated.View style={{ transform: [{ rotate: spin }], marginLeft: 6 }}>
-              <Ionicons name="sync" size={14} color="#111111" />
-            </Animated.View>
+        <View style={styles.brandContainer}>
+          <View style={styles.locationRow}>
+            <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4, marginTop: 1 }} />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={toggleLocation}
+              style={{ flexShrink: 1, marginRight: 6 }}
+            >
+              <Text 
+                style={{ fontSize: 15, fontWeight: '700', color: '#111111', lineHeight: 20 }}
+                numberOfLines={isExpanded ? undefined : 1}
+              >
+                {isExpanded && fullAddress ? fullAddress : locationName}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleRefresh(false)}
+              disabled={isRefreshing}
+              style={{ paddingHorizontal: 4, paddingVertical: 2 }}
+            >
+              <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <Ionicons name="sync" size={14} color="#111111" />
+              </Animated.View>
+            </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
 
         <View style={styles.rightActions}>
           <TouchableOpacity style={styles.profileButton} onPress={handleMenuPress}>
@@ -251,12 +245,17 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
   },
   brandContainer: {
+    flex: 1,
+    marginRight: 12,
     justifyContent: "center",
-    marginRight: 8,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
   logo: {
     width: 125,

@@ -1,0 +1,131 @@
+import * as Location from "expo-location";
+import { getServiceAreaMatch, isServiceable } from "../config/serviceAreas";
+
+export interface LocationResult {
+  locality: string;
+  fullAddress: string;
+  latitude: number;
+  longitude: number;
+  postalCode: string | null;
+  rawAddress: Location.LocationGeocodedAddress | null;
+  isServiceable: boolean;
+  status: 'success' | 'permission_denied' | 'error' | 'unserviceable';
+}
+
+class LocationService {
+  /**
+   * Helper to parse the most specific locality string from Expo's address object.
+   * Matches Android/iOS specific fields accurately.
+   */
+  public static getLocalityString(addr: Location.LocationGeocodedAddress): string {
+    // Priority: subLocality (e.g. Gopanpally) -> neighborhood -> street -> name -> district (e.g. Tellapur) -> city
+    if (addr.subLocality && addr.subLocality.length > 0) return addr.subLocality;
+    if (addr.neighborhood && addr.neighborhood.length > 0) return addr.neighborhood;
+    if (addr.name && addr.name.length > 0) return addr.name;
+    if (addr.street && addr.street.length > 0) return addr.street;
+    if (addr.district && addr.district.length > 0) return addr.district;
+    if (addr.city && addr.city.length > 0) return addr.city;
+    if (addr.subregion && addr.subregion.length > 0) return addr.subregion;
+    if (addr.region && addr.region.length > 0) return addr.region;
+
+    return "Unknown Location";
+  }
+
+  /**
+   * Fetches current GPS location, reverse geocodes, and returns a unified result.
+   */
+  public static async fetchCurrentLocation(accuracy: Location.LocationAccuracy = Location.Accuracy.Balanced): Promise<LocationResult> {
+    try {
+      // 1. Permission Handling
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status: reqStatus } = await Location.requestForegroundPermissionsAsync();
+        finalStatus = reqStatus;
+      }
+
+      if (finalStatus !== 'granted') {
+        return {
+          locality: "Permission denied",
+          fullAddress: "",
+          latitude: 0,
+          longitude: 0,
+          postalCode: null,
+          rawAddress: null,
+          isServiceable: false,
+          status: 'permission_denied',
+        };
+      }
+
+      // 2. Get GPS coordinates
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: accuracy,
+      });
+
+      const { latitude, longitude } = location.coords;
+
+      // 3. Serviceability Check (can be bypassed for specific needs, but usually checked)
+      const serviceable = isServiceable(latitude, longitude);
+
+      // 4. Reverse Geocoding
+      const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
+      
+      let reverseString = "Unknown Location";
+      let postalCode = null;
+      let rawAddress = null;
+      let fullAddress = "";
+
+      if (addressList && addressList.length > 0) {
+        rawAddress = addressList[0];
+        postalCode = rawAddress.postalCode || null;
+        reverseString = this.getLocalityString(rawAddress);
+        
+        // Try to get the formatted address directly, or build it
+        const anyAddr = rawAddress as any;
+        if (anyAddr.formattedAddress) {
+          fullAddress = anyAddr.formattedAddress;
+        } else {
+          // Fallback construction
+          const parts = [
+            rawAddress.street,
+            rawAddress.subLocality,
+            rawAddress.city || rawAddress.district,
+            rawAddress.region,
+            rawAddress.postalCode,
+          ].filter(Boolean);
+          fullAddress = parts.join(", ");
+        }
+      }
+
+      // 5. Match with Neatify Specific Sub-Areas (e.g. strict Gopanpally polygon)
+      const matchedArea = getServiceAreaMatch(latitude, longitude, postalCode, reverseString);
+
+      return {
+        locality: matchedArea ? matchedArea.name : reverseString,
+        fullAddress: fullAddress || reverseString,
+        latitude,
+        longitude,
+        postalCode,
+        rawAddress,
+        isServiceable: serviceable,
+        status: 'success',
+      };
+
+    } catch (error) {
+      console.error("LocationService error:", error);
+      return {
+        locality: "Unable to update location",
+        fullAddress: "",
+        latitude: 0,
+        longitude: 0,
+        postalCode: null,
+        rawAddress: null,
+        isServiceable: false,
+        status: 'error',
+      };
+    }
+  }
+}
+
+export default LocationService;

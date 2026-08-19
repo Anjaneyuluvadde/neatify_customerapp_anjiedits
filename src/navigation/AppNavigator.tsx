@@ -20,7 +20,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
-import SubservicesScreen from "../screens/SubservicesScreen";
+import CategoryServicesScreen from "../screens/CategoryServicesScreen";
 import LocationAccessScreen from "../screens/LocationAccessScreen";
 import ComingSoonScreen from "../screens/ComingSoonScreen";
 
@@ -79,8 +79,9 @@ export type RootStackParamList = {
     category: string;
     label: string;
   };
-  Subservices: {
+  CategoryServices: {
     mainCategoryName: string;
+    mainCategoryId: string;
     subCategories: any[];
   };
   CompleteProfile: undefined;
@@ -93,7 +94,7 @@ export type HomeStackParamList = {
   Schedule: { services: SelectedService[] };
   Checkout: { services: SelectedService[]; total: number; bookingDateText: string };
   CategoryDetail: { category: string; label: string };
-  Subservices: { mainCategoryName: string; subCategories: any[] };
+  CategoryServices: { mainCategoryName: string; mainCategoryId: string; subCategories: any[] };
 };
 
 export type BookingsStackParamList = {
@@ -130,7 +131,7 @@ function HomeTabStack() {
       <HomeStack.Screen name="Schedule" component={ScheduleScreen as any} />
       <HomeStack.Screen name="Checkout" component={CheckoutScreen as any} />
       <HomeStack.Screen name="CategoryDetail" component={CategoryDetailScreen as any} />
-      <HomeStack.Screen name="Subservices" component={SubservicesScreen as any} />
+      <HomeStack.Screen name="CategoryServices" component={CategoryServicesScreen as any} />
     </HomeStack.Navigator>
   );
 }

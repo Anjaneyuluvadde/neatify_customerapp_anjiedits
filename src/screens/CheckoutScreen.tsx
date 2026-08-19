@@ -3,6 +3,7 @@ import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/nati
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import LocationService from "../services/LocationService";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -539,83 +540,59 @@ export default function CheckoutScreen({ route }: Props) {
   const fetchCurrentLocation = async () => {
     if (!userId) return;
 
-    const { status } = await Location.requestForegroundPermissionsAsync();
-
-    if (status !== "granted") {
-      setAlertConfig({
-        title: 'Permission Denied',
-        message: 'Location access is required to use this feature',
-        type: 'warning'
-      });
-      setShowAlertModal(true);
-      return;
-    }
-
     setFetchingLocation(true);
 
     try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const result = await LocationService.fetchCurrentLocation(Location.Accuracy.High);
 
-      const { latitude, longitude } = location.coords;
-
-      // Store coordinates for booking
-      setBookingLatitude(latitude);
-      setBookingLongitude(longitude);
-
-      // Use Expo's native geocoder (uses Google on Android — most accurate for India)
-      try {
-        const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
-
-        if (addressList[0]) {
-          const addr: any = addressList[0];
-
-          // Debug: log ALL fields to see what's available
-          console.log("📍 Expo Geocoder raw response:", JSON.stringify(addr, null, 2));
-
-          // Try to extract area from formattedAddress (Android returns full Google address)
-          const fullAddr: string = addr.formattedAddress || "";
-          console.log("📍 formattedAddress:", fullAddr);
-
-          if (fullAddr) {
-            // Parse the formatted address: "Premises, Street, Locality, City, State, PIN, Country"
-            const parts = fullAddr.split(",").map((p: string) => p.trim()).filter((p: string) => p);
-
-            // 1. Extract Pincode (any 6 digit number)
-            let pinIdx = -1;
-            for (let i = parts.length - 1; i >= 0; i--) {
-              const pinMatch = parts[i].match(/\b(\d{6})\b/);
-              if (pinMatch) {
-                setPincode(pinMatch[1]);
-                pinIdx = i;
-                break;
-              }
-            }
-            if (pinIdx === -1 && addr.postalCode) setPincode(addr.postalCode);
-
-            // Try to extract a clean street address for the manual field
-            setManualAddress(fullAddr || "");
-
-            setIsAddressSummaryMode(true);
-            setHasUsedLocationFetch(true);
-          } else {
-            setManualAddress(addr.street || addr.district || addr.subregion || "");
-            if (addr.postalCode) setPincode(addr.postalCode);
-            setIsAddressSummaryMode(false);
-          }
-        }
-      } catch (geoErr) {
-        console.log("Geocoding failed:", geoErr);
+      if (result.status === 'permission_denied') {
+        setAlertConfig({
+          title: 'Permission Denied',
+          message: 'Location access is required to use this feature',
+          type: 'warning'
+        });
+        setShowAlertModal(true);
+        return;
       }
-    } catch (err) {
-      console.error("Location fetch error:", err);
-      setAlertConfig({
-        title: 'Location Error',
-        message: 'Could not fetch your location. Please try again or enter manually.',
-        type: 'error'
-      });
-      setShowAlertModal(true);
+
+      if (result.status === 'error') {
+        setAlertConfig({
+          title: 'Location Error',
+          message: 'Could not fetch your location. Please try again or enter manually.',
+          type: 'error'
+        });
+        setShowAlertModal(true);
+        return;
+      }
+
+      setBookingLatitude(result.latitude);
+      setBookingLongitude(result.longitude);
+
+      if (result.rawAddress) {
+        const addr: any = result.rawAddress;
+        const fullAddr: string = addr.formattedAddress || "";
+
+        if (fullAddr) {
+          const parts = fullAddr.split(",").map((p: string) => p.trim()).filter((p: string) => p);
+          let pinIdx = -1;
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const pinMatch = parts[i].match(/\b(\d{6})\b/);
+            if (pinMatch) {
+              setPincode(pinMatch[1]);
+              pinIdx = i;
+              break;
+            }
+          }
+          if (pinIdx === -1 && addr.postalCode) setPincode(addr.postalCode);
+          setManualAddress(fullAddr || "");
+          setIsAddressSummaryMode(true);
+          setHasUsedLocationFetch(true);
+        } else {
+          setManualAddress(addr.street || addr.district || addr.subregion || result.locality || "");
+          if (addr.postalCode) setPincode(addr.postalCode);
+          setIsAddressSummaryMode(false);
+        }
+      }
     } finally {
       setFetchingLocation(false);
     }
