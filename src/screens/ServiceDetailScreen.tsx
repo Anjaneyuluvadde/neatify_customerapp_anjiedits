@@ -17,9 +17,11 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
+import AnimatedProcessTimeline from "../components/AnimatedProcessTimeline";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { supabase } from "../lib/supabase";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
@@ -99,6 +101,7 @@ export default function ServiceDetailScreen({ route }: Props) {
   const { theme, isDark } = useTheme();
   const { checkAuth } = useAuthGuard();
   const insets = useSafeAreaInsets();
+  const bottomNavPadding = useBottomNavPadding();
   const { service: paramService, serviceId } = route.params;
 
   const [service, setService] = useState<Service | null>(paramService || null);
@@ -685,6 +688,7 @@ export default function ServiceDetailScreen({ route }: Props) {
             progressBackgroundColor={theme.background}
           />
         }
+        contentContainerStyle={[bottomNavPadding]}
       >
         {/* BACK BUTTON */}
         <Pressable
@@ -916,9 +920,9 @@ export default function ServiceDetailScreen({ route }: Props) {
             </>
           ) : null}
 
-          {/* ✅ How it works (Replaced Workframes) */}
+          {/* ✅ How it works */}
           {(() => {
-            let howItWorksItems: { title: string, iconUrl?: string }[] = [];
+            let howItWorksItems: { title: string }[] = [];
 
             // 1. Check if the new JSON column 'how_it_works' has data
             let parsedHowItWorks = null;
@@ -933,67 +937,12 @@ export default function ServiceDetailScreen({ route }: Props) {
             if (parsedHowItWorks && Array.isArray(parsedHowItWorks) && parsedHowItWorks.length > 0) {
               // Use the new dynamic JSON column
               howItWorksItems = parsedHowItWorks.map((item: any) => {
-                let imgUrl = item.image;
-                if (imgUrl && !imgUrl.startsWith("http")) {
-                  imgUrl = supabase.storage.from("service-images").getPublicUrl(imgUrl).data.publicUrl;
-                }
                 return {
                   title: item.title,
-                  iconUrl: imgUrl || undefined
                 };
               });
             } else {
-              // 2. Legacy fallback: Prioritize gallery_images first
-              let frames: string[] = [];
-              
-              if (service.gallery_images) {
-                if (Array.isArray(service.gallery_images)) {
-                  frames = service.gallery_images;
-                } else if (typeof service.gallery_images === 'string') {
-                  try { frames = JSON.parse(service.gallery_images); } catch (e) { frames = [service.gallery_images]; }
-                }
-              }
-
-              // Fallback to image2 if gallery_images is empty or not provided
-              if (frames.length === 0 && service.image2) {
-                if (Array.isArray(service.image2)) {
-                  frames = service.image2;
-                } else if (typeof service.image2 === 'string') {
-                  if (service.image2.startsWith('[') || service.image2.startsWith('{')) {
-                    try { frames = JSON.parse(service.image2); } catch (e) { frames = [service.image2]; }
-                  } else {
-                    frames = [service.image2];
-                  }
-                }
-              }
-
-              // Robust cleanup: sometimes Supabase text[] returns a single element containing a stringified array
-              let actualFrames: string[] = [];
-              frames.forEach(f => {
-                if (typeof f === 'string' && (f.startsWith('[') || f.startsWith('{'))) {
-                  try {
-                    const parsed = JSON.parse(f);
-                    if (Array.isArray(parsed)) {
-                      actualFrames.push(...parsed);
-                    } else {
-                      actualFrames.push(f);
-                    }
-                  } catch (e) {
-                    actualFrames.push(f);
-                  }
-                } else {
-                  actualFrames.push(f);
-                }
-              });
-              frames = actualFrames;
-
-              const resolvedFrames = frames.map(f => {
-                if (f && !f.startsWith('http')) {
-                  return supabase.storage.from("service-images").getPublicUrl(f).data.publicUrl;
-                }
-                return f;
-              });
-
+              // 2. Legacy fallback: Use work_includes
               const workIncludesLines = service.work_includes
                 ? service.work_includes
                     .replace(/\r\n/g, "\n")
@@ -1002,12 +951,11 @@ export default function ServiceDetailScreen({ route }: Props) {
                     .filter(Boolean)
                 : [];
                 
-              howItWorksItems = workIncludesLines.map((line, idx) => {
+              howItWorksItems = workIncludesLines.map((line) => {
                 // Strip leading bullets/dashes
                 let cleanLine = line.replace(/^[•\-\*]\s*/, "");
                 return { 
                   title: cleanLine,
-                  iconUrl: resolvedFrames[idx]
                 };
               });
             }
@@ -1026,59 +974,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                   {t("serviceDetail.howItWorks") || "How it works"}
                 </Text>
 
-                <View style={{ paddingLeft: 4 }}>
-                  {howItWorksItems.map((item, idx) => {
-                    const iconUrl = item.iconUrl; // Read from the prepared item
-                    const isLast = idx === howItWorksItems.length - 1;
-                    return (
-                      <View key={idx} style={{ flexDirection: "row", marginBottom: isLast ? 0 : 20 }}>
-                        {/* Left Column: Icon and Vertical Line */}
-                        <View style={{ alignItems: "center", marginRight: 16 }}>
-                          {iconUrl ? (
-                            <Image
-                              source={{ uri: iconUrl }}
-                              style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: 28,
-                                backgroundColor: isDark ? "#333" : "#f0f0f0",
-                              }}
-                            />
-                          ) : (
-                            <View
-                              style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: 28,
-                                backgroundColor: isDark ? "#333" : "#f0f0f0",
-                              }}
-                            />
-                          )}
-                          {!isLast && (
-                            <View style={{ height: '100%', position: 'absolute', top: 56, bottom: -20, width: 2, alignItems: 'center' }}>
-                              <View
-                                style={{
-                                  width: 0,
-                                  height: '100%',
-                                  borderStyle: "dashed",
-                                  borderLeftWidth: 2,
-                                  borderColor: COLORS.saffron,
-                                }}
-                              />
-                            </View>
-                          )}
-                        </View>
-                        
-                        {/* Right Column: Text */}
-                        <View style={{ flex: 1, justifyContent: "center", paddingBottom: 16 }}>
-                          <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text, lineHeight: 24 }}>
-                            {item.title}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
+                <AnimatedProcessTimeline steps={howItWorksItems} />
               </>
             ) : null;
           })()}

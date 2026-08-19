@@ -6,6 +6,7 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 
 import { useTheme } from "../context/ThemeContext";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { RootStackParamList } from "../navigation/AppNavigator";
 
 type Props = {
@@ -15,6 +16,7 @@ type Props = {
 export default function SubservicesScreen({ route }: Props) {
   const { mainCategoryName, subCategories } = route.params;
   const { theme } = useTheme();
+  const bottomNavPadding = useBottomNavPadding();
   const navigation = useNavigation<any>();
 
   return (
@@ -35,7 +37,7 @@ export default function SubservicesScreen({ route }: Props) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, bottomNavPadding]}
       >
         <View style={styles.categoryGrid}>
           {subCategories.map((cat: any) => (

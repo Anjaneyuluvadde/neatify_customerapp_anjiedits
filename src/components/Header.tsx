@@ -216,20 +216,6 @@ export default function Header({ isCurved = false }: HeaderProps) {
         </TouchableOpacity>
 
         <View style={styles.rightActions}>
-          <TouchableOpacity style={styles.actionButton}>
-            <Ionicons
-              name="notifications"
-              size={25}
-              color="#111111"
-            />
-
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationBadgeText}>
-                2
-              </Text>
-            </View>
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.profileButton} onPress={handleMenuPress}>
             <Ionicons
               name="person"
@@ -281,15 +267,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  actionButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
   profileButton: {
     width: 42,
     height: 42,
@@ -297,22 +274,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     alignItems: "center",
     justifyContent: "center",
-  },
-  notificationBadge: {
-    position: "absolute",
-    top: -2,
-    right: -2,
-    width: 17,
-    height: 17,
-    borderRadius: 9,
-    backgroundColor: "#F4B400",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notificationBadgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#111111",
   },
   greetingContainer: {
     marginTop: 8,

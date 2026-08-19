@@ -27,6 +27,7 @@ import LoadingOverlay from "../components/LoadingOverlay";
 
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { processPayment } from "../lib/paymentService";
 import { supabase } from "../lib/supabase";
 import { invokeFunction } from "../lib/backendClient";
@@ -93,6 +94,7 @@ export default function CheckoutScreen({ route }: Props) {
   const navigation = useNavigation<any>();
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
+  const bottomNavPadding = useBottomNavPadding();
   const { services: initialServices, bookingDateText } = route.params;
   const [checkoutServices, setCheckoutServices] = useState<SelectedService[]>(initialServices || []);
 
@@ -1149,7 +1151,7 @@ export default function CheckoutScreen({ route }: Props) {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: theme.background }}>
         <ScrollView
           style={{ backgroundColor: theme.background }}
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[styles.container, bottomNavPadding]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

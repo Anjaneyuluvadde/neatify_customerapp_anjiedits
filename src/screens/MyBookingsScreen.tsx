@@ -18,6 +18,7 @@ import { useTheme } from "../context/ThemeContext";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { useFocusEffect } from "@react-navigation/native";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 
 type TabType = "current" | "completed";
 
@@ -31,6 +32,7 @@ export default function MyBookingsScreen() {
   const insets = useSafeAreaInsets();
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("current");
+  const bottomNavPadding = useBottomNavPadding();
 
   const pagerRef = useRef<FlatList>(null);
   const width = Dimensions.get("window").width;
@@ -156,7 +158,7 @@ export default function MyBookingsScreen() {
             <FlatList
               data={item.data}
               keyExtractor={(b) => b.id}
-              contentContainerStyle={{ padding: 16, paddingBottom: Math.max(insets.bottom + 110, 130), flexGrow: 1 }}
+              contentContainerStyle={[{ padding: 16, flexGrow: 1 }, bottomNavPadding]}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}

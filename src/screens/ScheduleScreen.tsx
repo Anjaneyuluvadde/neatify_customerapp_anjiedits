@@ -24,6 +24,7 @@ import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import {
@@ -334,6 +335,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const navigation = useNavigation<any>();
   const { showAlert } = useNotification();
   const insets = useSafeAreaInsets();
+  const bottomNavPadding = useBottomNavPadding();
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
 
@@ -1318,7 +1320,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <Header />
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, bottomNavPadding]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

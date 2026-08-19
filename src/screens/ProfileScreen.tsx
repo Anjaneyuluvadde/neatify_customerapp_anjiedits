@@ -20,8 +20,9 @@ import {
   View,
   Clipboard
 } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Header from "../components/Header";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 
 // import LanguageSelector from "../components/LanguageSelector"; // REMOVED
 import { useLanguage } from "../context/LanguageContext";
@@ -103,7 +104,7 @@ export default function ProfileScreen() {
   const { theme, isDark } = useTheme();
   const { showAlert, showToast } = useNotification();
   const { t } = useLanguage();
-  const insets = useSafeAreaInsets();
+  const bottomNavPadding = useBottomNavPadding();
 
   const formatDisplayPhone = (phone: string | undefined | null) => {
     if (!phone) return "";
@@ -362,7 +363,7 @@ export default function ProfileScreen() {
       >
         <ScrollView
           style={[styles.container, { backgroundColor: theme.background }]}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom + 110, 130), paddingHorizontal: 16 }}
+          contentContainerStyle={[{ paddingHorizontal: 16 }, bottomNavPadding]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           onScrollBeginDrag={Keyboard.dismiss}

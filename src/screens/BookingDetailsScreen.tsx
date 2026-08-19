@@ -17,6 +17,7 @@ import ReviewModal from "../components/ReviewModal";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import { useTheme } from "../context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 
 export default function BookingDetailsScreen({ route }: Props) {
   const { booking: initialBooking } = route.params;
@@ -38,6 +39,7 @@ export default function BookingDetailsScreen({ route }: Props) {
   const [fetchingFees, setFetchingFees] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
+  const bottomNavPadding = useBottomNavPadding();
 
   // Review State
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -413,7 +415,7 @@ export default function BookingDetailsScreen({ route }: Props) {
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <ScrollView
         style={{ flex: 1, backgroundColor: theme.background }}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, bottomNavPadding]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

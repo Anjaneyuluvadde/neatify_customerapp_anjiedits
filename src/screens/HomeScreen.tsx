@@ -28,6 +28,7 @@ import ServiceCard from "../components/ServiceCard";
 import WhyChooseUs from "../components/WhyChooseUs";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { useNotification } from "../hooks/useNotification";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
@@ -80,6 +81,7 @@ export default function HomeScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
+  const bottomNavPadding = useBottomNavPadding();
 
   // ✅ Hero banners state
   const [heroBanners, setHeroBanners] = useState<ImageSourcePropType[]>([]);
@@ -622,7 +624,7 @@ export default function HomeScreen({ navigation }: any) {
               progressBackgroundColor={theme.background}
             />
           }
-          contentContainerStyle={{ backgroundColor: theme.background, paddingBottom: Math.max(insets.bottom + 110, 130) }}
+          contentContainerStyle={[{ backgroundColor: theme.background }, bottomNavPadding]}
         >
           {/* 1. Header (Logo + Search) */}
           <Header />

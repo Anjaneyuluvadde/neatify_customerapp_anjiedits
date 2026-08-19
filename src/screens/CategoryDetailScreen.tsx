@@ -14,6 +14,7 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 
 import { supabase } from "../lib/supabase";
 import { useTheme } from "../context/ThemeContext";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { Service } from "../types/service";
 import ServiceCard from "../components/ServiceCard";
 import { RootStackParamList } from "../navigation/AppNavigator";
@@ -25,6 +26,7 @@ type Props = {
 export default function CategoryDetailScreen({ route }: Props) {
   const { category, label } = route.params;
   const { theme } = useTheme();
+  const bottomNavPadding = useBottomNavPadding();
   const navigation = useNavigation<any>();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,7 +89,7 @@ export default function CategoryDetailScreen({ route }: Props) {
           renderItem={renderService}
           keyExtractor={(item) => item.id}
           numColumns={2}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, bottomNavPadding]}
           showsVerticalScrollIndicator={false}
         />
       )}
