@@ -84,11 +84,14 @@ src/
     useGoogleAuth.ts
   components/
     AnimatedGradientBorder.tsx
+    AnimatedProcessTimeline.tsx
     AppToast.tsx
     CategoryTabs.tsx
     CustomAlert.tsx
     CustomDrawerContent.tsx
     CustomTabBar.tsx
+    DescriptionCard.tsx
+    FAQAccordion.tsx
     Header.tsx
     HomeHero.tsx
     LanguageSelector.tsx
@@ -96,7 +99,10 @@ src/
     LoadingOverlay.tsx
     ReviewModal.tsx
     ServiceCard.tsx
+    ServiceInfoCard.tsx
     WhyChooseUs.tsx
+    WorkIncludesCard.tsx
+    WorkNotIncludesCard.tsx
   config/
     serviceAreas.ts
   context/
@@ -121,6 +127,7 @@ src/
     BookingScreen.tsx
     CartScreen.tsx
     CategoryDetailScreen.tsx
+    CategoryServicesScreen.tsx
     CheckoutScreen.tsx
     ComingSoonScreen.tsx
     CompleteProfileScreen.tsx
@@ -132,7 +139,8 @@ src/
     ResetPasswordScreen.tsx
     ScheduleScreen.tsx
     ServiceDetailScreen.tsx
-    SubservicesScreen.tsx
+  services/
+    LocationService.ts
   theme/
     colors.ts
   types/
@@ -167,27 +175,6 @@ version9_HomeScreen.tsx
 
 <files>
 This section contains the contents of the repository's files.
-
-<file path="src/hooks/useBottomNavPadding.ts">
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-/**
- * Calculates the exact bottom padding required for scrollable content
- * to scroll completely above the absolute-positioned custom bottom navigation bar.
- * 
- * Includes the bar height (70), bar bottom padding (15), safe area, and extra spacing.
- */
-export function useBottomNavPadding(extraPadding: number = 24) {
-    const insets = useSafeAreaInsets();
-    
-    // CustomTabBar height (70) + tab bar bottom padding (15)
-    const BOTTOM_NAV_HEIGHT = 85; 
-    
-    return {
-        paddingBottom: BOTTOM_NAV_HEIGHT + insets.bottom + extraPadding,
-    };
-}
-</file>
 
 <file path="mocks/react-native-razorpay.js">
 /**
@@ -454,6 +441,300 @@ export async function signInWithGoogle() {
 }
 </file>
 
+<file path="src/components/AnimatedProcessTimeline.tsx">
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withRepeat,
+  interpolate,
+  Extrapolation,
+  Easing,
+} from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
+import { COLORS } from '../theme/colors';
+
+export interface TimelineStep {
+  title: string;
+}
+
+interface AnimatedProcessTimelineProps {
+  steps: TimelineStep[];
+}
+
+const STEP_DURATION = 1000; // 1 second per step transition
+
+const TimelineNode = ({ 
+  index, 
+  progress, 
+  isDark 
+}: { 
+  index: number; 
+  progress: Animated.SharedValue<number>; 
+  isDark: boolean; 
+}) => {
+  const pulseScale = useSharedValue(1);
+  const pulseOpacity = useSharedValue(0.6);
+
+  useEffect(() => {
+    pulseScale.value = withRepeat(withTiming(2.5, { duration: 1500, easing: Easing.out(Easing.ease) }), -1, false);
+    pulseOpacity.value = withRepeat(withTiming(0, { duration: 1500, easing: Easing.out(Easing.ease) }), -1, false);
+  }, []);
+
+  const outerCircleStyle = useAnimatedStyle(() => {
+    const scale = interpolate(
+      progress.value,
+      [index - 0.5, index, index + 0.5, index + 1],
+      [1, 1.2, 1.2, 1],
+      Extrapolation.CLAMP
+    );
+    
+    const isCompleted = progress.value >= index + 1;
+    const isActiveOrCompleted = progress.value >= index;
+
+    const bgColor = isCompleted 
+      ? COLORS.saffron 
+      : isDark ? '#222' : '#f9f9f9';
+
+    const borderColor = isActiveOrCompleted 
+      ? COLORS.saffron 
+      : isDark ? '#444' : '#d1d5db';
+      
+    const borderWidth = isCompleted ? 0 : 2;
+
+    return {
+      transform: [{ scale }],
+      backgroundColor: bgColor,
+      borderColor: borderColor,
+      borderWidth: borderWidth,
+    };
+  });
+
+  const checkmarkStyle = useAnimatedStyle(() => {
+    const opacity = interpolate(
+      progress.value,
+      [index + 0.8, index + 1],
+      [0, 1],
+      Extrapolation.CLAMP
+    );
+    const scale = interpolate(
+      progress.value,
+      [index + 0.8, index + 1],
+      [0.5, 1],
+      Extrapolation.CLAMP
+    );
+    return {
+      opacity,
+      transform: [{ scale }]
+    };
+  });
+
+  const activeDotStyle = useAnimatedStyle(() => {
+    const opacity = progress.value >= index && progress.value < index + 1 ? 1 : 0;
+    return { opacity };
+  });
+
+  const pulsingDotStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: pulseScale.value }],
+      opacity: pulseOpacity.value,
+    };
+  });
+
+  return (
+    <View style={styles.nodeContainer}>
+      <Animated.View style={[styles.outerCircle, outerCircleStyle]}>
+        {/* Active Dot and Pulse */}
+        <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, activeDotStyle]}>
+           <Animated.View style={[styles.pulsingDot, pulsingDotStyle]} />
+           <View style={styles.innerDot} />
+        </Animated.View>
+        
+        {/* Completed Checkmark */}
+        <Animated.View style={[StyleSheet.absoluteFill, styles.centerAlign, checkmarkStyle]}>
+           <Ionicons name="checkmark-sharp" size={16} color="#000" />
+        </Animated.View>
+      </Animated.View>
+    </View>
+  );
+};
+
+const TimelineLine = ({ 
+  index, 
+  progress, 
+  isDark 
+}: { 
+  index: number; 
+  progress: Animated.SharedValue<number>; 
+  isDark: boolean;
+}) => {
+  const lineFillStyle = useAnimatedStyle(() => {
+    const heightPercentage = interpolate(
+      progress.value,
+      [index, index + 1],
+      [0, 100],
+      Extrapolation.CLAMP
+    );
+    return {
+      height: `${heightPercentage}%`,
+    };
+  });
+
+  return (
+    <View style={styles.lineContainer}>
+      {/* Background dashed line */}
+      <View style={[styles.dashedLine, { borderColor: isDark ? '#444' : '#E5E7EB' }]} />
+      {/* Animated filled line */}
+      <Animated.View style={[styles.filledLine, lineFillStyle]} />
+    </View>
+  );
+};
+
+const AnimatedProcessTimeline: React.FC<AnimatedProcessTimelineProps> = ({ steps }) => {
+  const { theme, isDark } = useTheme();
+  const progress = useSharedValue(0);
+
+  useEffect(() => {
+    // Animate through all steps + 1 to complete the last node
+    progress.value = withTiming(steps.length, {
+      duration: steps.length * STEP_DURATION,
+      easing: Easing.linear,
+    });
+  }, [steps.length]);
+
+  return (
+    <View style={styles.container}>
+      {steps.map((step, index) => {
+        const isLast = index === steps.length - 1;
+        
+        // Item reveal animation
+        const itemStyle = useAnimatedStyle(() => {
+          const opacity = interpolate(
+            progress.value,
+            [index - 1, index - 0.5],
+            [0, 1],
+            Extrapolation.CLAMP
+          );
+          const translateY = interpolate(
+            progress.value,
+            [index - 1, index - 0.5],
+            [10, 0],
+            Extrapolation.CLAMP
+          );
+          // First item is always visible initially
+          return {
+            opacity: index === 0 ? 1 : opacity,
+            transform: [{ translateY: index === 0 ? 0 : translateY }]
+          };
+        });
+
+        return (
+          <Animated.View key={index} style={[styles.stepRow, itemStyle]}>
+            {/* Left Column: Node and Line */}
+            <View style={styles.leftColumn}>
+              <TimelineNode index={index} progress={progress} isDark={isDark} />
+              {!isLast && <TimelineLine index={index} progress={progress} isDark={isDark} />}
+            </View>
+            
+            {/* Right Column: Text */}
+            <View style={styles.rightColumn}>
+              <Text style={[styles.stepText, { color: theme.text }]}>
+                {step.title}
+              </Text>
+            </View>
+          </Animated.View>
+        );
+      })}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    paddingLeft: 4,
+    paddingRight: 16,
+    paddingBottom: 8,
+  },
+  stepRow: {
+    flexDirection: 'row',
+  },
+  leftColumn: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 32,
+  },
+  rightColumn: {
+    flex: 1,
+    paddingTop: 4,
+    paddingBottom: 24, // spacing between text items
+    justifyContent: 'flex-start',
+  },
+  nodeContainer: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  outerCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+  },
+  centerAlign: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  innerDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.saffron,
+  },
+  pulsingDot: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: COLORS.saffron,
+  },
+  lineContainer: {
+    width: 2,
+    flex: 1,
+    // The line stretches between nodes. 
+    // Margin top/bottom is slightly handled by padding in rightColumn, but we'll set negative margins to connect circles smoothly
+    marginTop: 4,
+    marginBottom: 4,
+    alignItems: 'center',
+  },
+  dashedLine: {
+    position: 'absolute',
+    width: 0,
+    height: '100%',
+    borderStyle: 'dashed',
+    borderLeftWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  filledLine: {
+    width: 2,
+    backgroundColor: COLORS.saffron,
+    position: 'absolute',
+    top: 0,
+  },
+  stepText: {
+    fontSize: 16,
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+});
+
+export default AnimatedProcessTimeline;
+</file>
+
 <file path="src/components/AppToast.tsx">
 import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect, useRef } from "react";
@@ -558,6 +839,205 @@ export default function AppToast({
 }
 </file>
 
+<file path="src/components/DescriptionCard.tsx">
+import React from 'react';
+import { Text, StyleSheet } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import ServiceInfoCard from './ServiceInfoCard';
+import { useLanguage } from '../context/LanguageContext';
+
+interface DescriptionCardProps {
+  description: string;
+}
+
+const DescriptionCard: React.FC<DescriptionCardProps> = ({ description }) => {
+  const { theme } = useTheme();
+  const { t } = useLanguage();
+
+  if (!description || !description.trim()) return null;
+
+  const descriptionLines = description
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (descriptionLines.length === 0) return null;
+
+  return (
+    <ServiceInfoCard title={t("serviceDetail.description")}>
+      {descriptionLines.map((line, index) => (
+        <Text
+          key={index}
+          style={[
+            styles.text,
+            { color: theme.text, marginTop: index === 0 ? 0 : 8 }
+          ]}
+        >
+          {line}
+        </Text>
+      ))}
+    </ServiceInfoCard>
+  );
+};
+
+const styles = StyleSheet.create({
+  text: {
+    fontSize: 15,
+    lineHeight: 24,
+  },
+});
+
+export default DescriptionCard;
+</file>
+
+<file path="src/components/FAQAccordion.tsx">
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
+import { COLORS } from '../theme/colors';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android') {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
+
+export interface FAQ {
+  id: number;
+  question: string;
+  answer: string;
+}
+
+interface FAQItemProps {
+  faq: FAQ;
+  isActive: boolean;
+  onToggle: () => void;
+}
+
+const FAQItem: React.FC<FAQItemProps> = ({ faq, isActive, onToggle }) => {
+  const { theme, isDark } = useTheme();
+
+  const bgColor = isActive 
+    ? (isDark ? "rgba(244, 196, 48, 0.06)" : "#FDFDF6")
+    : theme.background;
+    
+  const borderColor = isActive
+    ? "rgba(244, 196, 48, 0.25)"
+    : theme.border;
+
+  const leftBorderWidth = isActive ? 5 : 1;
+  const leftBorderColor = isActive ? COLORS.saffron : theme.border;
+
+  return (
+    <View style={[styles.card, {
+      backgroundColor: bgColor,
+      borderColor: borderColor,
+      borderLeftWidth: leftBorderWidth,
+      borderLeftColor: leftBorderColor,
+    }]}>
+      <Pressable onPress={onToggle} style={styles.header}>
+        <View style={styles.questionContainer}>
+          <View style={[styles.iconWrapper, { backgroundColor: isActive ? COLORS.saffron : (isDark ? '#333' : '#F3F4F6') }]}>
+            <Ionicons name={isActive ? "remove" : "add"} size={14} color={isActive ? "#000" : theme.textLight} />
+          </View>
+          <Text style={[styles.question, { color: theme.text }]}>
+            {faq.question}
+          </Text>
+        </View>
+      </Pressable>
+      
+      {isActive && (
+        <View style={styles.body}>
+          <Text style={[styles.answer, { color: theme.textLight }]}>
+            {faq.answer}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
+interface FAQAccordionProps {
+  faqs: FAQ[];
+}
+
+const FAQAccordion: React.FC<FAQAccordionProps> = ({ faqs }) => {
+  const [openFaqId, setOpenFaqId] = useState<number | null>(faqs.length > 0 ? faqs[0].id : null);
+
+  const handleToggle = (id: number) => {
+    // Configure standard layout animation for a smooth, native accordion effect without heavy JS computation
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setOpenFaqId((currentId) => (currentId === id ? null : id));
+  };
+
+  if (!faqs || faqs.length === 0) return null;
+
+  return (
+    <View style={styles.accordionContainer}>
+      {faqs.map((faq) => (
+        <FAQItem 
+          key={faq.id} 
+          faq={faq} 
+          isActive={openFaqId === faq.id}
+          onToggle={() => handleToggle(faq.id)}
+        />
+      ))}
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  accordionContainer: {
+    marginTop: 10,
+  },
+  card: {
+    borderWidth: 1,
+    borderRadius: 12,
+    marginBottom: 10,
+    overflow: 'hidden',
+    padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  questionContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  iconWrapper: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  question: {
+    fontSize: 15,
+    fontWeight: '700',
+    flex: 1,
+    lineHeight: 20,
+  },
+  body: {
+    paddingLeft: 36, // Align with text
+    overflow: 'hidden',
+    marginTop: 12,
+  },
+  answer: {
+    fontSize: 14,
+    lineHeight: 21,
+  },
+});
+
+export default FAQAccordion;
+</file>
+
 <file path="src/components/LoadingButton.tsx">
 import React from "react";
 import {
@@ -660,6 +1140,105 @@ const styles = StyleSheet.create({
         opacity: 0.7,
     },
 });
+</file>
+
+<file path="src/components/ServiceInfoCard.tsx">
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { COLORS } from '../theme/colors';
+
+interface ServiceInfoCardProps {
+  title?: string;
+  icon?: React.ReactNode;
+  children: React.ReactNode;
+  titleColor?: string;
+  headerRight?: React.ReactNode;
+  style?: any;
+}
+
+const ServiceInfoCard: React.FC<ServiceInfoCardProps> = ({ 
+  title, 
+  icon, 
+  children, 
+  titleColor,
+  headerRight,
+  style
+}) => {
+  const { theme, isDark } = useTheme();
+
+  return (
+    <View style={[
+      styles.card, 
+      { 
+        backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : '#FFFFFF',
+        borderColor: isDark ? 'rgba(255,255,255,0.1)' : '#E5E7EB'
+      },
+      style
+    ]}>
+      {(title || icon || headerRight) && (
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            {icon && <View style={styles.iconContainer}>{icon}</View>}
+            {title && (
+              <Text style={[
+                styles.title, 
+                { color: titleColor || theme.text }
+              ]}>
+                {title}
+              </Text>
+            )}
+          </View>
+          {headerRight}
+        </View>
+      )}
+      <View style={styles.content}>
+        {children}
+      </View>
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  iconContainer: {
+    marginRight: 8,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '800',
+    flexShrink: 1,
+  },
+  content: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+});
+
+export default ServiceInfoCard;
 </file>
 
 <file path="src/components/WhyChooseUs.tsx">
@@ -907,6 +1486,169 @@ const styles = StyleSheet.create({
     left: 20,
   }
 });
+</file>
+
+<file path="src/components/WorkIncludesCard.tsx">
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
+import ServiceInfoCard from './ServiceInfoCard';
+import { COLORS } from '../theme/colors';
+import { useLanguage } from '../context/LanguageContext';
+
+interface WorkIncludesCardProps {
+  workIncludes: string | null | undefined;
+}
+
+const WorkIncludesCard: React.FC<WorkIncludesCardProps> = ({ workIncludes }) => {
+  const { theme } = useTheme();
+  const { t } = useLanguage();
+
+  if (!workIncludes || !workIncludes.trim()) return null;
+
+  const includesLines = workIncludes
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (includesLines.length === 0) return null;
+
+  return (
+    <ServiceInfoCard 
+      title={t("serviceDetail.includes")}
+      titleColor={COLORS.saffron}
+      icon={<Ionicons name="checkmark-circle" size={24} color={COLORS.saffron} />}
+    >
+      <View style={styles.list}>
+        {includesLines.map((line, index) => {
+          // Strip existing manual bullets if any
+          const cleanLine = line.replace(/^[•\-\*]\s*/, "");
+          return (
+            <View key={index} style={styles.listItem}>
+              <Ionicons 
+                name="checkmark" 
+                size={18} 
+                color={COLORS.saffron} 
+                style={styles.checkIcon} 
+              />
+              <Text style={[styles.text, { color: theme.text }]}>
+                {cleanLine}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </ServiceInfoCard>
+  );
+};
+
+const styles = StyleSheet.create({
+  list: {
+    marginTop: 4,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 10,
+  },
+  checkIcon: {
+    marginRight: 10,
+    marginTop: 2, // slightly lower to align with text
+  },
+  text: {
+    fontSize: 15,
+    lineHeight: 24,
+    flex: 1,
+  },
+});
+
+export default WorkIncludesCard;
+</file>
+
+<file path="src/components/WorkNotIncludesCard.tsx">
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
+import ServiceInfoCard from './ServiceInfoCard';
+
+interface WorkNotIncludesCardProps {
+  workNotIncludes: string | null | undefined;
+}
+
+const RED_ACCENT = '#EF4444'; // Tailwind Red 500
+const RED_BG_LIGHT = '#FEF2F2'; // Tailwind Red 50
+const RED_BORDER_LIGHT = '#FCA5A5'; // Tailwind Red 300
+
+const WorkNotIncludesCard: React.FC<WorkNotIncludesCardProps> = ({ workNotIncludes }) => {
+  const { theme, isDark } = useTheme();
+
+  if (!workNotIncludes || !workNotIncludes.trim()) return null;
+
+  const notIncludesLines = workNotIncludes
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (notIncludesLines.length === 0) return null;
+
+  return (
+    <ServiceInfoCard 
+      title="Work Not Includes"
+      titleColor={RED_ACCENT}
+      icon={<Ionicons name="close-circle" size={24} color={RED_ACCENT} />}
+      style={{
+        backgroundColor: isDark ? 'rgba(239, 68, 68, 0.05)' : RED_BG_LIGHT,
+        borderColor: isDark ? 'rgba(239, 68, 68, 0.2)' : RED_BORDER_LIGHT,
+      }}
+    >
+      <View style={styles.list}>
+        {notIncludesLines.map((line, index) => {
+          // Strip existing manual bullets if any
+          const cleanLine = line.replace(/^[•\-\*]\s*/, "");
+          return (
+            <View key={index} style={styles.listItem}>
+              <Ionicons 
+                name="close" 
+                size={18} 
+                color={RED_ACCENT} 
+                style={styles.closeIcon} 
+              />
+              <Text style={[styles.text, { color: isDark ? theme.textLight : '#7F1D1D' }]}>
+                {cleanLine}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </ServiceInfoCard>
+  );
+};
+
+const styles = StyleSheet.create({
+  list: {
+    marginTop: 4,
+  },
+  listItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 10,
+  },
+  closeIcon: {
+    marginRight: 10,
+    marginTop: 2, // slightly lower to align with text
+  },
+  text: {
+    fontSize: 15,
+    lineHeight: 24,
+    flex: 1,
+  },
+});
+
+export default WorkNotIncludesCard;
 </file>
 
 <file path="src/config/serviceAreas.ts">
@@ -1334,6 +2076,27 @@ export function useLanguage() {
 }
 </file>
 
+<file path="src/hooks/useBottomNavPadding.ts">
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+/**
+ * Calculates the exact bottom padding required for scrollable content
+ * to scroll completely above the absolute-positioned custom bottom navigation bar.
+ * 
+ * Includes the bar height (70), bar bottom padding (15), safe area, and extra spacing.
+ */
+export function useBottomNavPadding(extraPadding: number = 24) {
+    const insets = useSafeAreaInsets();
+    
+    // CustomTabBar height (70) + tab bar bottom padding (15)
+    const BOTTOM_NAV_HEIGHT = 85; 
+    
+    return {
+        paddingBottom: BOTTOM_NAV_HEIGHT + insets.bottom + extraPadding,
+    };
+}
+</file>
+
 <file path="src/hooks/useNotification.ts">
 import { useContext } from "react";
 import { NotificationContext } from "../context/NotificationContext";
@@ -1372,16 +2135,16 @@ export default function BookingScreen({ route }: Props) {
 }
 </file>
 
-<file path="src/screens/CategoryDetailScreen.tsx">
+<file path="src/screens/CategoryServicesScreen.tsx">
 import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  FlatList,
   ActivityIndicator,
   Pressable,
   StatusBar,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -1393,13 +2156,14 @@ import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { Service } from "../types/service";
 import ServiceCard from "../components/ServiceCard";
 import { RootStackParamList } from "../navigation/AppNavigator";
+import { COLORS } from "../theme/colors";
 
 type Props = {
-  route: RouteProp<RootStackParamList, "CategoryDetail">;
+  route: RouteProp<RootStackParamList, "CategoryServices">;
 };
 
-export default function CategoryDetailScreen({ route }: Props) {
-  const { category, label } = route.params;
+export default function CategoryServicesScreen({ route }: Props) {
+  const { mainCategoryName, mainCategoryId, subCategories } = route.params;
   const { theme } = useTheme();
   const bottomNavPadding = useBottomNavPadding();
   const navigation = useNavigation<any>();
@@ -1411,7 +2175,7 @@ export default function CategoryDetailScreen({ route }: Props) {
     const { data, error } = await supabase
       .from("services")
       .select("*")
-      .eq("service_type", category)
+      .eq("main_category_id", mainCategoryId)
       .order("sort_order", { ascending: true });
 
     if (error) {
@@ -1420,18 +2184,20 @@ export default function CategoryDetailScreen({ route }: Props) {
       setServices(data || []);
     }
     setLoading(false);
-  }, [category]);
+  }, [mainCategoryId]);
 
   useEffect(() => {
     fetchServices();
   }, [fetchServices]);
 
-  const renderService = ({ item }: { item: Service }) => (
-    <ServiceCard 
-      service={item} 
-      onPress={() => navigation.navigate("ServiceDetail", { service: item })} 
-    />
-  );
+  // Group services by subcategory
+  const groupedServices = subCategories
+    .map((cat: any) => ({
+      title: cat.label,
+      value: cat.value,
+      data: services.filter((s) => s.service_type === cat.value),
+    }))
+    .filter((group) => group.data.length > 0);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
@@ -1445,7 +2211,7 @@ export default function CategoryDetailScreen({ route }: Props) {
         >
           <Ionicons name="arrow-back" size={24} color={theme.text} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>{label}</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>{mainCategoryName}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -1453,20 +2219,42 @@ export default function CategoryDetailScreen({ route }: Props) {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primary} />
         </View>
-      ) : services.length === 0 ? (
+      ) : groupedServices.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="search-outline" size={48} color={theme.textMuted} />
           <Text style={[styles.emptyText, { color: theme.textMuted }]}>No services found in this category.</Text>
         </View>
       ) : (
-        <FlatList
-          data={services}
-          renderItem={renderService}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          contentContainerStyle={[styles.listContent, bottomNavPadding]}
+        <ScrollView
           showsVerticalScrollIndicator={false}
-        />
+          contentContainerStyle={[styles.scrollContent, bottomNavPadding]}
+        >
+          {groupedServices.map((group, index) => (
+            <View key={group.value} style={[styles.groupContainer, index > 0 && styles.groupSpacing]}>
+              
+              {/* Section Heading */}
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>
+                  {group.title}
+                </Text>
+                <View style={[styles.accentLine, { backgroundColor: COLORS.saffron }]} />
+              </View>
+
+              {/* Service Cards for this Group */}
+              <View style={styles.cardsGrid}>
+                {group.data.map((service: Service) => (
+                  <View key={service.id} style={styles.cardWrapper}>
+                    <ServiceCard 
+                      service={service} 
+                      onPress={() => navigation.navigate("ServiceDetail", { service })} 
+                    />
+                  </View>
+                ))}
+              </View>
+
+            </View>
+          ))}
+        </ScrollView>
       )}
     </SafeAreaView>
   );
@@ -1503,9 +2291,39 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
   },
-  listContent: {
-    padding: 8,
-    paddingBottom: 24,
+  scrollContent: {
+    paddingTop: 16,
+    paddingBottom: 40,
+    paddingHorizontal: 8,
+  },
+  groupContainer: {
+    width: "100%",
+  },
+  groupSpacing: {
+    marginTop: 32,
+  },
+  sectionHeader: {
+    paddingHorizontal: 8,
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+  },
+  accentLine: {
+    height: 3,
+    width: 40,
+    borderRadius: 2,
+    marginTop: 4,
+  },
+  cardsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    width: "100%",
+  },
+  cardWrapper: {
+    width: "50%",
   },
 });
 </file>
@@ -2080,132 +2898,138 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/screens/SubservicesScreen.tsx">
-import React from "react";
-import { View, Text, StyleSheet, Pressable, StatusBar, ScrollView } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { RouteProp, useNavigation } from "@react-navigation/native";
-import { Image } from "expo-image";
+<file path="src/services/LocationService.ts">
+import * as Location from "expo-location";
+import { getServiceAreaMatch, isServiceable } from "../config/serviceAreas";
 
-import { useTheme } from "../context/ThemeContext";
-import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
-import { RootStackParamList } from "../navigation/AppNavigator";
-
-type Props = {
-  route: RouteProp<RootStackParamList, "Subservices">;
-};
-
-export default function SubservicesScreen({ route }: Props) {
-  const { mainCategoryName, subCategories } = route.params;
-  const { theme } = useTheme();
-  const bottomNavPadding = useBottomNavPadding();
-  const navigation = useNavigation<any>();
-
-  return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
-      <StatusBar barStyle={theme.background === "#FFFFFF" ? "dark-content" : "light-content"} />
-      
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <Pressable 
-          onPress={() => navigation.goBack()}
-          style={[styles.backButton, { backgroundColor: theme.surfaceVariant }]}
-        >
-          <Ionicons name="arrow-back" size={24} color={theme.text} />
-        </Pressable>
-        <Text style={[styles.headerTitle, { color: theme.text }]}>{mainCategoryName}</Text>
-        <View style={{ width: 40 }} />
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.content, bottomNavPadding]}
-      >
-        <View style={styles.categoryGrid}>
-          {subCategories.map((cat: any) => (
-            <Pressable
-              key={cat.value}
-              style={styles.categoryItem}
-              onPress={() => {
-                navigation.navigate("CategoryDetail", {
-                  category: cat.value,
-                  label: cat.label
-                });
-              }}
-            >
-              <View style={[styles.categoryIconContainer, { backgroundColor: theme.surfaceVariant || "#F5F7FA" }]}>
-                {cat.icon ? (
-                  <Image source={{ uri: cat.icon }} style={styles.categoryImage} contentFit="contain" />
-                ) : (
-                  <Ionicons name="apps-outline" size={32} color={theme.primary} />
-                )}
-              </View>
-              <Text style={[styles.categoryLabel, { color: theme.text }]} numberOfLines={2}>
-                {cat.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+export interface LocationResult {
+  locality: string;
+  fullAddress: string;
+  latitude: number;
+  longitude: number;
+  postalCode: string | null;
+  rawAddress: Location.LocationGeocodedAddress | null;
+  isServiceable: boolean;
+  status: 'success' | 'permission_denied' | 'error' | 'unserviceable';
 }
 
-const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 40,
-  },
-  categoryGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-  },
-  categoryItem: {
-    width: "33.33%",
-    alignItems: "center",
-    marginBottom: 24,
-    paddingHorizontal: 6,
-  },
-  categoryIconContainer: {
-    width: "100%",
-    aspectRatio: 1,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  categoryLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
-    lineHeight: 16,
-  },
-  categoryImage: {
-    width: "70%",
-    height: "70%",
-  },
-});
+class LocationService {
+  /**
+   * Helper to parse the most specific locality string from Expo's address object.
+   * Matches Android/iOS specific fields accurately.
+   */
+  public static getLocalityString(addr: Location.LocationGeocodedAddress): string {
+    // Priority: subLocality (e.g. Gopanpally) -> neighborhood -> street -> name -> district (e.g. Tellapur) -> city
+    if (addr.subLocality && addr.subLocality.length > 0) return addr.subLocality;
+    if (addr.neighborhood && addr.neighborhood.length > 0) return addr.neighborhood;
+    if (addr.name && addr.name.length > 0) return addr.name;
+    if (addr.street && addr.street.length > 0) return addr.street;
+    if (addr.district && addr.district.length > 0) return addr.district;
+    if (addr.city && addr.city.length > 0) return addr.city;
+    if (addr.subregion && addr.subregion.length > 0) return addr.subregion;
+    if (addr.region && addr.region.length > 0) return addr.region;
+
+    return "Unknown Location";
+  }
+
+  /**
+   * Fetches current GPS location, reverse geocodes, and returns a unified result.
+   */
+  public static async fetchCurrentLocation(accuracy: Location.LocationAccuracy = Location.Accuracy.Balanced): Promise<LocationResult> {
+    try {
+      // 1. Permission Handling
+      const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
+      let finalStatus = existingStatus;
+
+      if (existingStatus !== 'granted') {
+        const { status: reqStatus } = await Location.requestForegroundPermissionsAsync();
+        finalStatus = reqStatus;
+      }
+
+      if (finalStatus !== 'granted') {
+        return {
+          locality: "Permission denied",
+          fullAddress: "",
+          latitude: 0,
+          longitude: 0,
+          postalCode: null,
+          rawAddress: null,
+          isServiceable: false,
+          status: 'permission_denied',
+        };
+      }
+
+      // 2. Get GPS coordinates
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: accuracy,
+      });
+
+      const { latitude, longitude } = location.coords;
+
+      // 3. Serviceability Check (can be bypassed for specific needs, but usually checked)
+      const serviceable = isServiceable(latitude, longitude);
+
+      // 4. Reverse Geocoding
+      const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
+      
+      let reverseString = "Unknown Location";
+      let postalCode = null;
+      let rawAddress = null;
+      let fullAddress = "";
+
+      if (addressList && addressList.length > 0) {
+        rawAddress = addressList[0];
+        postalCode = rawAddress.postalCode || null;
+        reverseString = this.getLocalityString(rawAddress);
+        
+        // Try to get the formatted address directly, or build it
+        const anyAddr = rawAddress as any;
+        if (anyAddr.formattedAddress) {
+          fullAddress = anyAddr.formattedAddress;
+        } else {
+          // Fallback construction
+          const parts = [
+            rawAddress.street,
+            rawAddress.subLocality,
+            rawAddress.city || rawAddress.district,
+            rawAddress.region,
+            rawAddress.postalCode,
+          ].filter(Boolean);
+          fullAddress = parts.join(", ");
+        }
+      }
+
+      // 5. Match with Neatify Specific Sub-Areas (e.g. strict Gopanpally polygon)
+      const matchedArea = getServiceAreaMatch(latitude, longitude, postalCode, reverseString);
+
+      return {
+        locality: matchedArea ? matchedArea.name : reverseString,
+        fullAddress: fullAddress || reverseString,
+        latitude,
+        longitude,
+        postalCode,
+        rawAddress,
+        isServiceable: serviceable,
+        status: 'success',
+      };
+
+    } catch (error) {
+      console.error("LocationService error:", error);
+      return {
+        locality: "Unable to update location",
+        fullAddress: "",
+        latitude: 0,
+        longitude: 0,
+        postalCode: null,
+        rawAddress: null,
+        isServiceable: false,
+        status: 'error',
+      };
+    }
+  }
+}
+
+export default LocationService;
 </file>
 
 <file path="src/theme/colors.ts">
@@ -11127,6 +11951,144 @@ export const fetchServices = async () => {
 export { SUPABASE_URL };
 </file>
 
+<file path="src/screens/CategoryDetailScreen.tsx">
+import React, { useEffect, useState, useCallback } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  Pressable,
+  StatusBar,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import { RouteProp, useNavigation } from "@react-navigation/native";
+
+import { supabase } from "../lib/supabase";
+import { useTheme } from "../context/ThemeContext";
+import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
+import { Service } from "../types/service";
+import ServiceCard from "../components/ServiceCard";
+import { RootStackParamList } from "../navigation/AppNavigator";
+
+type Props = {
+  route: RouteProp<RootStackParamList, "CategoryDetail">;
+};
+
+export default function CategoryDetailScreen({ route }: Props) {
+  const { category, label } = route.params;
+  const { theme } = useTheme();
+  const bottomNavPadding = useBottomNavPadding();
+  const navigation = useNavigation<any>();
+  const [services, setServices] = useState<Service[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchServices = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("services")
+      .select("*")
+      .eq("service_type", category)
+      .order("sort_order", { ascending: true });
+
+    if (error) {
+      console.error("Error fetching services:", error);
+    } else {
+      setServices(data || []);
+    }
+    setLoading(false);
+  }, [category]);
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
+
+  const renderService = ({ item }: { item: Service }) => (
+    <ServiceCard 
+      service={item} 
+      onPress={() => navigation.navigate("ServiceDetail", { service: item })} 
+    />
+  );
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
+      <StatusBar barStyle={theme.background === "#FFFFFF" ? "dark-content" : "light-content"} />
+      
+      {/* Header */}
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
+        <Pressable 
+          onPress={() => navigation.goBack()}
+          style={[styles.backButton, { backgroundColor: theme.surfaceVariant }]}
+        >
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        </Pressable>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>{label}</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={theme.primary} />
+        </View>
+      ) : services.length === 0 ? (
+        <View style={styles.center}>
+          <Ionicons name="search-outline" size={48} color={theme.textMuted} />
+          <Text style={[styles.emptyText, { color: theme.textMuted }]}>No services found in this category.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={services}
+          renderItem={renderService}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          contentContainerStyle={[styles.listContent, bottomNavPadding]}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  emptyText: {
+    marginTop: 12,
+    fontSize: 16,
+    textAlign: "center",
+  },
+  listContent: {
+    padding: 8,
+    paddingBottom: 24,
+  },
+});
+</file>
+
 <file path="src/utils/pushNotifications.ts">
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
@@ -15065,308 +16027,6 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/components/Header.tsx">
-import { Ionicons } from "@expo/vector-icons";
-import { DrawerActions, useNavigation } from "@react-navigation/native";
-import * as Location from "expo-location";
-import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-
-import { useLanguage } from "../context/LanguageContext";
-import { useTheme } from "../context/ThemeContext";
-import { useAuthGuard } from "../hooks/useAuthGuard";
-import { supabase } from "../lib/supabase";
-import { isServiceable, getServiceAreaMatch } from "../config/serviceAreas";
-
-type HeaderProps = {
-  isCurved?: boolean;
-};
-
-export default function Header({ isCurved = false }: HeaderProps) {
-  const navigation = useNavigation<any>();
-  const { checkAuth } = useAuthGuard();
-  const { t } = useLanguage();
-  const { theme, isDark } = useTheme();
-
-  const [profile, setProfile] = useState<{ full_name: string; email: string } | null>(null);
-  const [locationName, setLocationName] = useState<string>("Fetching location...");
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const greetingOpacity = useRef(new Animated.Value(0)).current;
-  const greetingTranslateY = useRef(new Animated.Value(15)).current;
-  const spinValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(greetingOpacity, {
-        toValue: 1,
-        duration: 300,
-        delay: 0,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(greetingTranslateY, {
-        toValue: 0,
-        duration: 300,
-        delay: 0,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) fetchProfile(session.user.id);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        fetchProfile(session.user.id);
-      } else {
-        setProfile(null);
-      }
-    });
-
-    handleRefresh(true);
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const startSpin = () => {
-    spinValue.setValue(0);
-    Animated.loop(
-      Animated.timing(spinValue, {
-        toValue: 1,
-        duration: 1000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    ).start();
-  };
-
-  const stopSpin = () => {
-    spinValue.stopAnimation();
-  };
-
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
-  });
-
-  const getLocality = (addr: Location.LocationGeocodedAddress) => {
-    // Priority: subLocality/neighborhood -> locality -> district -> city
-    if (addr.district && addr.district.length > 0) return addr.district;
-    if (addr.subregion && addr.subregion.length > 0) return addr.subregion;
-    if (addr.city && addr.city.length > 0) return addr.city;
-    if (addr.name && addr.name.length > 0) return addr.name;
-    if (addr.region && addr.region.length > 0) return addr.region;
-    return "Unknown Location";
-  };
-
-  const handleRefresh = async (isInitial = false) => {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    startSpin();
-    
-    const oldLocation = locationName;
-    setLocationName("Fetching location...");
-
-    try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      let finalStatus = status;
-
-      if (status !== 'granted') {
-        const { status: reqStatus } = await Location.requestForegroundPermissionsAsync();
-        finalStatus = reqStatus;
-      }
-
-      if (finalStatus !== 'granted') {
-        setLocationName("Permission denied");
-        setIsRefreshing(false);
-        stopSpin();
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-
-      const { latitude, longitude } = location.coords;
-
-      // Service Area Check
-      const serviceable = isServiceable(latitude, longitude);
-      if (!serviceable) {
-        setIsRefreshing(false);
-        stopSpin();
-        navigation.reset({
-          index: 0,
-          routes: [{ name: "ComingSoon" }]
-        });
-        return;
-      }
-
-      // Reverse Geocoding
-      const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
-      let reverseString = "Unknown Location";
-      let postalCode = null;
-
-      if (addressList && addressList.length > 0) {
-        const addr = addressList[0];
-        postalCode = addr.postalCode;
-        reverseString = getLocality(addr);
-      }
-
-      // Check against strict Neatify Sub-Area mappings
-      const matchedArea = getServiceAreaMatch(latitude, longitude, postalCode, reverseString);
-
-      if (matchedArea) {
-        setLocationName(matchedArea.name);
-      } else {
-        setLocationName(reverseString);
-      }
-
-    } catch (error) {
-      console.warn("Location error:", error);
-      setLocationName("Unable to update location");
-      // Revert to old location after a brief message if it wasn't the initial load
-      if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
-        setTimeout(() => setLocationName(oldLocation), 2500);
-      }
-    } finally {
-      setIsRefreshing(false);
-      stopSpin();
-    }
-  };
-
-  const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profile')
-        .select('full_name, email')
-        .eq('id', userId)
-        .single();
-
-      if (data) {
-        setProfile(data);
-      }
-    } catch (error) {
-      console.error('Error fetching profile for header:', error);
-    }
-  };
-
-  const handleMenuPress = () => {
-    const drawerNav = navigation.getParent("root-drawer") || navigation;
-    drawerNav.dispatch(DrawerActions.toggleDrawer());
-  };
-
-  const userName = profile?.full_name || "Anjaneyulu";
-
-  return (
-    <View style={[styles.container, isCurved && styles.curved]}>
-      {/* TOP ROW */}
-      <View style={styles.topRow}>
-        <TouchableOpacity
-          activeOpacity={0.7}
-          onPress={() => handleRefresh(false)}
-          style={styles.brandContainer}
-          disabled={isRefreshing}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4 }} />
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#111111' }}>
-              {locationName}
-            </Text>
-            <Animated.View style={{ transform: [{ rotate: spin }], marginLeft: 6 }}>
-              <Ionicons name="sync" size={14} color="#111111" />
-            </Animated.View>
-          </View>
-        </TouchableOpacity>
-
-        <View style={styles.rightActions}>
-          <TouchableOpacity style={styles.profileButton} onPress={handleMenuPress}>
-            <Ionicons
-              name="person"
-              size={22}
-              color="#111111"
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* GREETING */}
-      <Animated.View style={[styles.greetingContainer, { opacity: greetingOpacity, transform: [{ translateY: greetingTranslateY }] }]}>
-        <Text style={styles.greetingWrapper}>
-          <Text style={styles.helloText}>Hello, </Text>
-          <Text style={styles.usernameText}>{userName}</Text>
-        </Text>
-      </Animated.View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 12,
-    backgroundColor: "#FFC928",
-  },
-  curved: {
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
-    paddingBottom: 24,
-  },
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  brandContainer: {
-    justifyContent: "center",
-    marginRight: 8,
-  },
-  logo: {
-    width: 125,
-    height: 35,
-  },
-  rightActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  profileButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  greetingContainer: {
-    marginTop: 8,
-    alignItems: "flex-start",
-    justifyContent: "center",
-    width: "100%",
-    paddingLeft: 12,
-  },
-  greetingWrapper: {
-    textAlign: "left",
-  },
-  helloText: {
-    fontSize: 16,
-    fontWeight: "500",
-    color: "#475569",
-  },
-  usernameText: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#0F172A",
-    letterSpacing: 0.5,
-  },
-});
-</file>
-
 <file path="package.json">
 {
   "name": "neatify-supabase-app",
@@ -15441,6 +16101,307 @@ const styles = StyleSheet.create({
   },
   "private": true
 }
+</file>
+
+<file path="src/components/Header.tsx">
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation, useRoute, DrawerActions } from "@react-navigation/native";
+import * as Location from "expo-location";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View, LayoutAnimation, Platform, UIManager } from "react-native";
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+import LocationService from "../services/LocationService";
+import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
+import { useAuthGuard } from "../hooks/useAuthGuard";
+import { supabase } from "../lib/supabase";
+
+type HeaderProps = {
+  isCurved?: boolean;
+};
+
+export default function Header({ isCurved = false }: HeaderProps) {
+  const navigation = useNavigation<any>();
+  const route = useRoute();
+  const { checkAuth } = useAuthGuard();
+  const { t } = useLanguage();
+  const { theme, isDark } = useTheme();
+
+  const isHome = route.name.toLowerCase().includes('home');
+
+  const [profile, setProfile] = useState<{ full_name: string; email: string } | null>(null);
+  const [locationName, setLocationName] = useState<string>("Fetching location...");
+  const [fullAddress, setFullAddress] = useState<string>("");
+  const [isExpanded, setIsExpanded] = useState<boolean>(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const greetingOpacity = useRef(new Animated.Value(0)).current;
+  const greetingTranslateY = useRef(new Animated.Value(15)).current;
+  const spinValue = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(greetingOpacity, {
+        toValue: 1,
+        duration: 300,
+        delay: 0,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(greetingTranslateY, {
+        toValue: 0,
+        duration: 300,
+        delay: 0,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) fetchProfile(session.user.id);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    handleRefresh(true);
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const startSpin = () => {
+    spinValue.setValue(0);
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 1000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  };
+
+  const stopSpin = () => {
+    spinValue.stopAnimation();
+  };
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  const handleRefresh = async (isInitial = false) => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    startSpin();
+
+    const oldLocation = locationName;
+    setLocationName("Fetching location...");
+
+    try {
+      const result = await LocationService.fetchCurrentLocation();
+
+      if (result.status === 'permission_denied') {
+        setLocationName("Permission denied");
+        return;
+      }
+
+      if (result.status === 'unserviceable') {
+        navigation.reset({
+          index: 0,
+          routes: [{ name: "ComingSoon" }]
+        });
+        return;
+      }
+
+      if (result.status === 'error') {
+        setLocationName("Unable to update location");
+        if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
+          setTimeout(() => setLocationName(oldLocation), 2500);
+        }
+        return;
+      }
+
+      // Success
+      setLocationName(result.locality);
+      setFullAddress(result.fullAddress);
+
+    } catch (error) {
+      console.warn("Location error:", error);
+      setLocationName("Unable to update location");
+      setFullAddress("");
+      if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
+        setTimeout(() => setLocationName(oldLocation), 2500);
+      }
+    } finally {
+      setIsRefreshing(false);
+      stopSpin();
+    }
+  };
+
+  const toggleLocation = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded(!isExpanded);
+  };
+
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profile')
+        .select('full_name, email')
+        .eq('id', userId)
+        .single();
+
+      if (data) {
+        setProfile(data);
+      }
+    } catch (error) {
+      console.error('Error fetching profile for header:', error);
+    }
+  };
+
+  const handleMenuPress = () => {
+    const drawerNav = navigation.getParent("root-drawer") || navigation;
+    drawerNav.dispatch(DrawerActions.toggleDrawer());
+  };
+
+  const userName = profile?.full_name || "Anjaneyulu";
+
+  if (!isHome) {
+    return null;
+  }
+
+  return (
+    <View style={[styles.container, isCurved && styles.curved]}>
+      {/* TOP ROW */}
+      <View style={styles.topRow}>
+        <View style={styles.brandContainer}>
+          <View style={styles.locationRow}>
+            <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4, marginTop: 1 }} />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={toggleLocation}
+              style={{ flexShrink: 1, marginRight: 6 }}
+            >
+              <Text 
+                style={{ fontSize: 15, fontWeight: '700', color: '#111111', lineHeight: 20 }}
+                numberOfLines={isExpanded ? undefined : 1}
+              >
+                {isExpanded && fullAddress ? fullAddress : locationName}
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => handleRefresh(false)}
+              disabled={isRefreshing}
+              style={{ paddingHorizontal: 4, paddingVertical: 2 }}
+            >
+              <Animated.View style={{ transform: [{ rotate: spin }] }}>
+                <Ionicons name="sync" size={14} color="#111111" />
+              </Animated.View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.rightActions}>
+          <TouchableOpacity style={styles.profileButton} onPress={handleMenuPress}>
+            <Ionicons
+              name="person"
+              size={22}
+              color="#111111"
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* GREETING */}
+      <Animated.View style={[styles.greetingContainer, { opacity: greetingOpacity, transform: [{ translateY: greetingTranslateY }] }]}>
+        <Text style={styles.greetingWrapper}>
+          <Text style={styles.helloText}>Hello, </Text>
+          <Text style={styles.usernameText}>{userName}</Text>
+        </Text>
+      </Animated.View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 12,
+    backgroundColor: "#FFC928",
+  },
+  curved: {
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    paddingBottom: 24,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  brandContainer: {
+    flex: 1,
+    marginRight: 12,
+    justifyContent: "center",
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  logo: {
+    width: 125,
+    height: 35,
+  },
+  rightActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  profileButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  greetingContainer: {
+    marginTop: 8,
+    alignItems: "flex-start",
+    justifyContent: "center",
+    width: "100%",
+    paddingLeft: 12,
+  },
+  greetingWrapper: {
+    textAlign: "left",
+  },
+  helloText: {
+    fontSize: 16,
+    fontWeight: "500",
+    color: "#475569",
+  },
+  usernameText: {
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#0F172A",
+    letterSpacing: 0.5,
+  },
+});
 </file>
 
 <file path="src/screens/BookingDetailsScreen.tsx">
@@ -17435,7 +18396,7 @@ import ProfileScreen from "../screens/ProfileScreen";
 import ResetPasswordScreen from "../screens/ResetPasswordScreen";
 import ScheduleScreen from "../screens/ScheduleScreen";
 import ServiceDetailScreen from "../screens/ServiceDetailScreen";
-import SubservicesScreen from "../screens/SubservicesScreen";
+import CategoryServicesScreen from "../screens/CategoryServicesScreen";
 import LocationAccessScreen from "../screens/LocationAccessScreen";
 import ComingSoonScreen from "../screens/ComingSoonScreen";
 
@@ -17494,8 +18455,9 @@ export type RootStackParamList = {
     category: string;
     label: string;
   };
-  Subservices: {
+  CategoryServices: {
     mainCategoryName: string;
+    mainCategoryId: string;
     subCategories: any[];
   };
   CompleteProfile: undefined;
@@ -17508,7 +18470,7 @@ export type HomeStackParamList = {
   Schedule: { services: SelectedService[] };
   Checkout: { services: SelectedService[]; total: number; bookingDateText: string };
   CategoryDetail: { category: string; label: string };
-  Subservices: { mainCategoryName: string; subCategories: any[] };
+  CategoryServices: { mainCategoryName: string; mainCategoryId: string; subCategories: any[] };
 };
 
 export type BookingsStackParamList = {
@@ -17545,7 +18507,7 @@ function HomeTabStack() {
       <HomeStack.Screen name="Schedule" component={ScheduleScreen as any} />
       <HomeStack.Screen name="Checkout" component={CheckoutScreen as any} />
       <HomeStack.Screen name="CategoryDetail" component={CategoryDetailScreen as any} />
-      <HomeStack.Screen name="Subservices" component={SubservicesScreen as any} />
+      <HomeStack.Screen name="CategoryServices" component={CategoryServicesScreen as any} />
     </HomeStack.Navigator>
   );
 }
@@ -19027,6 +19989,11 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
+import AnimatedProcessTimeline from "../components/AnimatedProcessTimeline";
+import DescriptionCard from "../components/DescriptionCard";
+import WorkIncludesCard from "../components/WorkIncludesCard";
+import WorkNotIncludesCard from "../components/WorkNotIncludesCard";
+import FAQAccordion from "../components/FAQAccordion";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
@@ -19795,143 +20762,20 @@ export default function ServiceDetailScreen({ route }: Props) {
             </Text>
           </Pressable>
 
-          {/* ✅ Description */}
-          {descriptionLines.length > 0 ? (
-            <>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginTop: 26,
-                  color: theme.text,
-                }}
-              >
-                {t("serviceDetail.description")}
-              </Text>
+          <View style={{ marginTop: 24 }}>
+            {/* ✅ Description */}
+            <DescriptionCard description={service.description || ""} />
 
-              {descriptionLines.map((line, index) => (
-                <Text
-                  key={index}
-                  style={{
-                    marginTop: 8,
-                    fontSize: 15,
-                    lineHeight: 22,
-                    color: theme.text,
-                  }}
-                >
-                  {line}
-                </Text>
-              ))}
-            </>
-          ) : null}
+            {/* ✅ Work Includes */}
+            <WorkIncludesCard workIncludes={service.work_includes} />
 
-          {/* ✅ Work Includes */}
-          {service.work_includes && service.work_includes.trim() ? (
-            <>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginTop: 26,
-                  color: COLORS.saffron,
-                }}
-              >
-                {t("serviceDetail.includes")}
-              </Text>
+            {/* ✅ Work Not Includes */}
+            <WorkNotIncludesCard workNotIncludes={service.work_not_included} />
+          </View>
 
-              {service.work_includes
-                .replace(/\r\n/g, "\n")
-                .split("\n")
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((line, index) => (
-                  <View
-                    key={index}
-                    style={{
-                      flexDirection: "row",
-                      marginTop: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.text,
-                        marginRight: 8,
-                      }}
-                    >
-                      •
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.text,
-                        flex: 1,
-                      }}
-                    >
-                      {line}
-                    </Text>
-                  </View>
-                ))}
-            </>
-          ) : null}
-
-          {/* ✅ Work Not Includes */}
-          {service.work_not_included && service.work_not_included.trim() ? (
-            <>
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  marginTop: 26,
-                  color: "#D32F2F",
-                }}
-              >
-                Work Not Includes
-              </Text>
-
-              {service.work_not_included
-                .replace(/\r\n/g, "\n")
-                .split("\n")
-                .map((l) => l.trim())
-                .filter(Boolean)
-                .map((line, index) => (
-                  <View
-                    key={index}
-                    style={{
-                      flexDirection: "row",
-                      marginTop: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.textLight,
-                        marginRight: 8,
-                      }}
-                    >
-                      •
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        lineHeight: 22,
-                        color: theme.textLight,
-                        flex: 1,
-                      }}
-                    >
-                      {line}
-                    </Text>
-                  </View>
-                ))}
-            </>
-          ) : null}
-
-          {/* ✅ How it works (Replaced Workframes) */}
+          {/* ✅ How it works */}
           {(() => {
-            let howItWorksItems: { title: string, iconUrl?: string }[] = [];
+            let howItWorksItems: { title: string }[] = [];
 
             // 1. Check if the new JSON column 'how_it_works' has data
             let parsedHowItWorks = null;
@@ -19946,67 +20790,12 @@ export default function ServiceDetailScreen({ route }: Props) {
             if (parsedHowItWorks && Array.isArray(parsedHowItWorks) && parsedHowItWorks.length > 0) {
               // Use the new dynamic JSON column
               howItWorksItems = parsedHowItWorks.map((item: any) => {
-                let imgUrl = item.image;
-                if (imgUrl && !imgUrl.startsWith("http")) {
-                  imgUrl = supabase.storage.from("service-images").getPublicUrl(imgUrl).data.publicUrl;
-                }
                 return {
                   title: item.title,
-                  iconUrl: imgUrl || undefined
                 };
               });
             } else {
-              // 2. Legacy fallback: Prioritize gallery_images first
-              let frames: string[] = [];
-              
-              if (service.gallery_images) {
-                if (Array.isArray(service.gallery_images)) {
-                  frames = service.gallery_images;
-                } else if (typeof service.gallery_images === 'string') {
-                  try { frames = JSON.parse(service.gallery_images); } catch (e) { frames = [service.gallery_images]; }
-                }
-              }
-
-              // Fallback to image2 if gallery_images is empty or not provided
-              if (frames.length === 0 && service.image2) {
-                if (Array.isArray(service.image2)) {
-                  frames = service.image2;
-                } else if (typeof service.image2 === 'string') {
-                  if (service.image2.startsWith('[') || service.image2.startsWith('{')) {
-                    try { frames = JSON.parse(service.image2); } catch (e) { frames = [service.image2]; }
-                  } else {
-                    frames = [service.image2];
-                  }
-                }
-              }
-
-              // Robust cleanup: sometimes Supabase text[] returns a single element containing a stringified array
-              let actualFrames: string[] = [];
-              frames.forEach(f => {
-                if (typeof f === 'string' && (f.startsWith('[') || f.startsWith('{'))) {
-                  try {
-                    const parsed = JSON.parse(f);
-                    if (Array.isArray(parsed)) {
-                      actualFrames.push(...parsed);
-                    } else {
-                      actualFrames.push(f);
-                    }
-                  } catch (e) {
-                    actualFrames.push(f);
-                  }
-                } else {
-                  actualFrames.push(f);
-                }
-              });
-              frames = actualFrames;
-
-              const resolvedFrames = frames.map(f => {
-                if (f && !f.startsWith('http')) {
-                  return supabase.storage.from("service-images").getPublicUrl(f).data.publicUrl;
-                }
-                return f;
-              });
-
+              // 2. Legacy fallback: Use work_includes
               const workIncludesLines = service.work_includes
                 ? service.work_includes
                     .replace(/\r\n/g, "\n")
@@ -20015,12 +20804,11 @@ export default function ServiceDetailScreen({ route }: Props) {
                     .filter(Boolean)
                 : [];
                 
-              howItWorksItems = workIncludesLines.map((line, idx) => {
+              howItWorksItems = workIncludesLines.map((line) => {
                 // Strip leading bullets/dashes
                 let cleanLine = line.replace(/^[•\-\*]\s*/, "");
                 return { 
                   title: cleanLine,
-                  iconUrl: resolvedFrames[idx]
                 };
               });
             }
@@ -20039,68 +20827,14 @@ export default function ServiceDetailScreen({ route }: Props) {
                   {t("serviceDetail.howItWorks") || "How it works"}
                 </Text>
 
-                <View style={{ paddingLeft: 4 }}>
-                  {howItWorksItems.map((item, idx) => {
-                    const iconUrl = item.iconUrl; // Read from the prepared item
-                    const isLast = idx === howItWorksItems.length - 1;
-                    return (
-                      <View key={idx} style={{ flexDirection: "row", marginBottom: isLast ? 0 : 20 }}>
-                        {/* Left Column: Icon and Vertical Line */}
-                        <View style={{ alignItems: "center", marginRight: 16 }}>
-                          {iconUrl ? (
-                            <Image
-                              source={{ uri: iconUrl }}
-                              style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: 28,
-                                backgroundColor: isDark ? "#333" : "#f0f0f0",
-                              }}
-                            />
-                          ) : (
-                            <View
-                              style={{
-                                width: 56,
-                                height: 56,
-                                borderRadius: 28,
-                                backgroundColor: isDark ? "#333" : "#f0f0f0",
-                              }}
-                            />
-                          )}
-                          {!isLast && (
-                            <View style={{ height: '100%', position: 'absolute', top: 56, bottom: -20, width: 2, alignItems: 'center' }}>
-                              <View
-                                style={{
-                                  width: 0,
-                                  height: '100%',
-                                  borderStyle: "dashed",
-                                  borderLeftWidth: 2,
-                                  borderColor: COLORS.saffron,
-                                }}
-                              />
-                            </View>
-                          )}
-                        </View>
-                        
-                        {/* Right Column: Text */}
-                        <View style={{ flex: 1, justifyContent: "center", paddingBottom: 16 }}>
-                          <Text style={{ fontSize: 16, fontWeight: "600", color: theme.text, lineHeight: 24 }}>
-                            {item.title}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
+                <AnimatedProcessTimeline steps={howItWorksItems} />
               </>
             ) : null;
           })()}
 
-          {/* ✅ FAQs Section (dynamic, service-specific, theme-adapted, below How it Works) */}
+          {/* ✅ FAQs Section */}
           {(() => {
             const faqs = getServiceSpecificFAQs();
-            const activeFAQ = faqs.find((f) => f.id === activeFaqId) || faqs[0];
-            const inactiveFAQs = faqs.filter((f) => f.id !== activeFaqId);
 
             return (
               <View style={{ marginTop: 24, paddingBottom: 16 }}>
@@ -20154,108 +20888,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                   Find answers to common questions about our {service?.title || "service"}.
                 </Text>
 
-                {/* Active FAQ Card */}
-                {activeFAQ && (
-                  <View
-                    style={{
-                      backgroundColor: isDark ? "rgba(244, 196, 48, 0.06)" : "#FDFDF6",
-                      borderColor: "rgba(244, 196, 48, 0.25)",
-                      borderWidth: 1,
-                      borderLeftWidth: 5,
-                      borderLeftColor: COLORS.saffron,
-                      borderRadius: 16,
-                      padding: 16,
-                      marginBottom: 14,
-                      shadowColor: COLORS.saffron,
-                      shadowOffset: { width: 0, height: 4 },
-                      shadowOpacity: isDark ? 0.05 : 0.03,
-                      shadowRadius: 8,
-                      elevation: 1,
-                    }}
-                  >
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        gap: 12,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flex: 1 }}>
-                        <View
-                          style={{
-                            width: 24,
-                            height: 24,
-                            borderRadius: 12,
-                            backgroundColor: COLORS.saffron,
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          <Ionicons name="remove" size={14} color="#000" />
-                        </View>
-                        <Text
-                          style={{
-                            fontSize: 16,
-                            fontWeight: "700",
-                            color: theme.text,
-                            flex: 1,
-                          }}
-                        >
-                          {activeFAQ.question}
-                        </Text>
-                      </View>
-                      <Ionicons name="chevron-up" size={18} color={COLORS.saffron} />
-                    </View>
-
-                    <View style={{ paddingLeft: 34, marginTop: 8 }}>
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          lineHeight: 21,
-                          color: theme.textLight,
-                        }}
-                      >
-                        {activeFAQ.answer}
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* Inactive FAQ cards stack */}
-                {inactiveFAQs.map((faq) => (
-                  <Pressable
-                    key={faq.id}
-                    onPress={() => setActiveFaqId(faq.id)}
-                    style={({ pressed }) => ({
-                      backgroundColor: theme.background,
-                      borderColor: theme.border,
-                      borderWidth: 1,
-                      borderRadius: 12,
-                      paddingHorizontal: 16,
-                      paddingVertical: 14,
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      marginBottom: 10,
-                      gap: 12,
-                      opacity: pressed ? 0.8 : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        fontWeight: "600",
-                        color: theme.text,
-                        flex: 1,
-                        lineHeight: 20,
-                      }}
-                    >
-                      {faq.question}
-                    </Text>
-                    <Ionicons name="add" size={18} color={theme.textLight} />
-                  </Pressable>
-                ))}
+                <FAQAccordion faqs={faqs} />
               </View>
             );
           })()}
@@ -20887,6 +21520,7 @@ import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/nati
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import LocationService from "../services/LocationService";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21423,83 +22057,59 @@ export default function CheckoutScreen({ route }: Props) {
   const fetchCurrentLocation = async () => {
     if (!userId) return;
 
-    const { status } = await Location.requestForegroundPermissionsAsync();
-
-    if (status !== "granted") {
-      setAlertConfig({
-        title: 'Permission Denied',
-        message: 'Location access is required to use this feature',
-        type: 'warning'
-      });
-      setShowAlertModal(true);
-      return;
-    }
-
     setFetchingLocation(true);
 
     try {
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
+      const result = await LocationService.fetchCurrentLocation(Location.Accuracy.High);
 
-      const { latitude, longitude } = location.coords;
-
-      // Store coordinates for booking
-      setBookingLatitude(latitude);
-      setBookingLongitude(longitude);
-
-      // Use Expo's native geocoder (uses Google on Android — most accurate for India)
-      try {
-        const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
-
-        if (addressList[0]) {
-          const addr: any = addressList[0];
-
-          // Debug: log ALL fields to see what's available
-          console.log("📍 Expo Geocoder raw response:", JSON.stringify(addr, null, 2));
-
-          // Try to extract area from formattedAddress (Android returns full Google address)
-          const fullAddr: string = addr.formattedAddress || "";
-          console.log("📍 formattedAddress:", fullAddr);
-
-          if (fullAddr) {
-            // Parse the formatted address: "Premises, Street, Locality, City, State, PIN, Country"
-            const parts = fullAddr.split(",").map((p: string) => p.trim()).filter((p: string) => p);
-
-            // 1. Extract Pincode (any 6 digit number)
-            let pinIdx = -1;
-            for (let i = parts.length - 1; i >= 0; i--) {
-              const pinMatch = parts[i].match(/\b(\d{6})\b/);
-              if (pinMatch) {
-                setPincode(pinMatch[1]);
-                pinIdx = i;
-                break;
-              }
-            }
-            if (pinIdx === -1 && addr.postalCode) setPincode(addr.postalCode);
-
-            // Try to extract a clean street address for the manual field
-            setManualAddress(fullAddr || "");
-
-            setIsAddressSummaryMode(true);
-            setHasUsedLocationFetch(true);
-          } else {
-            setManualAddress(addr.street || addr.district || addr.subregion || "");
-            if (addr.postalCode) setPincode(addr.postalCode);
-            setIsAddressSummaryMode(false);
-          }
-        }
-      } catch (geoErr) {
-        console.log("Geocoding failed:", geoErr);
+      if (result.status === 'permission_denied') {
+        setAlertConfig({
+          title: 'Permission Denied',
+          message: 'Location access is required to use this feature',
+          type: 'warning'
+        });
+        setShowAlertModal(true);
+        return;
       }
-    } catch (err) {
-      console.error("Location fetch error:", err);
-      setAlertConfig({
-        title: 'Location Error',
-        message: 'Could not fetch your location. Please try again or enter manually.',
-        type: 'error'
-      });
-      setShowAlertModal(true);
+
+      if (result.status === 'error') {
+        setAlertConfig({
+          title: 'Location Error',
+          message: 'Could not fetch your location. Please try again or enter manually.',
+          type: 'error'
+        });
+        setShowAlertModal(true);
+        return;
+      }
+
+      setBookingLatitude(result.latitude);
+      setBookingLongitude(result.longitude);
+
+      if (result.rawAddress) {
+        const addr: any = result.rawAddress;
+        const fullAddr: string = addr.formattedAddress || "";
+
+        if (fullAddr) {
+          const parts = fullAddr.split(",").map((p: string) => p.trim()).filter((p: string) => p);
+          let pinIdx = -1;
+          for (let i = parts.length - 1; i >= 0; i--) {
+            const pinMatch = parts[i].match(/\b(\d{6})\b/);
+            if (pinMatch) {
+              setPincode(pinMatch[1]);
+              pinIdx = i;
+              break;
+            }
+          }
+          if (pinIdx === -1 && addr.postalCode) setPincode(addr.postalCode);
+          setManualAddress(fullAddr || "");
+          setIsAddressSummaryMode(true);
+          setHasUsedLocationFetch(true);
+        } else {
+          setManualAddress(addr.street || addr.district || addr.subregion || result.locality || "");
+          if (addr.postalCode) setPincode(addr.postalCode);
+          setIsAddressSummaryMode(false);
+        }
+      }
     } finally {
       setFetchingLocation(false);
     }
@@ -26981,8 +27591,9 @@ export default function HomeScreen({ navigation }: any) {
                     style={styles.gridItem}
                     onPress={() => {
                       const subs = allSubCategoriesByMainCategory.get(mainCat.id) || [];
-                      navigation.navigate("Subservices", {
+                      navigation.navigate("CategoryServices", {
                         mainCategoryName: mainCat.name,
+                        mainCategoryId: mainCat.id,
                         subCategories: subs
                       });
                     }}

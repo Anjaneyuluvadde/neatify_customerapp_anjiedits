@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import { ChevronDown, Eye, EyeOff, Gift, Lock, Mail, Phone, Sparkles, User } from "lucide-react-native";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -131,6 +131,51 @@ function AnimatedPhoneInput({ value, onChangeText, theme }: any) {
   );
 }
 
+
+// Custom OTP Input Component
+function OtpInput({ value, onChangeText, length = 6 }: any) {
+  const inputRef = useRef<TextInput>(null);
+  
+  return (
+    <View style={{ width: '100%', alignItems: 'center', marginVertical: 10 }}>
+      <Pressable 
+        style={{ flexDirection: 'row', gap: 10 }} 
+        onPress={() => inputRef.current?.focus()}
+      >
+        {Array(length).fill(0).map((_, index) => (
+          <View 
+            key={index} 
+            style={[
+              styles.animatedInputContainer, 
+              { 
+                width: 45, 
+                height: 55, 
+                justifyContent: 'center', 
+                alignItems: 'center', 
+                paddingHorizontal: 0,
+                borderColor: value.length === index ? COLORS.saffron : (value[index] ? COLORS.saffron + '80' : '#F0F0F0'),
+                borderWidth: value.length === index ? 2 : 1.5,
+              }
+            ]}
+          >
+            <Text style={{ fontSize: 24, fontWeight: '700', color: '#111' }}>
+              {value[index] || ''}
+            </Text>
+          </View>
+        ))}
+      </Pressable>
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={(text) => onChangeText(text.replace(/[^0-9]/g, '').slice(0, length))}
+        keyboardType="number-pad"
+        maxLength={length}
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
+      />
+    </View>
+  );
+}
+
 // Custom Service Dropdown Component
 function AnimatedServiceDropdown({ selectedService, setShowServiceDropdown }: any) {
     const [isFocused, setIsFocused] = useState(false);
@@ -194,6 +239,17 @@ export default function LoginScreen(props: any) {
   const isDesktop = width >= 768;
 
   const [isLogin, setIsLogin] = useState(!props.route?.params?.isRegister);
+  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'profile'>('phone');
+  const [otp, setOtp] = useState('');
+  const [resendTimer, setResendTimer] = useState(0);
+
+  useEffect(() => {
+    let interval: any;
+    if (resendTimer > 0) {
+      interval = setInterval(() => setResendTimer(prev => prev - 1), 1000);
+    }
+    return () => clearInterval(interval);
+  }, [resendTimer]);
   const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
@@ -279,6 +335,151 @@ export default function LoginScreen(props: any) {
     }
   };
 
+
+  const handleSendOtp = async () => {
+    const cleanPhone = phone.replace(/\D/g, "").slice(-10);
+    if (cleanPhone.length < 10) {
+      showAlert({ type: "warning", title: "Invalid Phone", message: "Please enter a valid 10-digit phone number." });
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('msg91-send-otp', {
+        body: { phone: cleanPhone }
+      });
+      if (error || data?.error) {
+        throw new Error(error?.message || data?.error || 'Failed to send OTP');
+      }
+      setAuthStep('otp');
+      setResendTimer(30);
+      showToast("OTP sent successfully");
+    } catch (err: any) {
+      showAlert({ type: "error", title: "Error", message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (otp.length < 4) {
+      showAlert({ type: "warning", title: "Invalid OTP", message: "Please enter the complete OTP." });
+      return;
+    }
+    setLoading(true);
+    try {
+      const cleanPhone = phone.replace(/\D/g, "").slice(-10);
+      const { data, error } = await supabase.functions.invoke('msg91-verify-otp', {
+        body: { phone: cleanPhone, otp }
+      });
+      if (error || data?.error) {
+        throw new Error(error?.message || data?.error || 'Failed to verify OTP');
+      }
+
+      if (data.isNewUser) {
+        if (isLogin) {
+          setIsLogin(false);
+        }
+        setAuthStep('profile');
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.tempPassword
+        });
+        if (signInError) throw signInError;
+        await checkProfileAndNavigate((await supabase.auth.getUser()).data.user?.id!);
+      }
+    } catch (err: any) {
+      showAlert({ type: "error", title: "Verification Failed", message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignupSubmit = async () => {
+    setLoading(true);
+    try {
+      if (!fullName || !email) {
+        showAlert({ type: "warning", title: t("notifications.missingInfo"), message: "Name and Email are required." });
+        setLoading(false); return;
+      }
+      if (eligibleServices.length > 0 && !selectedService) {
+        showAlert({ type: "warning", title: "Select Service", message: "Please select a service for your 40% OFF discount." });
+        setLoading(false); return;
+      }
+      if (!isValidEmail(email)) {
+        showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
+        setLoading(false); return;
+      }
+
+      let referrerId = null;
+      if (referralCode.trim()) {
+        referrerId = await validateReferralCode(referralCode.trim());
+        if (!referrerId) {
+          showAlert({ type: "warning", title: "Invalid Referral", message: "The referral code you entered is invalid. You can continue without it." });
+          setLoading(false); return;
+        }
+      }
+
+      const cleanPhone = phone.replace(/\D/g, "").slice(-10);
+      const formattedPhone = `+91${cleanPhone}`;
+      const securePassword = crypto.randomUUID();
+
+      const { data, error } = await supabase.auth.signUp({
+        email, password: securePassword, options: { data: { full_name: fullName.trim(), phone_number: formattedPhone, } }
+      });
+
+      if (error) throw error;
+      const authUser = data.user;
+
+      if (!authUser?.identities?.length) {
+        throw new Error("This email is already registered. Please login instead.");
+      }
+
+      if (authUser) {
+        await supabase.auth.updateUser({ data: { full_name: fullName.trim(), phone_number: formattedPhone, } });
+        const myReferralCode = generateReferralCode(fullName.trim());
+        const selectedServiceTitle = selectedService?.title || null;
+        const selectedServiceId = selectedService?.id || null;
+
+        await Promise.all([
+          supabase.from("profile").upsert({ id: authUser.id, full_name: fullName.trim(), email: email.trim(), phone: cleanPhone, referral_code: myReferralCode, referred_by_id: referrerId, service_selected: selectedServiceTitle }),
+          supabase.from("signup").upsert({ id: authUser.id, full_name: fullName.trim(), email: email.trim(), phone: cleanPhone, service_selected: selectedServiceTitle }),
+          supabase.from("wallet").upsert({ user_id: authUser.id, balance: 0 })
+        ]);
+
+        await setClaimedOffer({ serviceId: selectedServiceId, serviceTitle: selectedServiceTitle, offerPercentage: 40, claimedAt: new Date().toISOString() });
+
+        const userMetadataUpdate: any = {};
+        if (selectedServiceTitle) {
+          userMetadataUpdate.show_signup_offer_popup = true;
+          userMetadataUpdate.signup_service_title = selectedServiceTitle;
+          userMetadataUpdate.signup_service_id = selectedServiceId;
+        }
+
+        if (referrerId) {
+          await supabase.from("referrals").insert({ referrer_id: referrerId, referred_user_id: authUser.id, status: 'pending', reward_amount: 50 });
+          const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+          await supabase.from("coupons").insert({ coupon_code: welcomeCouponCode, discount_amount: 50, is_used: false, phone_number: cleanPhone });
+          userMetadataUpdate.show_welcome_reward = true;
+          userMetadataUpdate.welcome_coupon_code = welcomeCouponCode;
+        }
+
+        if (Object.keys(userMetadataUpdate).length > 0) {
+          await supabase.auth.updateUser({ data: userMetadataUpdate });
+        }
+        await checkProfileAndNavigate(authUser.id);
+      }
+    } catch (err: any) {
+      showAlert({ type: "error", title: t("notifications.authFailed"), message: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==========================================
+  // LEGACY EMAIL/PASSWORD AUTHENTICATION
+  // KEPT FOR FUTURE USE — DO NOT DELETE
+  // ==========================================
   const handleSubmit = async () => {
     setLoading(true);
 
@@ -479,6 +680,115 @@ export default function LoginScreen(props: any) {
             </View>
 
             <View style={styles.form}>
+              
+              {authStep === 'phone' && (
+                <Animated.View entering={FadeInDown.duration(400).delay(300)}>
+                  <AnimatedPhoneInput value={phone} onChangeText={setPhone} />
+                  <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleSendOtp} disabled={loading} style={{ marginTop: 20 }}>
+                    <Animated.View style={[styles.primaryBtn, buttonAnimatedStyle]}>
+                      {loading ? (
+                        <ActivityIndicator color="#111" />
+                      ) : (
+                        <Text style={styles.primaryText}>Send OTP</Text>
+                      )}
+                    </Animated.View>
+                  </Pressable>
+                </Animated.View>
+              )}
+
+              {authStep === 'otp' && (
+                <Animated.View entering={FadeInDown.duration(400).delay(200)}>
+                  <Text style={{ textAlign: 'center', marginBottom: 10, color: '#555', fontSize: 14 }}>
+                    OTP sent to +91 {phone}
+                  </Text>
+                  <OtpInput value={otp} onChangeText={setOtp} length={6} />
+                  
+                  <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleVerifyOtp} disabled={loading} style={{ marginTop: 20 }}>
+                    <Animated.View style={[styles.primaryBtn, buttonAnimatedStyle, otp.length < 4 && { opacity: 0.5 }]}>
+                      {loading ? (
+                        <ActivityIndicator color="#111" />
+                      ) : (
+                        <Text style={styles.primaryText}>Verify OTP</Text>
+                      )}
+                    </Animated.View>
+                  </Pressable>
+                  
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, gap: 20 }}>
+                    <TouchableOpacity onPress={() => {
+                      if (resendTimer === 0) handleSendOtp();
+                    }} disabled={resendTimer > 0}>
+                      <Text style={[styles.linkText, resendTimer > 0 && { color: '#999' }]}>
+                        {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
+                      </Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity onPress={() => {
+                      setAuthStep('phone');
+                      setOtp('');
+                    }}>
+                      <Text style={styles.linkText}>Change Mobile Number</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Animated.View>
+              )}
+
+              {authStep === 'profile' && !isLogin && (
+                <Animated.View entering={FadeInDown.duration(400).delay(200)} style={{ gap: 12 }}>
+                  <AnimatedInput
+                    icon={<User size={20} color="#888" />}
+                    placeholder={t("login.fullName")}
+                    value={fullName}
+                    onChange={setFullName}
+                    autoCapitalize="words"
+                  />
+                  <AnimatedInput
+                    icon={<Mail size={20} color="#888" />}
+                    placeholder={t("login.email")}
+                    value={email}
+                    onChange={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                  <AnimatedInput
+                    icon={<Gift size={20} color="#888" />}
+                    placeholder="Referral/Discount Code (Optional)"
+                    value={referralCode}
+                    onChange={(text: string) => setReferralCode(text.toUpperCase())}
+                    autoCapitalize="characters"
+                  />
+                  {eligibleServices.length > 0 ? (
+                    <View style={{ marginBottom: 4 }}>
+                      <Text style={styles.dropdownLabel}>🎁 Select Service for 40% OFF:</Text>
+                      <AnimatedServiceDropdown 
+                        selectedService={selectedService} 
+                        setShowServiceDropdown={setShowServiceDropdown} 
+                      />
+                    </View>
+                  ) : (
+                    <View style={styles.expiredOfferContainer}>
+                      <Sparkles size={16} color="#888" />
+                      <Text style={styles.expiredOfferText}>40% Welcome Offer is currently expired / inactive.</Text>
+                    </View>
+                  )}
+                  
+                  <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleSignupSubmit} disabled={loading} style={{ marginTop: 8 }}>
+                    <Animated.View style={[styles.primaryBtn, buttonAnimatedStyle]}>
+                      {loading ? (
+                        <ActivityIndicator color="#111" />
+                      ) : (
+                        <Text style={styles.primaryText}>Complete Profile</Text>
+                      )}
+                    </Animated.View>
+                  </Pressable>
+                </Animated.View>
+              )}
+
+              {/* 
+                ==========================================
+                LEGACY EMAIL/PASSWORD UI
+                KEPT FOR FUTURE USE — DO NOT DELETE
+                ==========================================
+              */}
               {/* FULL NAME */}
               {!isLogin && (
                 <Animated.View entering={FadeInDown.duration(400).delay(200)}>

@@ -2,6 +2,7 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLanguage } from "../context/LanguageContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
@@ -11,7 +12,6 @@ import { RootStackParamList } from "../navigation/AppNavigator";
 type Props = {
   route: RouteProp<RootStackParamList, "BookingDetails">;
 };
-
 
 import ReviewModal from "../components/ReviewModal";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
@@ -62,9 +62,9 @@ export default function BookingDetailsScreen({ route }: Props) {
     fetchLatest();
   }, [initialBooking?.id]);
 
+  // 🟢 Service Checklist Feature
+  const [checklist, setChecklist] = useState<Record<number, boolean>>({});
 
-
-  // Safely parse services if it's a JSON string
   const services = React.useMemo(() => {
     if (!booking.services) return [];
     if (typeof booking.services === 'string') {
@@ -76,6 +76,61 @@ export default function BookingDetailsScreen({ route }: Props) {
     }
     return Array.isArray(booking.services) ? booking.services : [];
   }, [booking.services]);
+
+  const checklistItems = React.useMemo(() => {
+    const serviceName = (services[0]?.title || services[0]?.service_name || "").toLowerCase();
+    
+    let specificItems = [
+      "Customer & property details verified",
+      "Required areas/access confirmed",
+      "Service scope & requirements confirmed",
+      "Cleaning materials & equipment available",
+      "All selected service areas cleaned",
+      "Floors, surfaces & fixtures properly cleaned",
+      "Kitchen, bathrooms & applicable areas completed",
+      "Windows/glass & included tasks completed",
+      "No visible dirt or waste left behind",
+      "Final inspection completed & customer satisfied"
+    ];
+
+    if (serviceName.includes("bathroom")) {
+      specificItems[6] = "Floor, tiles, toilet, wash basin & fixtures cleaned";
+    } else if (serviceName.includes("kitchen")) {
+      specificItems[6] = "Countertop, hob, sink, cabinets & floor completed";
+    } else if (serviceName.includes("deep cleaning") || serviceName.includes("full house")) {
+      specificItems[6] = "Living room, bedrooms, kitchen, bathrooms & applicable areas completed";
+    }
+
+    return specificItems;
+  }, [services]);
+
+  useEffect(() => {
+    if (!booking.id) return;
+    const loadChecklist = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(`booking_checklist_${booking.id}`);
+        if (stored) {
+          setChecklist(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.warn("Failed to load checklist", e);
+      }
+    };
+    loadChecklist();
+  }, [booking.id]);
+
+  const toggleChecklistItem = async (index: number) => {
+    try {
+      const updated = { ...checklist, [index]: !checklist[index] };
+      setChecklist(updated);
+      await AsyncStorage.setItem(`booking_checklist_${booking.id}`, JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Failed to save checklist", e);
+    }
+  };
+
+  const checklistProgress = Object.values(checklist).filter(Boolean).length;
+
 
   // Real-time subscription for booking updates (OTPs, staff assignment, etc.)
   useEffect(() => {
@@ -552,6 +607,54 @@ export default function BookingDetailsScreen({ route }: Props) {
                       </View>
                     </TouchableOpacity>
                   ) : null}
+
+                  {/* STAFF ASSIGNMENT - Only show for non-completed bookings */}
+                  <View style={{ borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 16, marginTop: 4 }} />
+
+                  {/* SERVICE CHECKLIST */}
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <Text style={[styles.section, { color: theme.text, marginBottom: 0, marginTop: 0 }]}>Service Checklist</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? "#4ade80" : "#16a34a" }}>
+                        {checklistProgress} / 10 completed
+                      </Text>
+                    </View>
+
+                    {checklistItems.map((item, index) => {
+                      const isChecked = !!checklist[index];
+                      return (
+                        <TouchableOpacity
+                          key={index}
+                          activeOpacity={0.7}
+                          onPress={() => toggleChecklistItem(index)}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            marginBottom: 8,
+                            backgroundColor: theme.surfaceVariant,
+                            padding: 12,
+                            borderRadius: 8
+                          }}
+                        >
+                          <Ionicons
+                            name={isChecked ? "checkbox" : "square-outline"}
+                            size={22}
+                            color={isChecked ? (isDark ? "#4ade80" : "#16a34a") : theme.textLight}
+                            style={{ marginRight: 12 }}
+                          />
+                          <Text style={{
+                            flex: 1,
+                            fontSize: 14,
+                            color: isChecked ? theme.text : theme.text,
+                            textDecorationLine: isChecked ? 'line-through' : 'none',
+                            opacity: isChecked ? 0.6 : 1
+                          }}>
+                            {item}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
 
                   <View style={{ borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 16, marginTop: 4 }} />
 
