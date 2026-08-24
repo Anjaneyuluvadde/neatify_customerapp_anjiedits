@@ -1,24 +1,24 @@
-import React, { useEffect, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  ActivityIndicator,
-  Pressable,
-  StatusBar,
-  ScrollView,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { supabase } from "../lib/supabase";
+import ServiceCard from "../components/ServiceCard";
 import { useTheme } from "../context/ThemeContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
-import { Service } from "../types/service";
-import ServiceCard from "../components/ServiceCard";
+import { supabase } from "../lib/supabase";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
+import { Service } from "../types/service";
 
 type Props = {
   route: RouteProp<RootStackParamList, "CategoryServices">;
@@ -64,10 +64,10 @@ export default function CategoryServicesScreen({ route }: Props) {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <StatusBar barStyle={theme.background === "#FFFFFF" ? "dark-content" : "light-content"} />
-      
+
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <Pressable 
+        <Pressable
           onPress={() => navigation.goBack()}
           style={[styles.backButton, { backgroundColor: theme.surfaceVariant }]}
         >
@@ -93,7 +93,7 @@ export default function CategoryServicesScreen({ route }: Props) {
         >
           {groupedServices.map((group, index) => (
             <View key={group.value} style={[styles.groupContainer, index > 0 && styles.groupSpacing]}>
-              
+
               {/* Section Heading */}
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: theme.text }]}>
@@ -106,9 +106,9 @@ export default function CategoryServicesScreen({ route }: Props) {
               <View style={styles.cardsGrid}>
                 {group.data.map((service: Service) => (
                   <View key={service.id} style={styles.cardWrapper}>
-                    <ServiceCard 
-                      service={service} 
-                      onPress={() => navigation.navigate("ServiceDetail", { service })} 
+                    <ServiceCard
+                      service={service}
+                      onPress={() => navigation.navigate("ServiceDetail", { service })}
                     />
                   </View>
                 ))}
@@ -185,6 +185,6 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   cardWrapper: {
-    width: "50%",
+    width: "100%",
   },
 });

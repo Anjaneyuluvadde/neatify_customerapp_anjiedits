@@ -1,18 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation, useRoute, DrawerActions } from "@react-navigation/native";
-import * as Location from "expo-location";
-import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View, LayoutAnimation, Platform, UIManager } from "react-native";
+import { DrawerActions, useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { Animated, Easing, LayoutAnimation, Platform, StyleSheet, Text, TouchableOpacity, UIManager, View } from "react-native";
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-import LocationService from "../services/LocationService";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { supabase } from "../lib/supabase";
+import LocationService from "../services/LocationService";
 
 type HeaderProps = {
   isCurved?: boolean;
@@ -74,6 +73,13 @@ export default function Header({ isCurved = false }: HeaderProps) {
     return () => subscription.unsubscribe();
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      // Silently refresh location when returning to the screen
+      handleRefresh(false, true);
+    }, [])
+  );
+
   const startSpin = () => {
     spinValue.setValue(0);
     Animated.loop(
@@ -95,13 +101,13 @@ export default function Header({ isCurved = false }: HeaderProps) {
     outputRange: ['0deg', '360deg'],
   });
 
-  const handleRefresh = async (isInitial = false) => {
+  const handleRefresh = async (isInitial = false, isSilent = false) => {
     if (isRefreshing) return;
     setIsRefreshing(true);
-    startSpin();
+    if (!isSilent) startSpin();
 
     const oldLocation = locationName;
-    setLocationName("Fetching location...");
+    if (!isSilent) setLocationName("Fetching location...");
 
     try {
       const result = await LocationService.fetchCurrentLocation();
@@ -133,14 +139,14 @@ export default function Header({ isCurved = false }: HeaderProps) {
 
     } catch (error) {
       console.warn("Location error:", error);
-      setLocationName("Unable to update location");
+      if (!isSilent) setLocationName("Unable to update location");
       setFullAddress("");
-      if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
+      if (!isInitial && !isSilent && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
         setTimeout(() => setLocationName(oldLocation), 2500);
       }
     } finally {
       setIsRefreshing(false);
-      stopSpin();
+      if (!isSilent) stopSpin();
     }
   };
 
@@ -185,17 +191,17 @@ export default function Header({ isCurved = false }: HeaderProps) {
             <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4, marginTop: 1 }} />
             <TouchableOpacity
               activeOpacity={0.7}
-              onPress={toggleLocation}
-              style={{ flexShrink: 1, marginRight: 6 }}
+              onPress={() => navigation.navigate("LocationSearch")}
+              style={{ flexShrink: 1, marginRight: 6, flexDirection: 'row', alignItems: 'center' }}
             >
-              <Text 
-                style={{ fontSize: 15, fontWeight: '700', color: '#111111', lineHeight: 20 }}
-                numberOfLines={isExpanded ? undefined : 1}
+              <Text
+                style={{ fontSize: 15, color: '#111111', lineHeight: 20, fontWeight: '400' }}
+                numberOfLines={1}
               >
-                {isExpanded && fullAddress ? fullAddress : locationName}
+                {locationName} ▼
               </Text>
             </TouchableOpacity>
-            
+
             <TouchableOpacity
               activeOpacity={0.7}
               onPress={() => handleRefresh(false)}

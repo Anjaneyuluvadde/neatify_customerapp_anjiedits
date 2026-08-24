@@ -1,5 +1,8 @@
 import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getServiceAreaMatch, isServiceable } from "../config/serviceAreas";
+
+const SELECTED_LOCATION_KEY = "neatify_selected_location";
 
 export interface LocationResult {
   locality: string;
@@ -9,7 +12,7 @@ export interface LocationResult {
   postalCode: string | null;
   rawAddress: Location.LocationGeocodedAddress | null;
   isServiceable: boolean;
-  status: 'success' | 'permission_denied' | 'error' | 'unserviceable';
+  status: 'success' | 'permission_denied' | 'error' | 'unserviceable' | 'services_disabled';
 }
 
 class LocationService {
@@ -19,8 +22,9 @@ class LocationService {
    */
   public static getLocalityString(addr: Location.LocationGeocodedAddress): string {
     // Priority: subLocality (e.g. Gopanpally) -> neighborhood -> street -> name -> district (e.g. Tellapur) -> city
-    if (addr.subLocality && addr.subLocality.length > 0) return addr.subLocality;
-    if (addr.neighborhood && addr.neighborhood.length > 0) return addr.neighborhood;
+    const anyAddr = addr as any;
+    if (anyAddr.subLocality && anyAddr.subLocality.length > 0) return anyAddr.subLocality;
+    if (anyAddr.neighborhood && anyAddr.neighborhood.length > 0) return anyAddr.neighborhood;
     if (addr.name && addr.name.length > 0) return addr.name;
     if (addr.street && addr.street.length > 0) return addr.street;
     if (addr.district && addr.district.length > 0) return addr.district;
@@ -31,11 +35,52 @@ class LocationService {
     return "Unknown Location";
   }
 
+  public static async setSelectedLocation(location: LocationResult | null) {
+    if (location) {
+      await AsyncStorage.setItem(SELECTED_LOCATION_KEY, JSON.stringify(location));
+    } else {
+      await AsyncStorage.removeItem(SELECTED_LOCATION_KEY);
+    }
+  }
+
+  public static async getSelectedLocation(): Promise<LocationResult | null> {
+    try {
+      const data = await AsyncStorage.getItem(SELECTED_LOCATION_KEY);
+      if (data) return JSON.parse(data);
+    } catch (e) {
+      console.error("Error reading selected location:", e);
+    }
+    return null;
+  }
+
   /**
    * Fetches current GPS location, reverse geocodes, and returns a unified result.
+   * If forceGPS is false, it returns the user's manually selected location if available.
    */
-  public static async fetchCurrentLocation(accuracy: Location.LocationAccuracy = Location.Accuracy.Balanced): Promise<LocationResult> {
+  public static async fetchCurrentLocation(accuracy: Location.LocationAccuracy = Location.Accuracy.Balanced, forceGPS: boolean = false): Promise<LocationResult> {
     try {
+      if (!forceGPS) {
+        const manualLocation = await this.getSelectedLocation();
+        if (manualLocation) {
+          return manualLocation;
+        }
+      }
+
+      // 0. Check if services are enabled
+      const servicesEnabled = await Location.hasServicesEnabledAsync();
+      if (!servicesEnabled) {
+        return {
+          locality: "Location services disabled",
+          fullAddress: "",
+          latitude: 0,
+          longitude: 0,
+          postalCode: null,
+          rawAddress: null,
+          isServiceable: false,
+          status: 'services_disabled',
+        };
+      }
+
       // 1. Permission Handling
       const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
       let finalStatus = existingStatus;
@@ -89,7 +134,7 @@ class LocationService {
           // Fallback construction
           const parts = [
             rawAddress.street,
-            rawAddress.subLocality,
+            (rawAddress as any).subLocality,
             rawAddress.city || rawAddress.district,
             rawAddress.region,
             rawAddress.postalCode,

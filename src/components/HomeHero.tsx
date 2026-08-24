@@ -4,11 +4,11 @@ import React, { useEffect, useRef } from "react";
 import {
   Animated,
   Dimensions,
+  Easing,
   StyleSheet,
   Text,
-  View,
-  Easing,
   TouchableOpacity,
+  View,
 } from "react-native";
 
 const { width } = Dimensions.get("window");

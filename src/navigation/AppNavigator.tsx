@@ -23,6 +23,7 @@ import ServiceDetailScreen from "../screens/ServiceDetailScreen";
 import CategoryServicesScreen from "../screens/CategoryServicesScreen";
 import LocationAccessScreen from "../screens/LocationAccessScreen";
 import ComingSoonScreen from "../screens/ComingSoonScreen";
+import LocationSearchScreen from "../screens/LocationSearchScreen";
 
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { Service } from "../types/service";
@@ -95,6 +96,7 @@ export type HomeStackParamList = {
   Checkout: { services: SelectedService[]; total: number; bookingDateText: string };
   CategoryDetail: { category: string; label: string };
   CategoryServices: { mainCategoryName: string; mainCategoryId: string; subCategories: any[] };
+  LocationSearch: undefined;
 };
 
 export type BookingsStackParamList = {
@@ -132,6 +134,7 @@ function HomeTabStack() {
       <HomeStack.Screen name="Checkout" component={CheckoutScreen as any} />
       <HomeStack.Screen name="CategoryDetail" component={CategoryDetailScreen as any} />
       <HomeStack.Screen name="CategoryServices" component={CategoryServicesScreen as any} />
+      <HomeStack.Screen name="LocationSearch" component={LocationSearchScreen as any} />
     </HomeStack.Navigator>
   );
 }

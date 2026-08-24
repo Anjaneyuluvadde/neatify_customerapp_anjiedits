@@ -1,23 +1,23 @@
-import React, { useEffect, useState, useCallback } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  Pressable,
-  StatusBar,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { supabase } from "../lib/supabase";
+import ServiceCard from "../components/ServiceCard";
 import { useTheme } from "../context/ThemeContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
-import { Service } from "../types/service";
-import ServiceCard from "../components/ServiceCard";
+import { supabase } from "../lib/supabase";
 import { RootStackParamList } from "../navigation/AppNavigator";
+import { Service } from "../types/service";
 
 type Props = {
   route: RouteProp<RootStackParamList, "CategoryDetail">;
@@ -52,19 +52,19 @@ export default function CategoryDetailScreen({ route }: Props) {
   }, [fetchServices]);
 
   const renderService = ({ item }: { item: Service }) => (
-    <ServiceCard 
-      service={item} 
-      onPress={() => navigation.navigate("ServiceDetail", { service: item })} 
+    <ServiceCard
+      service={item}
+      onPress={() => navigation.navigate("ServiceDetail", { service: item })}
     />
   );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }} edges={["top"]}>
       <StatusBar barStyle={theme.background === "#FFFFFF" ? "dark-content" : "light-content"} />
-      
+
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.border }]}>
-        <Pressable 
+        <Pressable
           onPress={() => navigation.goBack()}
           style={[styles.backButton, { backgroundColor: theme.surfaceVariant }]}
         >
@@ -88,7 +88,6 @@ export default function CategoryDetailScreen({ route }: Props) {
           data={services}
           renderItem={renderService}
           keyExtractor={(item) => item.id}
-          numColumns={2}
           contentContainerStyle={[styles.listContent, bottomNavPadding]}
           showsVerticalScrollIndicator={false}
         />

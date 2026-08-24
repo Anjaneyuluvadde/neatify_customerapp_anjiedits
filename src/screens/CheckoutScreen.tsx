@@ -541,9 +541,9 @@ export default function CheckoutScreen({ route }: Props) {
     if (!userId) return;
 
     setFetchingLocation(true);
-
     try {
-      const result = await LocationService.fetchCurrentLocation(Location.Accuracy.High);
+      // Force GPS fetch (true) because user explicitly clicked the GPS button
+      const result = await LocationService.fetchCurrentLocation(Location.Accuracy.High, true);
 
       if (result.status === 'permission_denied') {
         setAlertConfig({

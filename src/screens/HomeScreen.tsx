@@ -560,7 +560,6 @@ export default function HomeScreen({ navigation }: any) {
             <FlatList
               data={pageServices}
               keyExtractor={(s) => s.id}
-              numColumns={2}
               scrollEnabled={false}
               renderItem={({ item }) => (
                 <ServiceCard service={item} onPress={() => navigation.navigate("ServiceDetail", { service: item })} />
@@ -1232,7 +1231,8 @@ const promoBannerStyles = StyleSheet.create({
     marginBottom: 10,
     backgroundColor: "#0F172A",
     borderRadius: 12,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     flexDirection: "row",
     overflow: "hidden",
     alignItems: "center",
@@ -1252,18 +1252,18 @@ const promoBannerStyles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "700",
-    marginBottom: 4,
+    marginBottom: 2,
   },
   descriptionText: {
     color: "#94A3B8",
     fontSize: 10,
     fontWeight: "500",
     lineHeight: 14,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   claimBtn: {
     backgroundColor: "#FFC928",
-    paddingVertical: 6,
+    paddingVertical: 5,
     paddingHorizontal: 12,
     borderRadius: 16,
     alignSelf: "flex-start",
