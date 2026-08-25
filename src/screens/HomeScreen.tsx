@@ -25,6 +25,7 @@ import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
 import HomeHero from "../components/HomeHero";
 import ServiceCard from "../components/ServiceCard";
+import FloatingCartSummary from "../components/FloatingCartSummary";
 import WhyChooseUs from "../components/WhyChooseUs";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore
@@ -600,6 +601,31 @@ export default function HomeScreen({ navigation }: any) {
     return () => clearInterval(interval);
   }, [heroBanners.length, isUserSwiping]);
 
+  const navigateToExpressCleaning = useCallback(() => {
+    // Check if it's a specific service
+    const expressService = services.find(s => s.title?.toLowerCase().includes("express"));
+    if (expressService) {
+      navigation.navigate("ServiceDetail", { service: expressService });
+      return;
+    }
+
+    // Check if it's a main category
+    const expressCategory = mainCategories.find(c => c.name.toLowerCase().includes("express"));
+    if (expressCategory) {
+      const subs = allSubCategoriesByMainCategory.get(expressCategory.id) || [];
+      navigation.navigate("CategoryServices", {
+        mainCategoryName: expressCategory.name,
+        mainCategoryId: expressCategory.id,
+        subCategories: subs
+      });
+      return;
+    }
+
+    // Fallback
+    scrollRef.current?.scrollTo({ y: servicesY || 0, animated: true });
+  }, [services, mainCategories, allSubCategoriesByMainCategory, navigation, servicesY]);
+
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <SafeAreaView style={{ backgroundColor: "#FFC928", flex: 0 }} edges={["top"]} />
@@ -629,7 +655,7 @@ export default function HomeScreen({ navigation }: any) {
           <Header />
 
           {/* 2. Hero Slider */}
-          <HomeHero />
+          <HomeHero onBookNow={navigateToExpressCleaning} />
 
           {/* New User Promo Banner (Matching Website Image 1) */}
           <View style={promoBannerStyles.container}>
@@ -703,9 +729,7 @@ export default function HomeScreen({ navigation }: any) {
 
 
           {/* 6. Why Choose Us Section */}
-          <WhyChooseUs onBookNow={() => {
-            scrollRef.current?.scrollTo({ y: 0, animated: true });
-          }} />
+          <WhyChooseUs onBookNow={navigateToExpressCleaning} />
         </ScrollView>
       )}
 
@@ -892,6 +916,7 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       </Modal>
       {/* Floating Go Up Button */}
+      <FloatingCartSummary />
       {showGoUp && (
         <TouchableOpacity
           style={[goUpStyles.goUpBtn, { backgroundColor: theme.background, borderColor: theme.border }]}

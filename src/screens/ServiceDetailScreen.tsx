@@ -1,5 +1,5 @@
 
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
@@ -22,8 +22,10 @@ import DescriptionCard from "../components/DescriptionCard";
 import WorkIncludesCard from "../components/WorkIncludesCard";
 import WorkNotIncludesCard from "../components/WorkNotIncludesCard";
 import FAQAccordion from "../components/FAQAccordion";
+import FloatingCartSummary from "../components/FloatingCartSummary";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
+import { useBookingCart } from "../context/BookingCartContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { supabase } from "../lib/supabase";
@@ -122,9 +124,7 @@ export default function ServiceDetailScreen({ route }: Props) {
   );
 
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
-  const [selectedServices, setSelectedServices] = useState<SelectedService[]>(
-    []
-  );
+  const { cartItems: selectedServices, addService: addToGlobalCart, removeService, updateQuantity } = useBookingCart();
   const [addons, setAddons] = useState<AddOn[]>([]);
 
   // ✅ Active offer from offers table
@@ -401,10 +401,15 @@ export default function ServiceDetailScreen({ route }: Props) {
     setRefreshing(false);
   };
 
-  /* ================= INIT SELECTED SERVICE ================= */
-  useEffect(() => {
-    if (service) {
-      // Determine effective price and badge based on active offer
+  /* ================= HELPERS ================= */
+
+  const handleBookNow = () => {
+    if (!service) return;
+
+    // Check if main service is already in global cart
+    const existing = selectedServices.find(s => s.id === service.id);
+    
+    if (!existing) {
       let effectivePrice = service.price;
       let effectiveLabel = (service as any)?.discount_label ?? null;
       let effectiveOriginalPrice = (service as any)?.original_price ?? null;
@@ -415,28 +420,21 @@ export default function ServiceDetailScreen({ route }: Props) {
         effectiveDiscountPercent = activeOfferPercent;
       }
 
-      setSelectedServices([
-        {
-          id: service.id,
-          title: service.title,
-          duration: service.duration,
-          price: effectivePrice,
-          service_type: service.service_type,
-          original_price: effectiveOriginalPrice,
-          discount_percent: effectiveDiscountPercent,
-          discount_label: effectiveLabel,
-          tax_percent: (service as any)?.tax_percent ?? null,
-          image: (service as any)?.image ?? null,
-          quantity: 1, // Main service always has quantity 1
-        },
-      ]);
+      addToGlobalCart({
+        id: service.id,
+        title: service.title,
+        duration: service.duration,
+        price: effectivePrice,
+        service_type: service.service_type,
+        original_price: effectiveOriginalPrice,
+        discount_percent: effectiveDiscountPercent,
+        discount_label: effectiveLabel,
+        tax_percent: (service as any)?.tax_percent ?? null,
+        image: (service as any)?.image ?? null,
+        quantity: 1,
+      });
     }
-  }, [service, activeOfferPercent]);
 
-  /* ================= HELPERS ================= */
-
-  const handleBookNow = () => {
-    if (!service) return;
     setShowSummary(true);
   };
 
@@ -465,35 +463,23 @@ export default function ServiceDetailScreen({ route }: Props) {
       // If already added, increment quantity (up to max_quantity)
       const maxQty = addons.find((a) => a.id === addon.id)?.max_quantity || 3;
       if ((existingAddon.quantity || 1) >= maxQty) {
-        // Already at max, do nothing
         return;
       }
-
-      setSelectedServices((prev) =>
-        prev.map((s) =>
-          s.id === addon.id
-            ? { ...s, quantity: (s.quantity || 1) + 1 }
-            : s
-        )
-      );
-      // Don't close modal when just incrementing quantity
+      updateQuantity(addon.id, (existingAddon.quantity || 1) + 1);
     } else {
       // Add new addon with quantity 1
-      const newService: SelectedService = {
+      addToGlobalCart({
         id: addon.id,
         title: addon.title,
-        duration: `${addon.duration} mins`, // Convert int to string format
-        price: addon.price, // already string with ₹ from db
-        original_price: addon.original_price, // already string with ₹ from db
+        duration: `${addon.duration} mins`,
+        price: addon.price,
+        original_price: addon.original_price,
         discount_percent: addon.discount_percent,
         discount_label: (addon as any)?.discount_label ?? null,
         tax_percent: (addon as any)?.tax_percent ?? null,
-        image: addon.image,
+        image: addon.image || undefined,
         quantity: 1,
-      };
-
-      setSelectedServices((prev) => [...prev, newService]);
-      // Modal stays open so user can immediately adjust quantity
+      });
     }
   };
 
@@ -507,19 +493,8 @@ export default function ServiceDetailScreen({ route }: Props) {
       removeService(addonId);
     } else {
       // Decrement quantity
-      setSelectedServices((prev) =>
-        prev.map((s) =>
-          s.id === addonId
-            ? { ...s, quantity: (s.quantity || 1) - 1 }
-            : s
-        )
-      );
+      updateQuantity(addonId, (existingAddon.quantity || 1) - 1);
     }
-  };
-
-  const removeService = (id: string) => {
-    if (selectedServices.length === 1) return; // ✅ cannot remove last
-    setSelectedServices((prev) => prev.filter((s) => s.id !== id));
   };
 
   // ✅ Filter addons to match the main service's service_type (case-insensitive)
@@ -859,6 +834,161 @@ export default function ServiceDetailScreen({ route }: Props) {
               </>
             ) : null;
           })()}
+
+          {/* ✅ NEW SECTIONS: Trust Building */}
+          <View style={{ marginTop: 32 }}>
+
+            {/* 1. Meet Our Best Cleaners */}
+            <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 16 }}>
+              Meet Our Best Cleaners
+            </Text>
+            <View style={{ 
+              backgroundColor: theme.surface, 
+              borderRadius: 16, 
+              padding: 16, 
+              flexDirection: 'row', 
+              shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+              borderWidth: 1, borderColor: theme.border,
+              marginBottom: 32
+            }}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Ionicons name="time" size={20} color={COLORS.saffron} style={{ marginRight: 8 }} />
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>100+ Hours</Text>
+                    <Text style={{ fontSize: 12, color: theme.textLight }}>Trained for 100+ hours</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Ionicons name="star" size={20} color={COLORS.saffron} style={{ marginRight: 8 }} />
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>4.7/5</Text>
+                    <Text style={{ fontSize: 12, color: theme.textLight }}>Average customer rating</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Ionicons name="home" size={20} color={COLORS.saffron} style={{ marginRight: 8 }} />
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>50K+</Text>
+                    <Text style={{ fontSize: 12, color: theme.textLight }}>Homes served</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.saffron} style={{ marginRight: 8 }} />
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>Verified</Text>
+                    <Text style={{ fontSize: 12, color: theme.textLight }}>Verified by Team Neatify</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={{ width: 120, justifyContent: 'center', alignItems: 'center' }}>
+                <Image 
+                  source={require("../../assets/images/heroimg.png")} 
+                  style={{ width: 120, height: 160 }} 
+                  contentFit="contain" 
+                />
+              </View>
+            </View>
+
+            {/* 2. Our Cleaning Tools & Equipment */}
+            <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 4 }}>
+              Our Cleaning Tools & Equipment
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.textLight, marginBottom: 16 }}>
+              Professional tools for a better clean
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 32 }}>
+              {[
+                { name: "Vacuum", icon: "vacuum" }, 
+                { name: "Mop", icon: "broom" },
+                { name: "Brushes", icon: "brush" },
+                { name: "Machine", icon: "washing-machine" }
+              ].map((tool, idx) => (
+                <View key={idx} style={{ 
+                  width: '48%', 
+                  backgroundColor: theme.surface, 
+                  borderRadius: 12, 
+                  padding: 16, 
+                  alignItems: 'center', 
+                  marginBottom: 12,
+                  borderWidth: 1, borderColor: theme.border,
+                  shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1
+                }}>
+                  <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 12, borderRadius: 12, marginBottom: 8 }}>
+                    <MaterialCommunityIcons name={tool.icon as any} size={28} color={COLORS.saffron} />
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: theme.text }}>{tool.name}</Text>
+                </View>
+              ))}
+            </View>
+
+            {/* 3. What We Need From You */}
+            <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 4 }}>
+              What We Need From You
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.textLight, marginBottom: 16 }}>
+              A few simple things to help us get started
+            </Text>
+            <View style={{ 
+              backgroundColor: theme.surface, 
+              borderRadius: 16, 
+              padding: 16, 
+              borderWidth: 1, borderColor: theme.border,
+              shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+              marginBottom: 32
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 10, borderRadius: 10, marginRight: 12 }}>
+                  <Ionicons name="water" size={22} color="#0EA5E9" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Bucket & Water</Text>
+                  <Text style={{ fontSize: 13, color: theme.textLight, marginTop: 2 }}>Keep sufficient water ready</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 10, borderRadius: 10, marginRight: 12 }}>
+                  <Ionicons name="flash" size={22} color="#EAB308" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Power Point</Text>
+                  <Text style={{ fontSize: 13, color: theme.textLight, marginTop: 2 }}>Provide access when needed</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 10, borderRadius: 10, marginRight: 12 }}>
+                  <Ionicons name="podium" size={22} color="#F97316" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Ladder / Stool</Text>
+                  <Text style={{ fontSize: 13, color: theme.textLight, marginTop: 2 }}>Keep a safe one available</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* 4. Customer Rating */}
+            <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 16 }}>
+              What Our Customers Say
+            </Text>
+            <View style={{ 
+              backgroundColor: theme.surface, 
+              borderRadius: 16, 
+              padding: 24, 
+              alignItems: 'center',
+              borderWidth: 1, borderColor: theme.border,
+              shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+              marginBottom: 32
+            }}>
+              <Text style={{ fontSize: 42, fontWeight: '900', color: theme.text, marginBottom: 4 }}>4.7<Text style={{ fontSize: 24, color: theme.textLight }}>/5</Text></Text>
+              <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+                {[1, 2, 3, 4, 5].map((_, i) => (
+                  <Ionicons key={i} name="star" size={24} color={COLORS.saffron} style={{ marginHorizontal: 2 }} />
+                ))}
+              </View>
+              <Text style={{ fontSize: 14, color: theme.textLight, fontWeight: '500' }}>Based on customer reviews</Text>
+            </View>
+
+          </View>
 
           {/* ✅ FAQs Section */}
           {(() => {
@@ -1537,6 +1667,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         )}
 
       </ScrollView>
+      <FloatingCartSummary />
     </View>
   );
 }

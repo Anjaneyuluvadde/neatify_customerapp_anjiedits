@@ -182,37 +182,58 @@ export default function Header({ isCurved = false }: HeaderProps) {
     return null;
   }
 
+  const addressPreview = fullAddress
+    ? fullAddress.split(',').slice(0, 2).join(',').substring(0, 15) + "..."
+    : "";
+
   return (
     <View style={[styles.container, isCurved && styles.curved]}>
       {/* TOP ROW */}
       <View style={styles.topRow}>
         <View style={styles.brandContainer}>
-          <View style={styles.locationRow}>
-            <Ionicons name="location" size={18} color="#111111" style={{ marginRight: 4, marginTop: 1 }} />
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => navigation.navigate("LocationSearch")}
-              style={{ flexShrink: 1, marginRight: 6, flexDirection: 'row', alignItems: 'center' }}
-            >
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate("LocationSearch")}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: '#000000',
+              paddingHorizontal: 12,
+              paddingVertical: 8,
+              borderRadius: 24,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.1,
+              shadowRadius: 6,
+              elevation: 3,
+              maxWidth: '75%'
+            }}
+          >
+            <View style={{
+              backgroundColor: '#FFC928',
+              padding: 6,
+              borderRadius: 12,
+              marginRight: 10
+            }}>
+              <Ionicons name="location" size={18} color="#000000" />
+            </View>
+            <View style={{ flexShrink: 1, flexDirection: 'column', justifyContent: 'center' }}>
               <Text
-                style={{ fontSize: 15, color: '#111111', lineHeight: 20, fontWeight: '400' }}
+                style={{ fontSize: 15, color: '#FFFFFF', fontWeight: '700', fontFamily: 'Helvetica Neue', marginBottom: 1 }}
                 numberOfLines={1}
               >
-                {locationName} ▼
+                {locationName}
               </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => handleRefresh(false)}
-              disabled={isRefreshing}
-              style={{ paddingHorizontal: 4, paddingVertical: 2 }}
-            >
-              <Animated.View style={{ transform: [{ rotate: spin }] }}>
-                <Ionicons name="sync" size={14} color="#111111" />
-              </Animated.View>
-            </TouchableOpacity>
-          </View>
+              {fullAddress ? (
+                <Text
+                  style={{ fontSize: 11, color: '#CBD5E1', fontWeight: '500', fontFamily: 'Helvetica Neue' }}
+                  numberOfLines={1}
+                >
+                  {addressPreview}
+                </Text>
+              ) : null}
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.rightActions}>
@@ -220,7 +241,7 @@ export default function Header({ isCurved = false }: HeaderProps) {
             <Ionicons
               name="person"
               size={22}
-              color="#111111"
+              color="#FFFFFF"
             />
           </TouchableOpacity>
         </View>
@@ -251,7 +272,7 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
   },
   brandContainer: {
@@ -276,7 +297,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -294,11 +315,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#475569",
+    fontFamily: "Poppins",
   },
   usernameText: {
     fontSize: 22,
     fontWeight: "900",
     color: "#0F172A",
+    fontFamily: "Poppins",
     letterSpacing: 0.5,
   },
 });

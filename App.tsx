@@ -12,6 +12,7 @@ import { supabase } from "./src/lib/supabase";
 import AppNavigator from "./src/navigation/AppNavigator";
 import * as Notifications from 'expo-notifications';
 import { registerForPushNotificationsAsync, savePushTokenToSupabase } from "./src/utils/pushNotifications";
+import { BookingCartProvider } from "./src/context/BookingCartContext";
 
 export default function App() {
   const [initialRoute, setInitialRoute] = useState<"LocationAccess" | "Login" | "HomeDrawer" | "CompleteProfile">("HomeDrawer");
@@ -311,11 +312,13 @@ export default function App() {
       <ThemeProvider>
         <LanguageProvider>
           <NotificationProvider>
-            <ThemedAppContent
-              linking={linking}
-              navigationRef={navigationRef}
-              initialRoute={initialRoute}
-            />
+            <BookingCartProvider>
+              <ThemedAppContent
+                linking={linking}
+                navigationRef={navigationRef}
+                initialRoute={initialRoute}
+              />
+            </BookingCartProvider>
           </NotificationProvider>
         </LanguageProvider>
       </ThemeProvider>

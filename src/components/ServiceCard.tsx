@@ -4,6 +4,7 @@ import React, { memo } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
+import { useBookingCart } from "../context/BookingCartContext";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
 
@@ -17,6 +18,9 @@ type Props = {
 export default memo(function ServiceCard({ service, onPress }: Props) {
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
+  const { cartItems, addService, updateQuantity, removeService } = useBookingCart();
+  
+  const cartItem = cartItems.find(s => s.id === service.id);
 
   return (
     <Pressable
@@ -67,6 +71,47 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
                 {String(service.original_price).startsWith('₹') ? service.original_price : `₹${service.original_price}`}
               </Text>
             ) : null}
+          </View>
+          
+          <View style={styles.cartActionContainer}>
+            {cartItem ? (
+              <View style={styles.quantityControl}>
+                <Pressable
+                  style={styles.qtyBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    if (cartItem.quantity && cartItem.quantity > 1) {
+                      updateQuantity(service.id, -1);
+                    } else {
+                      removeService(service.id);
+                    }
+                  }}
+                >
+                  <Ionicons name="remove" size={16} color={COLORS.black} />
+                </Pressable>
+                <Text style={styles.qtyText}>{cartItem.quantity || 1}</Text>
+                <Pressable
+                  style={styles.qtyBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    updateQuantity(service.id, 1);
+                  }}
+                >
+                  <Ionicons name="add" size={16} color={COLORS.black} />
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.addButton}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  addService(service);
+                }}
+              >
+                <Ionicons name="add" size={16} color={COLORS.black} />
+                <Text style={styles.addButtonText}>Add</Text>
+              </Pressable>
+            )}
           </View>
         </View>
       </View>
@@ -158,5 +203,40 @@ const styles = StyleSheet.create({
     textDecorationLine: "line-through",
     fontWeight: '500',
   },
-
+  cartActionContainer: {
+    marginLeft: 8,
+  },
+  addButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FDE047', // Yellow theme
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
+  },
+  addButtonText: {
+    fontWeight: '700',
+    color: COLORS.black,
+    fontSize: 14,
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FDE047', // Yellow theme
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  qtyBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyText: {
+    fontWeight: '700',
+    fontSize: 14,
+    color: COLORS.black,
+    paddingHorizontal: 8,
+  },
 });

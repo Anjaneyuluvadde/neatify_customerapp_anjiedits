@@ -13,7 +13,11 @@ import {
 
 const { width } = Dimensions.get("window");
 
-export default function HomeHero() {
+interface HomeHeroProps {
+  onBookNow?: () => void;
+}
+
+export default function HomeHero({ onBookNow }: HomeHeroProps) {
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const titleTranslateY = useRef(new Animated.Value(15)).current;
 
@@ -68,7 +72,7 @@ export default function HomeHero() {
         </Animated.View>
 
         <Animated.View style={[{ opacity: detailsOpacity, transform: [{ translateY: detailsTranslateY }] }]}>
-          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8}>
+          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8} onPress={onBookNow}>
             <Text style={styles.ctaText}>Book a Service →</Text>
           </TouchableOpacity>
 
@@ -124,6 +128,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     marginBottom: 10,
     letterSpacing: -0.5,
+    fontFamily: "Poppins",
   },
   ctaButton: {
     backgroundColor: "#0F172A",
