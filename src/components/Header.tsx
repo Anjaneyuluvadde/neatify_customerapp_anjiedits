@@ -315,13 +315,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
     color: "#475569",
-    fontFamily: "Poppins",
+    fontFamily: "Helvetica Neue",
   },
   usernameText: {
     fontSize: 22,
     fontWeight: "900",
     color: "#0F172A",
-    fontFamily: "Poppins",
+    fontFamily: "Helvetica Neue",
     letterSpacing: 0.5,
   },
 });

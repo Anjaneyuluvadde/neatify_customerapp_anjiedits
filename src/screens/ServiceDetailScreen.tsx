@@ -2,7 +2,7 @@
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import React, { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Dimensions,
   Modal,
@@ -19,20 +19,20 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import AnimatedProcessTimeline from "../components/AnimatedProcessTimeline";
 import DescriptionCard from "../components/DescriptionCard";
-import WorkIncludesCard from "../components/WorkIncludesCard";
-import WorkNotIncludesCard from "../components/WorkNotIncludesCard";
 import FAQAccordion from "../components/FAQAccordion";
 import FloatingCartSummary from "../components/FloatingCartSummary";
+import SimilarServices from "../components/SimilarServices";
+import WorkIncludesCard from "../components/WorkIncludesCard";
+import WorkNotIncludesCard from "../components/WorkNotIncludesCard";
+import { useBookingCart } from "../context/BookingCartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
-import { useBookingCart } from "../context/BookingCartContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { supabase } from "../lib/supabase";
 import { RootStackParamList } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
-import { getClaimedOffer } from "../utils/priceUtils";
 
 /* ================= TYPES ================= */
 
@@ -299,7 +299,7 @@ export default function ServiceDetailScreen({ route }: Props) {
     const { data: servicesData } = await supabase
       .from("services")
       .select(
-        "id, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, image2, sort_order, description, gallery_images, work_not_included"
+        "id, title, service_type, main_category_id, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_not_included"
       );
     if (servicesData) setAvailableServices(servicesData as Service[]);
 
@@ -309,7 +309,7 @@ export default function ServiceDetailScreen({ route }: Props) {
       .select("*")
       .eq("is_active", true)
       .order("sort_order", { ascending: true });
-    
+
     if (error) console.error("Error fetching addons:", error);
     if (addonsData) setAddons(addonsData as AddOn[]);
   }, []);
@@ -322,7 +322,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         const { data, error } = await supabase
           .from("services")
           .select(
-            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, image2, sort_order, description, gallery_images, work_includes, work_not_included"
+            "id, slug, title, service_type, main_category_id, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes, work_not_included"
           )
           .eq("slug", serviceId)
           .maybeSingle();
@@ -333,7 +333,7 @@ export default function ServiceDetailScreen({ route }: Props) {
         const { data, error } = await supabase
           .from("services")
           .select(
-            "id, slug, title, service_type, duration, price, original_price, discount_percent, discount_label, tax_percent, image, image2, sort_order, description, gallery_images, work_includes, work_not_included"
+            "id, slug, title, service_type, main_category_id, duration, price, original_price, discount_percent, discount_label, tax_percent, image, sort_order, description, gallery_images, work_includes, work_not_included"
           )
           .eq("id", serviceId)
           .maybeSingle();
@@ -408,7 +408,7 @@ export default function ServiceDetailScreen({ route }: Props) {
 
     // Check if main service is already in global cart
     const existing = selectedServices.find(s => s.id === service.id);
-    
+
     if (!existing) {
       let effectivePrice = service.price;
       let effectiveLabel = (service as any)?.discount_label ?? null;
@@ -561,7 +561,7 @@ export default function ServiceDetailScreen({ route }: Props) {
       >
         {/* ✅ MRP (STRIKE) - SHOWN FIRST */}
         {hasOld ? (
-              <Text
+          <Text
             style={{
               fontSize: oldPriceSize,
               color: theme.textMuted,
@@ -647,7 +647,7 @@ export default function ServiceDetailScreen({ route }: Props) {
           }}
         />
       )}
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={(e) => {
@@ -765,6 +765,11 @@ export default function ServiceDetailScreen({ route }: Props) {
             </Text>
           </Pressable>
 
+          <SimilarServices
+            currentService={service}
+            availableServices={availableServices}
+          />
+
           <View style={{ marginTop: 24 }}>
             {/* ✅ Description */}
             <DescriptionCard description={service.description || ""} />
@@ -786,7 +791,7 @@ export default function ServiceDetailScreen({ route }: Props) {
               if (Array.isArray(service.how_it_works)) {
                 parsedHowItWorks = service.how_it_works;
               } else if (typeof service.how_it_works === "string") {
-                try { parsedHowItWorks = JSON.parse(service.how_it_works); } catch (e) {}
+                try { parsedHowItWorks = JSON.parse(service.how_it_works); } catch (e) { }
               }
             }
 
@@ -801,16 +806,16 @@ export default function ServiceDetailScreen({ route }: Props) {
               // 2. Legacy fallback: Use work_includes
               const workIncludesLines = service.work_includes
                 ? service.work_includes
-                    .replace(/\r\n/g, "\n")
-                    .split("\n")
-                    .map((l) => l.trim())
-                    .filter(Boolean)
+                  .replace(/\r\n/g, "\n")
+                  .split("\n")
+                  .map((l) => l.trim())
+                  .filter(Boolean)
                 : [];
-                
+
               howItWorksItems = workIncludesLines.map((line) => {
                 // Strip leading bullets/dashes
                 let cleanLine = line.replace(/^[•\-\*]\s*/, "");
-                return { 
+                return {
                   title: cleanLine,
                 };
               });
@@ -842,11 +847,11 @@ export default function ServiceDetailScreen({ route }: Props) {
             <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 16 }}>
               Meet Our Best Cleaners
             </Text>
-            <View style={{ 
-              backgroundColor: theme.surface, 
-              borderRadius: 16, 
-              padding: 16, 
-              flexDirection: 'row', 
+            <View style={{
+              backgroundColor: theme.surface,
+              borderRadius: 16,
+              padding: 16,
+              flexDirection: 'row',
               shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
               borderWidth: 1, borderColor: theme.border,
               marginBottom: 32
@@ -882,10 +887,10 @@ export default function ServiceDetailScreen({ route }: Props) {
                 </View>
               </View>
               <View style={{ width: 120, justifyContent: 'center', alignItems: 'center' }}>
-                <Image 
-                  source={require("../../assets/images/heroimg.png")} 
-                  style={{ width: 120, height: 160 }} 
-                  contentFit="contain" 
+                <Image
+                  source={require("../../assets/images/heroimg.png")}
+                  style={{ width: 120, height: 160 }}
+                  contentFit="contain"
                 />
               </View>
             </View>
@@ -899,17 +904,17 @@ export default function ServiceDetailScreen({ route }: Props) {
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 32 }}>
               {[
-                { name: "Vacuum", icon: "vacuum" }, 
+                { name: "Vacuum", icon: "vacuum" },
                 { name: "Mop", icon: "broom" },
                 { name: "Brushes", icon: "brush" },
                 { name: "Machine", icon: "washing-machine" }
               ].map((tool, idx) => (
-                <View key={idx} style={{ 
-                  width: '48%', 
-                  backgroundColor: theme.surface, 
-                  borderRadius: 12, 
-                  padding: 16, 
-                  alignItems: 'center', 
+                <View key={idx} style={{
+                  width: '48%',
+                  backgroundColor: theme.surface,
+                  borderRadius: 12,
+                  padding: 16,
+                  alignItems: 'center',
                   marginBottom: 12,
                   borderWidth: 1, borderColor: theme.border,
                   shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1
@@ -929,10 +934,10 @@ export default function ServiceDetailScreen({ route }: Props) {
             <Text style={{ fontSize: 14, color: theme.textLight, marginBottom: 16 }}>
               A few simple things to help us get started
             </Text>
-            <View style={{ 
-              backgroundColor: theme.surface, 
-              borderRadius: 16, 
-              padding: 16, 
+            <View style={{
+              backgroundColor: theme.surface,
+              borderRadius: 16,
+              padding: 16,
               borderWidth: 1, borderColor: theme.border,
               shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
               marginBottom: 32
@@ -970,10 +975,10 @@ export default function ServiceDetailScreen({ route }: Props) {
             <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 16 }}>
               What Our Customers Say
             </Text>
-            <View style={{ 
-              backgroundColor: theme.surface, 
-              borderRadius: 16, 
-              padding: 24, 
+            <View style={{
+              backgroundColor: theme.surface,
+              borderRadius: 16,
+              padding: 24,
               alignItems: 'center',
               borderWidth: 1, borderColor: theme.border,
               shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
@@ -1054,147 +1059,147 @@ export default function ServiceDetailScreen({ route }: Props) {
 
 
         {/* ================= SUMMARY MODAL ================= */}
-          <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
-            <View
-              style={{
-                flex: 1,
-                backgroundColor: "rgba(0,0,0,0.55)",
-                justifyContent: "center",
-                padding: 20,
-              }}
+        <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: "rgba(0,0,0,0.55)",
+              justifyContent: "center",
+              padding: 20,
+            }}
+          >
+            <AnimatedGradientBorder
+              borderRadius={14}
+              borderWidth={2}
+              animationSpeed={3}
+              style={{ width: "100%", maxHeight: "80%" }}
             >
-              <AnimatedGradientBorder
-                borderRadius={14}
-                borderWidth={2}
-                animationSpeed={3}
-                style={{ width: "100%", maxHeight: "80%" }}
+              <View
+                style={{
+                  backgroundColor: theme.background,
+                  borderRadius: 14,
+                  padding: 20,
+                  width: "100%",
+                }}
               >
                 <View
                   style={{
-                    backgroundColor: theme.background,
-                    borderRadius: 14,
-                    padding: 20,
-                    width: "100%",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center",
                   }}
                 >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text }}>
-                      {t("schedule.summary")}
-                    </Text>
-                    <Pressable onPress={() => setShowSummary(false)}>
-                      <Text style={{ fontSize: 18, color: theme.text }}>✕</Text>
-                    </Pressable>
-                  </View>
+                  <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text }}>
+                    {t("schedule.summary")}
+                  </Text>
+                  <Pressable onPress={() => setShowSummary(false)}>
+                    <Text style={{ fontSize: 18, color: theme.text }}>✕</Text>
+                  </Pressable>
+                </View>
 
-                  <ScrollView
-                    style={{ maxHeight: Dimensions.get('window').height * 0.4, marginTop: 14 }}
-                    showsVerticalScrollIndicator={true}
-                    nestedScrollEnabled={true}
-                    bounces={false}
-                  >
-                    {selectedServices.map((s) => (
-                      <View
-                        key={s.id}
-                        style={{
-                          paddingVertical: 10,
-                          borderBottomWidth: 0.5,
-                          borderBottomColor: theme.border,
-                        }}
-                      >
-                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text }}>
-                              {s.title}
-                              {s.quantity && s.quantity > 1 ? ` (x${s.quantity})` : ""}
-                            </Text>
-                            <Text style={{ marginTop: 4, color: theme.textLight }}>
-                              {s.duration}
-                            </Text>
+                <ScrollView
+                  style={{ maxHeight: Dimensions.get('window').height * 0.4, marginTop: 14 }}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                  bounces={false}
+                >
+                  {selectedServices.map((s) => (
+                    <View
+                      key={s.id}
+                      style={{
+                        paddingVertical: 10,
+                        borderBottomWidth: 0.5,
+                        borderBottomColor: theme.border,
+                      }}
+                    >
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text }}>
+                            {s.title}
+                            {s.quantity && s.quantity > 1 ? ` (x${s.quantity})` : ""}
+                          </Text>
+                          <Text style={{ marginTop: 4, color: theme.textLight }}>
+                            {s.duration}
+                          </Text>
 
-                            {/* ✅ Calculate price based on quantity */}
-                            <PriceRow
-                              price={(parseFloat(formatPrice(s.price)) * (s.quantity || 1)).toString()}
-                              original_price={s.original_price ? Number(String(s.original_price).replace(/[^\d.]/g, '')) * (s.quantity || 1) : null}
-                              discount_percent={s.discount_percent}
-                              percentText={(s as any)?.discount_label}
-                              size="small"
-                            />
-                          </View>
+                          {/* ✅ Calculate price based on quantity */}
+                          <PriceRow
+                            price={(parseFloat(formatPrice(s.price)) * (s.quantity || 1)).toString()}
+                            original_price={s.original_price ? Number(String(s.original_price).replace(/[^\d.]/g, '')) * (s.quantity || 1) : null}
+                            discount_percent={s.discount_percent}
+                            percentText={(s as any)?.discount_label}
+                            size="small"
+                          />
                         </View>
-
-                        {/* Show remove only if it's NOT the main service */}
-                        {s.id !== service.id && (
-                          <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
-                            <Pressable onPress={() => removeService(s.id)} style={{ paddingVertical: 6 }}>
-                              <Text
-                                style={{ color: "red", fontSize: 12 }}
-                              >
-                                {t("schedule.remove")}
-                              </Text>
-                            </Pressable>
-                          </View>
-                        )}
                       </View>
-                    ))}
-                  </ScrollView>
 
-                  {/* ✅ ADDONS BUTTON — only show if there are matching addons for this service_type */}
-                  {availableAddons.length > 0 && (
-                      <Pressable
-                        onPress={() => {
-                          setShowSummary(false);
-                          setShowAddonsModal(true);
-                        }}
-                        style={{
-                          borderWidth: 1,
-                          borderColor: theme.border,
-                          paddingVertical: 12,
-                          alignItems: "center",
-                          marginTop: 16,
-                          borderRadius: 10,
-                        }}
-                      >
-                        <Text style={{ fontWeight: "800", color: theme.text }}>{"+ " + t("serviceDetail.addOns")}</Text>
-                      </Pressable>
-                    )}
+                      {/* Show remove only if it's NOT the main service */}
+                      {s.id !== service.id && (
+                        <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
+                          <Pressable onPress={() => removeService(s.id)} style={{ paddingVertical: 6 }}>
+                            <Text
+                              style={{ color: "red", fontSize: 12 }}
+                            >
+                              {t("schedule.remove")}
+                            </Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </ScrollView>
 
+                {/* ✅ ADDONS BUTTON — only show if there are matching addons for this service_type */}
+                {availableAddons.length > 0 && (
                   <Pressable
-                    onPress={async () => {
-                      const isAuth = await checkAuth("schedule an appointment");
-                      if (isAuth) {
-                        setShowSummary(false);
-                        navigation.navigate("Schedule", {
-                          services: selectedServices,
-                        });
-                      }
+                    onPress={() => {
+                      setShowSummary(false);
+                      setShowAddonsModal(true);
                     }}
                     style={{
-                      backgroundColor: COLORS.saffron,
-                      paddingVertical: 14,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      paddingVertical: 12,
                       alignItems: "center",
                       marginTop: 16,
                       borderRadius: 10,
                     }}
                   >
-                    <Text style={{ color: "#000", fontWeight: "800" }}>
-                      {t("serviceDetail.scheduleAppointment")}
-                    </Text>
+                    <Text style={{ fontWeight: "800", color: theme.text }}>{"+ " + t("serviceDetail.addOns")}</Text>
                   </Pressable>
-                </View>
-              </AnimatedGradientBorder>
-            </View>
+                )}
+
+                <Pressable
+                  onPress={async () => {
+                    const isAuth = await checkAuth("schedule an appointment");
+                    if (isAuth) {
+                      setShowSummary(false);
+                      navigation.navigate("Schedule", {
+                        services: selectedServices,
+                      });
+                    }
+                  }}
+                  style={{
+                    backgroundColor: COLORS.saffron,
+                    paddingVertical: 14,
+                    alignItems: "center",
+                    marginTop: 16,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: "#000", fontWeight: "800" }}>
+                    {t("serviceDetail.scheduleAppointment")}
+                  </Text>
+                </Pressable>
+              </View>
+            </AnimatedGradientBorder>
+          </View>
         </Modal>
 
         {/* ================= ADDONS LIST MODAL ================= */}
         <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); setShowSummary(true); }}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]}>
-            <View 
+            <View
               style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}
               onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
               onTouchEnd={(e) => {
@@ -1235,7 +1240,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                     </Pressable>
                   </View>
 
-                  <ScrollView 
+                  <ScrollView
                     contentContainerStyle={{ padding: 16 }}
                     onScroll={(e) => {
                       if (e.nativeEvent.contentOffset.y < -60) {
@@ -1412,7 +1417,7 @@ export default function ServiceDetailScreen({ route }: Props) {
                                 ) : (
                                   <Pressable
                                     onPress={(e) => {
-                                      e.stopPropagation(); 
+                                      e.stopPropagation();
                                       addAddonToCart(addon);
                                     }}
                                     style={{
@@ -1457,7 +1462,7 @@ export default function ServiceDetailScreen({ route }: Props) {
             onRequestClose={() => setSelectedAddonDetail(null)}
             statusBarTranslucent={true}
           >
-            <View 
+            <View
               style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", padding: 10, paddingTop: insets.top + 10 }}
               onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
               onTouchEnd={(e) => {
@@ -1492,22 +1497,22 @@ export default function ServiceDetailScreen({ route }: Props) {
                     <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>✕</Text>
                   </Pressable>
 
-                  <ScrollView 
-                  style={{ flex: 1 }} 
-                  scrollEventThrottle={16} 
-                  showsVerticalScrollIndicator={false} 
-                  decelerationRate="normal"
-                  onScroll={(e) => {
-                    if (e.nativeEvent.contentOffset.y < -60) {
-                      setSelectedAddonDetail(null);
-                    }
-                  }}
-                  onScrollEndDrag={(e) => {
-                    if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
-                      setSelectedAddonDetail(null);
-                    }
-                  }}
-                >
+                  <ScrollView
+                    style={{ flex: 1 }}
+                    scrollEventThrottle={16}
+                    showsVerticalScrollIndicator={false}
+                    decelerationRate="normal"
+                    onScroll={(e) => {
+                      if (e.nativeEvent.contentOffset.y < -60) {
+                        setSelectedAddonDetail(null);
+                      }
+                    }}
+                    onScrollEndDrag={(e) => {
+                      if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
+                        setSelectedAddonDetail(null);
+                      }
+                    }}
+                  >
                     {/* Full Image */}
                     <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
                       {selectedAddonDetail.image && selectedAddonDetail.image.trim() !== '' ? (

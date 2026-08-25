@@ -22,10 +22,10 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
+import FloatingCartSummary from "../components/FloatingCartSummary";
 import Header from "../components/Header";
 import HomeHero from "../components/HomeHero";
 import ServiceCard from "../components/ServiceCard";
-import FloatingCartSummary from "../components/FloatingCartSummary";
 import WhyChooseUs from "../components/WhyChooseUs";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore

@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     marginBottom: 10,
     letterSpacing: -0.5,
-    fontFamily: "Poppins",
+    fontFamily: "Helvetica Neue",
   },
   ctaButton: {
     backgroundColor: "#0F172A",
