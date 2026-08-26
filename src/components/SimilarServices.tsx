@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import React, { useMemo } from 'react';
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -17,6 +18,14 @@ interface SimilarServicesProps {
 export default function SimilarServices({ currentService, availableServices }: SimilarServicesProps) {
   const { theme, isDark } = useTheme();
   const { cartItems: selectedServices, addService: addToGlobalCart, removeService, updateQuantity } = useBookingCart();
+  const navigation = useNavigation<any>();
+
+  const handleOpenService = (service: Service) => {
+    navigation.push('ServiceDetail', {
+      serviceId: service.id,
+      service: service
+    });
+  };
 
   const similarServices = useMemo(() => {
     if (!currentService || !availableServices || !availableServices.length) return [];
@@ -110,7 +119,11 @@ export default function SimilarServices({ currentService, availableServices }: S
           const hasOld = cleanOriginal && Number(cleanOriginal) > Number(cleanPrice);
 
           return (
-            <View key={service.id} style={[styles.card, { backgroundColor: theme.surface }]}>
+            <Pressable 
+              key={service.id} 
+              style={[styles.card, { backgroundColor: theme.surface }]}
+              onPress={() => handleOpenService(service)}
+            >
               {/* Image */}
               <View style={styles.imageContainer}>
                 <Image
@@ -151,7 +164,10 @@ export default function SimilarServices({ currentService, availableServices }: S
                   {quantity === 0 ? (
                     <Pressable
                       style={styles.addButton}
-                      onPress={() => handleAdd(service)}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleAdd(service);
+                      }}
                     >
                       <Text style={styles.addButtonText}>+ Add</Text>
                     </Pressable>
@@ -160,7 +176,10 @@ export default function SimilarServices({ currentService, availableServices }: S
                       <View style={styles.quantityControl}>
                         <Pressable
                           style={styles.qtyBtn}
-                          onPress={() => handleDecrement(service.id, quantity)}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleDecrement(service.id, quantity);
+                          }}
                         >
                           <Ionicons name="remove" size={14} color="#000" />
                         </Pressable>
@@ -169,7 +188,10 @@ export default function SimilarServices({ currentService, availableServices }: S
 
                         <Pressable
                           style={styles.qtyBtn}
-                          onPress={() => handleIncrement(service.id)}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleIncrement(service.id);
+                          }}
                         >
                           <Ionicons name="add" size={14} color="#000" />
                         </Pressable>
@@ -178,7 +200,7 @@ export default function SimilarServices({ currentService, availableServices }: S
                   )}
                 </View>
               </View>
-            </View>
+            </Pressable>
           );
         })}
       </ScrollView>

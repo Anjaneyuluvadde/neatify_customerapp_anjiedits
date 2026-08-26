@@ -8,6 +8,7 @@ import Animated, {
   interpolate,
   Extrapolation,
   Easing,
+  SharedValue,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -29,7 +30,7 @@ const TimelineNode = ({
   isDark 
 }: { 
   index: number; 
-  progress: Animated.SharedValue<number>; 
+  progress: SharedValue<number>; 
   isDark: boolean; 
 }) => {
   const pulseScale = useSharedValue(1);
@@ -124,7 +125,7 @@ const TimelineLine = ({
   isDark 
 }: { 
   index: number; 
-  progress: Animated.SharedValue<number>; 
+  progress: SharedValue<number>; 
   isDark: boolean;
 }) => {
   const lineFillStyle = useAnimatedStyle(() => {

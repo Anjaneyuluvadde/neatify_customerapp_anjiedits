@@ -22,6 +22,7 @@ import DescriptionCard from "../components/DescriptionCard";
 import FAQAccordion from "../components/FAQAccordion";
 import FloatingCartSummary from "../components/FloatingCartSummary";
 import SimilarServices from "../components/SimilarServices";
+import ServiceHowItWorksVideos from "../components/ServiceHowItWorksVideos";
 import WorkIncludesCard from "../components/WorkIncludesCard";
 import WorkNotIncludesCard from "../components/WorkNotIncludesCard";
 import { useBookingCart } from "../context/BookingCartContext";
@@ -834,6 +835,13 @@ export default function ServiceDetailScreen({ route }: Props) {
                 >
                   {t("serviceDetail.howItWorks") || "How it works"}
                 </Text>
+
+                {(() => {
+                  console.log("[ServiceDetail] current service id:", service.id);
+                  return null;
+                })()}
+
+                <ServiceHowItWorksVideos serviceId={service.id} />
 
                 <AnimatedProcessTimeline steps={howItWorksItems} />
               </>
