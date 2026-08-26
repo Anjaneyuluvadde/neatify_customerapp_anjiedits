@@ -2,9 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import React, { memo } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import { useBookingCart } from "../context/BookingCartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
-import { useBookingCart } from "../context/BookingCartContext";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
 
@@ -19,7 +19,7 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
   const { cartItems, addService, updateQuantity, removeService } = useBookingCart();
-  
+
   const cartItem = cartItems.find(s => s.id === service.id);
 
   return (
@@ -57,7 +57,7 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
         </Text>
 
         <View style={styles.infoRow}>
-          <Ionicons name="time-outline" size={14} color={theme.textLight} />
+          <Ionicons name="time-outline" size={12} color={theme.textLight} />
           <Text style={[styles.durationText, { color: theme.textLight }]}>{service.duration}</Text>
         </View>
 
@@ -72,7 +72,8 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
               </Text>
             ) : null}
           </View>
-          
+
+          {/* Cart Actions */}
           <View style={styles.cartActionContainer}>
             {cartItem ? (
               <View style={styles.quantityControl}>
@@ -108,7 +109,7 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
                   addService(service);
                 }}
               >
-                <Ionicons name="add" size={16} color={COLORS.black} />
+                <Ionicons name="add" size={14} color={COLORS.black} />
                 <Text style={styles.addButtonText}>Add</Text>
               </Pressable>
             )}
@@ -121,8 +122,8 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
+    flexDirection: 'column',
+    flex: 1,
     marginVertical: 8,
     borderRadius: 16,
     overflow: "hidden",
@@ -130,30 +131,31 @@ const styles = StyleSheet.create({
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowRadius: 6,
     borderWidth: 1,
-    padding: 12,
+    backgroundColor: '#fff',
   },
   imageContainer: {
     position: 'relative',
-    marginRight: 12,
+    width: '100%',
+    height: 120,
+    backgroundColor: '#F1F5F9', // subtle placeholder color
   },
   image: {
-    height: 100,
-    width: 100,
-    borderRadius: 12,
+    height: '100%',
+    width: '100%',
   },
   specialOfferBadge: {
     position: 'absolute',
-    top: 4,
-    left: 4,
+    top: 8,
+    left: 8,
     backgroundColor: 'rgba(254, 243, 199, 0.95)',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
-    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
   },
   specialOfferText: {
     color: '#92400E',
@@ -161,82 +163,86 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   content: {
+    padding: 12,
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
   },
   title: {
-    fontSize: 16,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
     color: COLORS.black,
-    marginBottom: 4,
-    lineHeight: 22,
+    marginBottom: 6,
+    lineHeight: 18,
+    height: 36, // fix height to align rows
   },
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   durationText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '500',
     color: "#64748B",
   },
   bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  priceRow: {
     flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+  },
+  priceColumn: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    gap: 2,
   },
   currentPrice: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "800",
   },
   originalPrice: {
-    fontSize: 12,
+    fontSize: 11,
     color: "#94A3B8",
     textDecorationLine: "line-through",
     fontWeight: '500',
   },
   cartActionContainer: {
-    marginLeft: 8,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FDE047', // Yellow theme
+    backgroundColor: '#FDE047',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingVertical: 8,
+    borderRadius: 20,
     gap: 4,
   },
   addButtonText: {
     fontWeight: '700',
     color: COLORS.black,
-    fontSize: 14,
+    fontSize: 13,
   },
   quantityControl: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FDE047', // Yellow theme
-    borderRadius: 8,
+    backgroundColor: '#FDE047',
+    borderRadius: 20,
     overflow: 'hidden',
   },
   qtyBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyText: {
     fontWeight: '700',
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.black,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
 });

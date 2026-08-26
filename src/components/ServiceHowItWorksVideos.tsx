@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { useVideoPlayer, VideoView } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../theme/colors';
@@ -29,8 +29,6 @@ export default function ServiceHowItWorksVideos({ serviceId }: ServiceHowItWorks
   const [videos, setVideos] = useState<VideoRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [isMuted, setIsMuted] = useState(true);
-  const [isPlaying, setIsPlaying] = useState(true);
   const [isScreenFocused, setIsScreenFocused] = useState(true);
 
   useFocusEffect(
@@ -68,18 +66,14 @@ export default function ServiceHowItWorksVideos({ serviceId }: ServiceHowItWorks
     }
   };
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setActiveIndex(viewableItems[0].index);
+  const handleScrollEnd = (e: any) => {
+    const offsetX = e.nativeEvent.contentOffset.x;
+    const itemWidth = CARD_WIDTH + 12; // width + gap
+    const index = Math.round(offsetX / itemWidth);
+    if (index >= 0 && index < videos.length) {
+      setActiveIndex(index);
     }
-  }).current;
-
-  const viewabilityConfig = useRef({
-    itemVisiblePercentThreshold: 50,
-  }).current;
-
-  const togglePlayPause = () => setIsPlaying(prev => !prev);
-  const toggleMute = () => setIsMuted(prev => !prev);
+  };
 
   if (loading) {
     return (
@@ -100,24 +94,21 @@ export default function ServiceHowItWorksVideos({ serviceId }: ServiceHowItWorks
         keyExtractor={(item) => item.id}
         horizontal
         showsHorizontalScrollIndicator={false}
-        onViewableItemsChanged={onViewableItemsChanged}
-        viewabilityConfig={viewabilityConfig}
-        snapToInterval={CARD_WIDTH + 12} // width + gap for centering the swipe
+        onMomentumScrollEnd={handleScrollEnd}
+        snapToInterval={CARD_WIDTH + 12} // width + gap
         decelerationRate="fast"
         contentContainerStyle={styles.flatListContent}
         renderItem={({ item, index }) => {
           const isActive = index === activeIndex && isScreenFocused;
-          
+
           return (
             <View style={styles.cardWrapper}>
-              <VideoCard 
+              <HowItWorksVideoCard
                 video={item}
+                index={index}
                 isActive={isActive}
-                isPlaying={isPlaying}
-                isMuted={isMuted}
                 progressText={videos.length > 1 ? `${index + 1} / ${videos.length}` : ''}
-                onTogglePlayPause={togglePlayPause}
-                onToggleMute={toggleMute}
+                onActivate={() => setActiveIndex(index)}
               />
             </View>
           );
@@ -127,53 +118,76 @@ export default function ServiceHowItWorksVideos({ serviceId }: ServiceHowItWorks
   );
 }
 
-interface VideoCardProps {
+interface HowItWorksVideoCardProps {
   video: VideoRecord;
+  index: number;
   isActive: boolean;
-  isPlaying: boolean;
-  isMuted: boolean;
   progressText: string;
-  onTogglePlayPause: () => void;
-  onToggleMute: () => void;
+  onActivate: () => void;
 }
 
-function VideoCard({ 
-  video, 
-  isActive, 
-  isPlaying, 
-  isMuted, 
-  progressText, 
-  onTogglePlayPause, 
-  onToggleMute 
-}: VideoCardProps) {
+function HowItWorksVideoCard({
+  video,
+  index,
+  isActive,
+  progressText,
+  onActivate
+}: HowItWorksVideoCardProps) {
+
+  const [isPlaying, setIsPlaying] = useState(isActive);
+  const [isMuted, setIsMuted] = useState(true);
 
   const player = useVideoPlayer(video.video_url, p => {
     p.loop = true;
-    p.muted = isMuted;
+    p.muted = true;
   });
 
+  // Sync mute state independently for this video
   useEffect(() => {
     player.muted = isMuted;
   }, [isMuted, player]);
 
+  // Sync active state from parent
   useEffect(() => {
-    if (isActive && isPlaying) {
+    if (isActive) {
+      setIsPlaying(true);
       player.play();
     } else {
+      setIsPlaying(false);
       player.pause();
     }
-  }, [isActive, isPlaying, player]);
+  }, [isActive, player]);
+
+  const handleTogglePlayPause = () => {
+    if (!isActive) {
+      // Tap on an inactive video: make it the active one
+      onActivate();
+    } else {
+      // Toggle play/pause for the already active video
+      if (isPlaying) {
+        player.pause();
+        setIsPlaying(false);
+      } else {
+        player.play();
+        setIsPlaying(true);
+      }
+    }
+  };
+
+  const handleToggleMute = () => {
+    setIsMuted(!isMuted);
+  };
 
   return (
     <View style={styles.videoCard}>
-      <Pressable style={styles.videoPressable} onPress={onTogglePlayPause}>
+      <Pressable style={styles.videoPressable} onPress={handleTogglePlayPause}>
         <VideoView
           player={player}
           style={styles.videoView}
           contentFit="cover"
           nativeControls={false}
         />
-        
+
         {/* Play/Pause Overlay Component */}
         {!isPlaying && isActive && (
           <View style={styles.playPauseOverlay}>
@@ -202,7 +216,7 @@ function VideoCard({
                 </View>
               ) : <View />}
 
-              <Pressable onPress={onToggleMute} style={styles.muteButton}>
+              <Pressable onPress={handleToggleMute} style={styles.muteButton}>
                 <Ionicons name={isMuted ? "volume-mute" : "volume-high"} size={14} color="white" />
               </Pressable>
             </View>

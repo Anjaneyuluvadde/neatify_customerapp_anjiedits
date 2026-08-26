@@ -562,10 +562,12 @@ export default function HomeScreen({ navigation }: any) {
               data={pageServices}
               keyExtractor={(s) => s.id}
               scrollEnabled={false}
+              numColumns={2}
+              columnWrapperStyle={{ gap: 12, paddingHorizontal: 12 }}
               renderItem={({ item }) => (
                 <ServiceCard service={item} onPress={() => navigation.navigate("ServiceDetail", { service: item })} />
               )}
-              contentContainerStyle={{ padding: 8, paddingBottom: 16 }}
+              contentContainerStyle={{ paddingBottom: 16 }}
               onContentSizeChange={(_, h) => {
                 if (measuredHeights[tab.value] !== h) {
                   setMeasuredHeights((prev) => ({ ...prev, [tab.value]: h }));

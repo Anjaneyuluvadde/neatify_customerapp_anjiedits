@@ -90,6 +90,8 @@ export default function CategoryDetailScreen({ route }: Props) {
           data={services}
           renderItem={renderService}
           keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={{ gap: 12, paddingHorizontal: 16 }}
           contentContainerStyle={[styles.listContent, bottomNavPadding]}
           showsVerticalScrollIndicator={false}
         />

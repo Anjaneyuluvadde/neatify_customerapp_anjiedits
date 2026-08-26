@@ -187,8 +187,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     width: "100%",
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
   },
   cardWrapper: {
-    width: "100%",
+    width: "48%",
+    marginBottom: 8,
   },
 });
