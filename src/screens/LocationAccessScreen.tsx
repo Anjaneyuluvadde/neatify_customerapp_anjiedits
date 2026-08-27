@@ -1,24 +1,24 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from "react-native";
+import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import * as Location from "expo-location";
-import { useNavigation } from "@react-navigation/native";
-import Animated, { 
-  FadeInDown, 
-  FadeInUp, 
-  useAnimatedStyle, 
-  useSharedValue, 
-  withRepeat, 
-  withSequence, 
+import { MapPin } from "lucide-react-native";
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from "react-native";
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { MapPin } from "lucide-react-native";
 
-import { supabase } from "../lib/supabase";
-import { COLORS } from "../theme/colors";
 import NeatifyLogo from "../../assets/images/neatifylogo.png";
 import { isServiceable } from "../config/serviceAreas";
+import { supabase } from "../lib/supabase";
+import { COLORS } from "../theme/colors";
 
 type LocationStatus = 'detecting' | 'checking' | 'serviceable' | 'error' | 'denied';
 
@@ -109,7 +109,7 @@ export default function LocationAccessScreen() {
     try {
       // Check current permission status
       const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
-      
+
       let finalStatus = existingStatus;
 
       if (existingStatus !== 'granted') {
@@ -126,13 +126,13 @@ export default function LocationAccessScreen() {
       setStatus('checking');
 
       // Automatically get high accuracy location
-      const location = await Location.getCurrentPositionAsync({ 
-        accuracy: Location.Accuracy.Balanced 
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.Balanced
       });
-      
+
       // Validation check
       if (location.coords.accuracy && location.coords.accuracy > 150) {
-          console.warn("Low accuracy, might need retry.");
+        console.warn("Low accuracy, might need retry.");
       }
 
       // Verify service area
@@ -166,7 +166,7 @@ export default function LocationAccessScreen() {
       </View>
 
       <View style={[styles.content, isDesktop && styles.desktopContent]}>
-        
+
         {/* LOGO */}
         <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.logoContainer}>
           <Image source={NeatifyLogo} style={styles.logo} contentFit="contain" />
@@ -174,11 +174,11 @@ export default function LocationAccessScreen() {
 
         {/* HERO SECTION */}
         <View style={styles.heroSection}>
-          
+
           {/* 3D Character */}
           <Animated.View entering={FadeInDown.duration(600).delay(200)} style={characterAnimatedStyle}>
-            <Image 
-              source={require("../../assets/images/heroimg.png")} 
+            <Image
+              source={require("../../assets/images/heroimg.png")}
               style={styles.characterImage}
               contentFit="contain"
             />
@@ -186,7 +186,7 @@ export default function LocationAccessScreen() {
 
           {/* Location status UI */}
           <Animated.View entering={FadeInDown.duration(600).delay(400)} style={styles.statusContainer}>
-            
+
             {(status === 'detecting' || status === 'checking') && (
               <>
                 <Animated.View style={[styles.iconContainer, pinAnimatedStyle]}>
@@ -207,7 +207,7 @@ export default function LocationAccessScreen() {
                 <View style={[styles.iconContainer, { backgroundColor: '#E8F5E9' }]}>
                   <MapPin size={32} color="#2E7D32" strokeWidth={2.5} />
                 </View>
-                <Text style={[styles.statusTitle, { color: '#2E7D32' }]}>You're in our service area!</Text>
+                <Text style={[styles.statusTitle, { color: '#2E7D32' }]}>You&apos;re in our service area!</Text>
               </Animated.View>
             )}
 

@@ -1,6 +1,7 @@
-import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Location from "expo-location";
 import { getServiceAreaMatch, isServiceable } from "../config/serviceAreas";
+import { supabase } from "../lib/supabase";
 
 const SELECTED_LOCATION_KEY = "neatify_selected_location";
 
@@ -115,7 +116,7 @@ class LocationService {
 
       // 4. Reverse Geocoding
       const addressList = await Location.reverseGeocodeAsync({ latitude, longitude });
-      
+
       let reverseString = "Unknown Location";
       let postalCode = null;
       let rawAddress = null;
@@ -125,7 +126,7 @@ class LocationService {
         rawAddress = addressList[0];
         postalCode = rawAddress.postalCode || null;
         reverseString = this.getLocalityString(rawAddress);
-        
+
         // Try to get the formatted address directly, or build it
         const anyAddr = rawAddress as any;
         if (anyAddr.formattedAddress) {
@@ -146,15 +147,48 @@ class LocationService {
       // 5. Match with Neatify Specific Sub-Areas (e.g. strict Gopanpally polygon)
       const matchedArea = getServiceAreaMatch(latitude, longitude, postalCode, reverseString);
 
+      let finalLocality = matchedArea ? matchedArea.name : reverseString;
+      let finalServiceable = serviceable;
+      let serviceStatus: 'success' | 'permission_denied' | 'error' | 'unserviceable' | 'services_disabled' = 'success';
+
+      if (postalCode) {
+        try {
+          const { data, error } = await supabase
+            .from("neatify_service_areas")
+            .select("area_name")
+            .ilike("pincode", `%${postalCode}%`)
+            .limit(1);
+
+          if (error) {
+            console.warn("Supabase error fetching service areas:", error.message);
+            serviceStatus = finalServiceable ? 'success' : 'unserviceable';
+          } else if (data && data.length > 0) {
+            if (data[0].area_name) {
+              finalLocality = data[0].area_name;
+            }
+            finalServiceable = true;
+            serviceStatus = 'success';
+          } else {
+            finalServiceable = false;
+            serviceStatus = 'unserviceable';
+          }
+        } catch (e) {
+          console.warn("Network error fetching service areas:", e);
+          serviceStatus = finalServiceable ? 'success' : 'unserviceable';
+        }
+      } else {
+        serviceStatus = finalServiceable ? 'success' : 'unserviceable';
+      }
+
       return {
-        locality: matchedArea ? matchedArea.name : reverseString,
+        locality: finalLocality,
         fullAddress: fullAddress || reverseString,
         latitude,
         longitude,
         postalCode,
         rawAddress,
-        isServiceable: serviceable,
-        status: 'success',
+        isServiceable: finalServiceable,
+        status: serviceStatus,
       };
 
     } catch (error) {

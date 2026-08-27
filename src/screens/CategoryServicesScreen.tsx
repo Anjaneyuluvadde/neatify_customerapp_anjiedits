@@ -12,11 +12,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import Header from "../components/Header";
-import ServiceCard from "../components/ServiceCard";
 import FloatingCartSummary from "../components/FloatingCartSummary";
+import ServiceCard from "../components/ServiceCard";
 import { useTheme } from "../context/ThemeContext";
-import { useLanguage } from "../context/LanguageContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { supabase } from "../lib/supabase";
 import { RootStackParamList } from "../navigation/AppNavigator";

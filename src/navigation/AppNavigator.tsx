@@ -44,6 +44,7 @@ export type SelectedService = {
   discount_label?: string | null;
   tax_percent?: number | null;
   quantity?: number;
+  main_category_id?: string | null;
 };
 
 export type RootStackParamList = {

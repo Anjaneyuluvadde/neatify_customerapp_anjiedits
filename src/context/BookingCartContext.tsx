@@ -27,11 +27,19 @@ export function BookingCartProvider({ children }: { children: React.ReactNode })
         );
       }
       
+      const serviceMainCategoryId = (service as any).main_category_id;
+      
+      // Enforce single selection per main category
+      let filteredPrev = prev;
+      if (serviceMainCategoryId) {
+        filteredPrev = prev.filter(s => s.main_category_id !== serviceMainCategoryId);
+      }
+      
       // Map Service to SelectedService if not already
       let quantity = (service as SelectedService).quantity || 1;
       
       return [
-        ...prev,
+        ...filteredPrev,
         {
           id: service.id,
           title: service.title,
@@ -43,6 +51,7 @@ export function BookingCartProvider({ children }: { children: React.ReactNode })
           discount_label: (service as any).discount_label,
           tax_percent: (service as any).tax_percent,
           image: (service as any).image,
+          main_category_id: serviceMainCategoryId,
           quantity: quantity,
         } as SelectedService,
       ];
