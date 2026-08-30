@@ -4,7 +4,6 @@ import { RouteProp, useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Dimensions,
   Modal,
   Pressable,
   RefreshControl,
@@ -20,18 +19,19 @@ import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import AnimatedProcessTimeline from "../components/AnimatedProcessTimeline";
 import DescriptionCard from "../components/DescriptionCard";
 import FAQAccordion from "../components/FAQAccordion";
-import FloatingCartSummary from "../components/FloatingCartSummary";
+import ServiceEquipmentSection from "../components/ServiceEquipmentSection";
 import ServiceHowItWorksVideos from "../components/ServiceHowItWorksVideos";
 import SimilarServices from "../components/SimilarServices";
 import WorkIncludesCard from "../components/WorkIncludesCard";
 import WorkNotIncludesCard from "../components/WorkNotIncludesCard";
-import { useBookingCart } from "../context/BookingCartContext";
+import { getEquipmentForService } from "../data/serviceEquipment";
+import { applyCartRules, useBookingCart } from "../context/BookingCartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useAuthGuard } from "../hooks/useAuthGuard";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { supabase } from "../lib/supabase";
-import { RootStackParamList } from "../navigation/AppNavigator";
+import { RootStackParamList, SelectedService } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
 
@@ -45,19 +45,7 @@ type Props = {
 // or we can just use the Service type if it matches well enough.
 // The Service type has optional fields, so it should be fine.
 
-type SelectedService = {
-  id: string;
-  title: string;
-  duration: string;
-  price: string;
-  service_type?: string; // Add this
-  original_price?: string | null;
-  discount_percent?: number | null;
-  image?: string | null;
-  discount_label?: string | null;
-  tax_percent?: number | null;
-  quantity?: number; // For addons, track how many times added (max 3)
-};
+
 
 type AddOn = {
   id: string;
@@ -117,7 +105,6 @@ export default function ServiceDetailScreen({ route }: Props) {
   const [isScrolled, setIsScrolled] = useState(false);
   const addonsTouchY = useRef(0);
 
-  const [showSummary, setShowSummary] = useState(false);
   // const [showAddService, setShowAddService] = useState(false); // Removed as per request to replace
   const [showAddonsModal, setShowAddonsModal] = useState(false);
   const [selectedAddonDetail, setSelectedAddonDetail] = useState<AddOn | null>(
@@ -127,6 +114,7 @@ export default function ServiceDetailScreen({ route }: Props) {
   const [availableServices, setAvailableServices] = useState<Service[]>([]);
   const { cartItems: selectedServices, addService: addToGlobalCart, removeService, updateQuantity } = useBookingCart();
   const [addons, setAddons] = useState<AddOn[]>([]);
+  const [loadingAddons, setLoadingAddons] = useState(true);
 
   // ✅ Active offer from offers table
   const [activeOfferPercent, setActiveOfferPercent] = useState<number | null>(null);
@@ -296,6 +284,7 @@ export default function ServiceDetailScreen({ route }: Props) {
   /* ================= FETCH SERVICES & ADDONS ================= */
 
   const fetchAddons = useCallback(async () => {
+    setLoadingAddons(true);
     // Fetch Services (keeping existing logic though Add Another Service is removed from UI, might be useful later)
     const { data: servicesData } = await supabase
       .from("services")
@@ -313,6 +302,7 @@ export default function ServiceDetailScreen({ route }: Props) {
 
     if (error) console.error("Error fetching addons:", error);
     if (addonsData) setAddons(addonsData as AddOn[]);
+    setLoadingAddons(false);
   }, []);
 
   const fetchServiceDetails = useCallback(async () => {
@@ -404,39 +394,53 @@ export default function ServiceDetailScreen({ route }: Props) {
 
   /* ================= HELPERS ================= */
 
-  const handleBookNow = () => {
+  const handleBookNow = async () => {
+    if (loadingAddons) return;
     if (!service) return;
 
-    // Check if main service is already in global cart
-    const existing = selectedServices.find(s => s.id === service.id);
+    let effectivePrice = service.price;
+    let effectiveLabel = (service as any)?.discount_label ?? null;
+    let effectiveOriginalPrice = (service as any)?.original_price ?? null;
+    let effectiveDiscountPercent = (service as any)?.discount_percent ?? null;
 
-    if (!existing) {
-      let effectivePrice = service.price;
-      let effectiveLabel = (service as any)?.discount_label ?? null;
-      let effectiveOriginalPrice = (service as any)?.original_price ?? null;
-      let effectiveDiscountPercent = (service as any)?.discount_percent ?? null;
-
-      if (activeOfferPercent && activeOfferPercent > 0) {
-        effectiveLabel = `${activeOfferPercent}% OFF`;
-        effectiveDiscountPercent = activeOfferPercent;
-      }
-
-      addToGlobalCart({
-        id: service.id,
-        title: service.title,
-        duration: service.duration,
-        price: effectivePrice,
-        service_type: service.service_type,
-        original_price: effectiveOriginalPrice,
-        discount_percent: effectiveDiscountPercent,
-        discount_label: effectiveLabel,
-        tax_percent: (service as any)?.tax_percent ?? null,
-        image: (service as any)?.image ?? null,
-        quantity: 1,
-      });
+    if (activeOfferPercent && activeOfferPercent > 0) {
+      effectiveLabel = `${activeOfferPercent}% OFF`;
+      effectiveDiscountPercent = activeOfferPercent;
     }
 
-    setShowSummary(true);
+    const existing = selectedServices.find(s => s.id === service.id);
+
+    let nextServices = [...selectedServices];
+
+    const serviceToAdd = {
+      id: service.id,
+      title: service.title,
+      duration: service.duration,
+      price: effectivePrice,
+      service_type: service.service_type,
+      original_price: effectiveOriginalPrice,
+      discount_percent: effectiveDiscountPercent,
+      discount_label: effectiveLabel,
+      tax_percent: (service as any)?.tax_percent || undefined,
+      image: ((service as any)?.image as string) || undefined,
+      quantity: 1,
+      main_category_id: (service as any).main_category_id,
+      is_addon: false,
+    } as SelectedService;
+
+    if (!existing) {
+      addToGlobalCart(serviceToAdd);
+      nextServices = applyCartRules(nextServices, serviceToAdd);
+    }
+
+    if (availableAddons && availableAddons.length > 0) {
+      setShowAddonsModal(true);
+    } else {
+      const isAuth = await checkAuth("schedule an appointment");
+      if (isAuth) {
+        navigation.navigate("Schedule", { services: nextServices });
+      }
+    }
   };
 
   const handleShare = async () => {
@@ -474,12 +478,14 @@ export default function ServiceDetailScreen({ route }: Props) {
         title: addon.title,
         duration: `${addon.duration} mins`,
         price: addon.price,
+        service_type: addon.service_type,
         original_price: addon.original_price,
         discount_percent: addon.discount_percent,
         discount_label: (addon as any)?.discount_label ?? null,
         tax_percent: (addon as any)?.tax_percent ?? null,
         image: addon.image || undefined,
         quantity: 1,
+        is_addon: true,
       });
     }
   };
@@ -753,16 +759,17 @@ export default function ServiceDetailScreen({ route }: Props) {
           {/* ✅ BOOK NOW */}
           <Pressable
             onPress={handleBookNow}
+            disabled={loadingAddons}
             style={{
               marginTop: 20,
-              backgroundColor: COLORS.saffron,
+              backgroundColor: loadingAddons ? "#ccc" : COLORS.saffron,
               paddingVertical: 16,
               borderRadius: 12,
               alignItems: "center",
             }}
           >
             <Text style={{ fontSize: 16, fontWeight: "700", color: "#000" }}>
-              {t("serviceDetail.bookNow")}
+              {loadingAddons ? t("common.loading") : t("serviceDetail.bookNow")}
             </Text>
           </Pressable>
 
@@ -875,14 +882,14 @@ export default function ServiceDetailScreen({ route }: Props) {
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                   <Ionicons name="star" size={20} color={COLORS.saffron} style={{ marginRight: 8 }} />
                   <View>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>4.7/5</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>4.8/5</Text>
                     <Text style={{ fontSize: 12, color: theme.textLight }}>Average customer rating</Text>
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
                   <Ionicons name="home" size={20} color={COLORS.saffron} style={{ marginRight: 8 }} />
                   <View>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>50K+</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.text }}>10K+</Text>
                     <Text style={{ fontSize: 12, color: theme.textLight }}>Homes served</Text>
                   </View>
                 </View>
@@ -904,36 +911,7 @@ export default function ServiceDetailScreen({ route }: Props) {
             </View>
 
             {/* 2. Our Cleaning Tools & Equipment */}
-            <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 4 }}>
-              Our Cleaning Tools & Equipment
-            </Text>
-            <Text style={{ fontSize: 14, color: theme.textLight, marginBottom: 16 }}>
-              Professional tools for a better clean
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 32 }}>
-              {[
-                { name: "Vacuum", icon: "vacuum" },
-                { name: "Mop", icon: "broom" },
-                { name: "Brushes", icon: "brush" },
-                { name: "Machine", icon: "washing-machine" }
-              ].map((tool, idx) => (
-                <View key={idx} style={{
-                  width: '48%',
-                  backgroundColor: theme.surface,
-                  borderRadius: 12,
-                  padding: 16,
-                  alignItems: 'center',
-                  marginBottom: 12,
-                  borderWidth: 1, borderColor: theme.border,
-                  shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1
-                }}>
-                  <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 12, borderRadius: 12, marginBottom: 8 }}>
-                    <MaterialCommunityIcons name={tool.icon as any} size={28} color={COLORS.saffron} />
-                  </View>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: theme.text }}>{tool.name}</Text>
-                </View>
-              ))}
-            </View>
+            <ServiceEquipmentSection equipmentData={getEquipmentForService(service)} />
 
             {/* 3. What We Need From You */}
             <Text style={{ fontSize: 22, fontWeight: "800", color: theme.text, marginBottom: 4 }}>
@@ -992,7 +970,7 @@ export default function ServiceDetailScreen({ route }: Props) {
               shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
               marginBottom: 32
             }}>
-              <Text style={{ fontSize: 42, fontWeight: '900', color: theme.text, marginBottom: 4 }}>4.7<Text style={{ fontSize: 24, color: theme.textLight }}>/5</Text></Text>
+              <Text style={{ fontSize: 42, fontWeight: '900', color: theme.text, marginBottom: 4 }}>4.8<Text style={{ fontSize: 24, color: theme.textLight }}>/5</Text></Text>
               <View style={{ flexDirection: 'row', marginBottom: 12 }}>
                 {[1, 2, 3, 4, 5].map((_, i) => (
                   <Ionicons key={i} name="star" size={24} color={COLORS.saffron} style={{ marginHorizontal: 2 }} />
@@ -1066,154 +1044,15 @@ export default function ServiceDetailScreen({ route }: Props) {
         </View>
 
 
-        {/* ================= SUMMARY MODAL ================= */}
-        <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.55)",
-              justifyContent: "center",
-              padding: 20,
-            }}
-          >
-            <AnimatedGradientBorder
-              borderRadius={14}
-              borderWidth={2}
-              animationSpeed={3}
-              style={{ width: "100%", maxHeight: "80%" }}
-            >
-              <View
-                style={{
-                  backgroundColor: theme.background,
-                  borderRadius: 14,
-                  padding: 20,
-                  width: "100%",
-                }}
-              >
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text }}>
-                    {t("schedule.summary")}
-                  </Text>
-                  <Pressable onPress={() => setShowSummary(false)}>
-                    <Text style={{ fontSize: 18, color: theme.text }}>✕</Text>
-                  </Pressable>
-                </View>
-
-                <ScrollView
-                  style={{ maxHeight: Dimensions.get('window').height * 0.4, marginTop: 14 }}
-                  showsVerticalScrollIndicator={true}
-                  nestedScrollEnabled={true}
-                  bounces={false}
-                >
-                  {selectedServices.map((s) => (
-                    <View
-                      key={s.id}
-                      style={{
-                        paddingVertical: 10,
-                        borderBottomWidth: 0.5,
-                        borderBottomColor: theme.border,
-                      }}
-                    >
-                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text }}>
-                            {s.title}
-                            {s.quantity && s.quantity > 1 ? ` (x${s.quantity})` : ""}
-                          </Text>
-                          <Text style={{ marginTop: 4, color: theme.textLight }}>
-                            {s.duration}
-                          </Text>
-
-                          {/* ✅ Calculate price based on quantity */}
-                          <PriceRow
-                            price={(parseFloat(formatPrice(s.price)) * (s.quantity || 1)).toString()}
-                            original_price={s.original_price ? Number(String(s.original_price).replace(/[^\d.]/g, '')) * (s.quantity || 1) : null}
-                            discount_percent={s.discount_percent}
-                            percentText={(s as any)?.discount_label}
-                            size="small"
-                          />
-                        </View>
-                      </View>
-
-                      {/* Show remove only if it's NOT the main service */}
-                      {s.id !== service.id && (
-                        <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
-                          <Pressable onPress={() => removeService(s.id)} style={{ paddingVertical: 6 }}>
-                            <Text
-                              style={{ color: "red", fontSize: 12 }}
-                            >
-                              {t("schedule.remove")}
-                            </Text>
-                          </Pressable>
-                        </View>
-                      )}
-                    </View>
-                  ))}
-                </ScrollView>
-
-                {/* ✅ ADDONS BUTTON — only show if there are matching addons for this service_type */}
-                {availableAddons.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      setShowSummary(false);
-                      setShowAddonsModal(true);
-                    }}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      paddingVertical: 12,
-                      alignItems: "center",
-                      marginTop: 16,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "800", color: theme.text }}>{"+ " + t("serviceDetail.addOns")}</Text>
-                  </Pressable>
-                )}
-
-                <Pressable
-                  onPress={async () => {
-                    const isAuth = await checkAuth("schedule an appointment");
-                    if (isAuth) {
-                      setShowSummary(false);
-                      navigation.navigate("Schedule", {
-                        services: selectedServices,
-                      });
-                    }
-                  }}
-                  style={{
-                    backgroundColor: COLORS.saffron,
-                    paddingVertical: 14,
-                    alignItems: "center",
-                    marginTop: 16,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: "#000", fontWeight: "800" }}>
-                    {t("serviceDetail.scheduleAppointment")}
-                  </Text>
-                </Pressable>
-              </View>
-            </AnimatedGradientBorder>
-          </View>
-        </Modal>
-
         {/* ================= ADDONS LIST MODAL ================= */}
-        <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); setShowSummary(true); }}>
+        <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => { setShowAddonsModal(false); }}>
           <SafeAreaView style={{ flex: 1, backgroundColor: "transparent" }} edges={["top", "bottom"]}>
             <View
-              style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 10, paddingVertical: 20 }}
+              style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.55)", paddingHorizontal: 20, alignItems: "center", justifyContent: "center" }}
               onTouchStart={(e) => addonsTouchY.current = e.nativeEvent.pageY}
               onTouchEnd={(e) => {
                 if (e.nativeEvent.pageY - addonsTouchY.current > 80) {
                   setShowAddonsModal(false);
-                  setShowSummary(true);
                 }
               }}
             >
@@ -1221,10 +1060,9 @@ export default function ServiceDetailScreen({ route }: Props) {
                 borderRadius={20}
                 borderWidth={2}
                 animationSpeed={3}
-                style={{ width: "100%", alignSelf: "stretch", flex: 1 }}
-                flex={1}
+                style={{ width: "100%", maxHeight: "85%" }}
               >
-                <View style={{ flex: 1, backgroundColor: theme.background, borderRadius: 20 }}>
+                <View style={{ backgroundColor: theme.background, borderRadius: 20, width: "100%", maxHeight: "100%", overflow: "hidden" }}>
                   {/* Header */}
                   <View
                     style={{
@@ -1241,7 +1079,6 @@ export default function ServiceDetailScreen({ route }: Props) {
                     <Pressable
                       onPress={() => {
                         setShowAddonsModal(false);
-                        setShowSummary(true);
                       }}
                     >
                       <Text style={{ fontSize: 20, padding: 5, color: theme.text }}>✕</Text>
@@ -1253,13 +1090,11 @@ export default function ServiceDetailScreen({ route }: Props) {
                     onScroll={(e) => {
                       if (e.nativeEvent.contentOffset.y < -60) {
                         setShowAddonsModal(false);
-                        setShowSummary(true);
                       }
                     }}
                     onScrollEndDrag={(e) => {
                       if (e.nativeEvent.contentOffset.y <= 0 && e.nativeEvent.velocity && e.nativeEvent.velocity.y > 1.5) {
                         setShowAddonsModal(false);
-                        setShowSummary(true);
                       }
                     }}
                     scrollEventThrottle={16}
@@ -1455,6 +1290,29 @@ export default function ServiceDetailScreen({ route }: Props) {
                       })
                     )}
                   </ScrollView>
+
+                  {/* Continue Button */}
+                  <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: theme.border }}>
+                    <Pressable
+                      onPress={async () => {
+                        const isAuth = await checkAuth("schedule an appointment");
+                        if (isAuth) {
+                          setShowAddonsModal(false);
+                          navigation.navigate("Schedule", { services: selectedServices });
+                        }
+                      }}
+                      style={{
+                        backgroundColor: COLORS.saffron,
+                        paddingVertical: 14,
+                        borderRadius: 10,
+                        alignItems: "center",
+                      }}
+                    >
+                      <Text style={{ color: "#000", fontWeight: "800", fontSize: 16 }}>
+                        Continue →
+                      </Text>
+                    </Pressable>
+                  </View>
                 </View>
               </AnimatedGradientBorder>
             </View>
@@ -1680,7 +1538,6 @@ export default function ServiceDetailScreen({ route }: Props) {
         )}
 
       </ScrollView>
-      <FloatingCartSummary />
     </View>
   );
 }

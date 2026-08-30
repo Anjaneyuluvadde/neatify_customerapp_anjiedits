@@ -15,47 +15,75 @@ type BookingCartContextType = {
 
 const BookingCartContext = createContext<BookingCartContextType | null>(null);
 
+export function applyCartRules(prev: SelectedService[], service: Service | SelectedService): SelectedService[] {
+  const isAddon = (service as any).is_addon;
+  const incomingMainCategoryId = (service as any).main_category_id;
+  const incomingServiceType = service.service_type;
+
+  const currentMainService = prev.find(s => !s.is_addon && s.main_category_id);
+
+  if (isAddon) {
+    if (!currentMainService) return prev;
+    if (incomingServiceType && currentMainService.service_type) {
+      if (incomingServiceType.toUpperCase() !== currentMainService.service_type.toUpperCase()) {
+        return prev;
+      }
+    }
+    const existing = prev.find(s => s.id === service.id);
+    if (existing) return prev;
+
+    return [...prev, {
+      ...service,
+      quantity: 1,
+      is_addon: true
+    } as SelectedService];
+  } else {
+    const existing = prev.find((s) => s.id === service.id);
+    if (existing) return prev;
+
+    let filteredPrev = prev;
+
+    if (currentMainService) {
+      if (currentMainService.main_category_id !== incomingMainCategoryId) {
+        filteredPrev = [];
+      } else {
+        filteredPrev = filteredPrev.filter(s => s.id !== currentMainService.id);
+        filteredPrev = filteredPrev.filter(s => {
+          if (s.is_addon && s.service_type && incomingServiceType) {
+            return s.service_type.toUpperCase() === incomingServiceType.toUpperCase();
+          }
+          return false;
+        });
+      }
+    }
+
+    return [
+      ...filteredPrev,
+      {
+        id: service.id,
+        title: service.title,
+        duration: service.duration,
+        price: service.price,
+        service_type: service.service_type,
+        original_price: (service as any).original_price,
+        discount_percent: (service as any).discount_percent,
+        discount_label: (service as any).discount_label,
+        tax_percent: (service as any).tax_percent,
+        image: (service as any).image,
+        main_category_id: incomingMainCategoryId,
+        is_addon: false,
+        quantity: 1,
+      } as SelectedService,
+    ];
+  }
+}
+
 export function BookingCartProvider({ children }: { children: React.ReactNode }) {
   const [cartItems, setCartItems] = useState<SelectedService[]>([]);
 
+
   const addService = (service: Service | SelectedService) => {
-    setCartItems((prev) => {
-      const existing = prev.find((s) => s.id === service.id);
-      if (existing) {
-        return prev.map((s) =>
-          s.id === service.id ? { ...s, quantity: (s.quantity || 1) + 1 } : s
-        );
-      }
-      
-      const serviceMainCategoryId = (service as any).main_category_id;
-      
-      // Enforce single selection per main category
-      let filteredPrev = prev;
-      if (serviceMainCategoryId) {
-        filteredPrev = prev.filter(s => s.main_category_id !== serviceMainCategoryId);
-      }
-      
-      // Map Service to SelectedService if not already
-      let quantity = (service as SelectedService).quantity || 1;
-      
-      return [
-        ...filteredPrev,
-        {
-          id: service.id,
-          title: service.title,
-          duration: service.duration,
-          price: service.price,
-          service_type: service.service_type,
-          original_price: (service as any).original_price,
-          discount_percent: (service as any).discount_percent,
-          discount_label: (service as any).discount_label,
-          tax_percent: (service as any).tax_percent,
-          image: (service as any).image,
-          main_category_id: serviceMainCategoryId,
-          quantity: quantity,
-        } as SelectedService,
-      ];
-    });
+    setCartItems((prev) => applyCartRules(prev, service));
   };
 
   const removeService = (serviceId: string) => {

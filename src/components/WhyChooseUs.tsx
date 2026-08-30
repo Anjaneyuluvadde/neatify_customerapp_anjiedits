@@ -36,9 +36,9 @@ const DEFAULT_DATA: WhyChooseUsData = {
     { icon: "time-outline", iconFamily: "Ionicons", title: "On-Time Service", description: "Punctual and reliable service at your doorstep." },
     { icon: "happy-outline", iconFamily: "Ionicons", title: "Customer Satisfaction", description: "We ensure quality service every time." },
   ],
-  bottom_title: "Ready to make your home feel new?",
-  bottom_desc: "Book a service now and experience the Neatify difference.",
-  bottom_button_text: "Book a Service Now"
+  bottom_title: "Sparkling Clean in a Flash ⚡",
+  bottom_desc: "Short on time? Let our top-rated professionals refresh your home instantly with our signature Express Cleaning service.",
+  bottom_button_text: "Book Express Clean Now"
 };
 
 export default function WhyChooseUs({ onBookNow }: WhyChooseUsProps) {

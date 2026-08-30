@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import FloatingCartSummary from "../components/FloatingCartSummary";
+
 import ServiceCard from "../components/ServiceCard";
 import { useTheme } from "../context/ThemeContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
@@ -119,7 +119,7 @@ export default function CategoryServicesScreen({ route }: Props) {
           ))}
         </ScrollView>
       )}
-      <FloatingCartSummary />
+
     </SafeAreaView>
   );
 }

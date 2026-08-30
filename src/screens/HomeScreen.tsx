@@ -22,7 +22,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
-import FloatingCartSummary from "../components/FloatingCartSummary";
+
 import Header from "../components/Header";
 import HomeHero from "../components/HomeHero";
 import ServiceCard from "../components/ServiceCard";
@@ -918,7 +918,7 @@ export default function HomeScreen({ navigation }: any) {
         </Pressable>
       </Modal>
       {/* Floating Go Up Button */}
-      <FloatingCartSummary />
+
       {showGoUp && (
         <TouchableOpacity
           style={[goUpStyles.goUpBtn, { backgroundColor: theme.background, borderColor: theme.border }]}

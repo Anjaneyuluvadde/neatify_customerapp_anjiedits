@@ -7,8 +7,7 @@ import {
   Easing,
   StyleSheet,
   Text,
-  TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 const { width } = Dimensions.get("window");
@@ -72,14 +71,11 @@ export default function HomeHero({ onBookNow }: HomeHeroProps) {
         </Animated.View>
 
         <Animated.View style={[{ opacity: detailsOpacity, transform: [{ translateY: detailsTranslateY }] }]}>
-          <TouchableOpacity style={styles.ctaButton} activeOpacity={0.8} onPress={onBookNow}>
-            <Text style={styles.ctaText}>Book a Service →</Text>
-          </TouchableOpacity>
 
           <View style={styles.badges}>
             <View style={styles.badge}>
               <Ionicons name="star" size={14} color="#111111" />
-              <Text style={styles.badgeText}>4.9 Rating</Text>
+              <Text style={styles.badgeText}>4.8 Rating</Text>
             </View>
             <View style={styles.badge}>
               <Ionicons name="shield-checkmark" size={15} color="#111111" />
@@ -87,7 +83,7 @@ export default function HomeHero({ onBookNow }: HomeHeroProps) {
             </View>
             <View style={styles.badge}>
               <Ionicons name="flash" size={15} color="#111111" />
-              <Text style={styles.badgeText}>Same Day Service</Text>
+              <Text style={styles.badgeText}>Reliable Service</Text>
             </View>
           </View>
         </Animated.View>
@@ -123,7 +119,7 @@ const styles = StyleSheet.create({
   },
   headline: {
     fontSize: 22,
-    lineHeight: 26,
+    lineHeight: 34,
     fontWeight: "900",
     color: "#0F172A",
     marginBottom: 10,

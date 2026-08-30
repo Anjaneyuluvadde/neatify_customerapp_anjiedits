@@ -368,7 +368,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
   const [month, setMonth] = useState(today.getMonth());
   const [year, setYear] = useState(today.getFullYear());
 
-  const [showSummary, setShowSummary] = useState(false);
+
   const [showAddService, setShowAddService] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
   const [showYearPicker, setShowYearPicker] = useState(false);
@@ -1334,9 +1334,6 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         {/* SERVICE DETAILS */}
         <View style={styles.headerRow}>
           <Text style={[styles.section, { color: theme.text, marginTop: 0 }]}>{t("schedule.serviceDetails")}</Text>
-          <Pressable onPress={() => setShowSummary(true)}>
-            <Text style={[styles.edit, { color: theme.text }]}>{t("schedule.edit")}</Text>
-          </Pressable>
         </View>
 
         {selectedServices.map((s: SelectedService) => (
@@ -1803,7 +1800,6 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                               },
                             ]);
                             setShowAddService(false);
-                            setShowSummary(true);
                           }}
                           style={[
                             styles.addBtn,
@@ -1821,176 +1817,6 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
           </View>
         </Modal>
       </ScrollView>
-
-      {/* ================= APPOINTMENT SUMMARY MODAL ================= */}
-      <Modal visible={showSummary} transparent animationType="fade" statusBarTranslucent={true} onRequestClose={() => setShowSummary(false)}>
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: "rgba(0,0,0,0.55)",
-            justifyContent: "center",
-            padding: 20
-          }}
-        >
-          <AnimatedGradientBorder
-            borderRadius={14}
-            borderWidth={2}
-            animationSpeed={3}
-            style={{ maxHeight: "80%", width: "100%" }}
-          >
-            <View
-              style={{
-                backgroundColor: theme.background,
-                borderRadius: 14,
-                width: "100%",
-                maxHeight: "100%",
-              }}
-            >
-              {/* Header - fixed at top */}
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  paddingHorizontal: 20,
-                  paddingTop: 20,
-                  paddingBottom: 10,
-                }}
-              >
-                <Text style={{ fontSize: 18, fontWeight: "800", color: theme.text }}>
-                  Appointment Summary
-                </Text>
-                <Pressable onPress={() => setShowSummary(false)}>
-                  <Text style={{ fontSize: 18, color: theme.text }}>✕</Text>
-                </Pressable>
-              </View>
-
-              {/* Scrollable list */}
-              <ScrollView
-                style={{ flexGrow: 1, flexShrink: 1 }}
-                contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 10 }}
-                showsVerticalScrollIndicator={true}
-                scrollEventThrottle={16}
-                keyboardShouldPersistTaps="handled"
-              >
-                {editServices.map((s, index) => (
-                  <View
-                    key={s.id}
-                    style={{
-                      paddingVertical: 10,
-                      borderBottomWidth: 0.5,
-                      borderBottomColor: "#ddd",
-                    }}
-                  >
-                    <Text style={{ fontWeight: "800", fontSize: 16, color: theme.text }}>
-                      {s.title}
-                      {s.quantity && s.quantity > 1 ? ` (x${s.quantity})` : ""}
-                    </Text>
-                    <Text style={{ marginTop: 4, color: theme.textLight }}>
-                      {s.duration}
-                    </Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 6 }}>
-                      <Text style={{ fontSize: 16, fontWeight: "800", color: theme.text }}>
-                        ₹{(parseFloat(s.price.replace(/[^\d]/g, "")) * (s.quantity || 1)).toLocaleString("en-IN")}
-                      </Text>
-                      {(s.discount_label || (s.discount_percent && Number(s.discount_percent) > 0)) ? (
-                        <View style={{ backgroundColor: "#E9F7EF", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
-                          <Text style={{ color: "#1E7E34", fontWeight: "700", fontSize: 10 }}>
-                            {s.discount_label || `${s.discount_percent}% off`}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    {index !== 0 && (
-                      <View style={{ flexDirection: "row", gap: 12, marginTop: 10 }}>
-                        <Pressable
-                          onPress={() => {
-                            const fullAddon = addons.find(a => a.id === s.id);
-                            setShowSummary(false);
-                            setSelectedAddonDetail(fullAddon || (s as any));
-                          }}
-                          style={{
-                            paddingVertical: 6,
-                            paddingHorizontal: 12,
-                            borderRadius: 6,
-                            borderWidth: 1,
-                            borderColor: theme.border,
-                            backgroundColor: theme.surfaceVariant
-                          }}
-                        >
-                          <Text style={{ color: theme.text, fontSize: 12, fontWeight: "600" }}>
-                            {t("schedule.view")}
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() =>
-                            setEditServices((prev) =>
-                              prev.filter((x) => x.id !== s.id)
-                            )
-                          }
-                          style={{ paddingVertical: 6 }}
-                        >
-                          <Text style={{ color: "red", fontSize: 12 }}>
-                            Remove
-                          </Text>
-                        </Pressable>
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </ScrollView>
-
-              {/* Bottom buttons - fixed at bottom */}
-              <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
-                {filteredAddons.length > 0 && (
-                  <Pressable
-                    onPress={() => {
-                      setShowSummary(false);
-                      setShowAddonsModal(true);
-                    }}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: theme.border,
-                      paddingVertical: 12,
-                      alignItems: "center",
-                      marginTop: 16,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ fontWeight: "800", color: theme.text }}>+ Addons</Text>
-                  </Pressable>
-                )}
-
-                <Pressable
-                  onPress={() => {
-                    if (editServices.length === 0) {
-                      showAlert({
-                        title: "Error",
-                        message: "Please select at least one service",
-                        type: "error",
-                      });
-                      return;
-                    }
-                    setSelectedServices(editServices);
-                    setShowSummary(false);
-                  }}
-                  style={{
-                    backgroundColor: COLORS.saffron,
-                    paddingVertical: 14,
-                    alignItems: "center",
-                    marginTop: 16,
-                    borderRadius: 10,
-                  }}
-                >
-                  <Text style={{ color: "#000", fontWeight: "800" }}>Update Selection</Text>
-                </Pressable>
-              </View>
-            </View>
-          </AnimatedGradientBorder>
-        </View>
-      </Modal>
-
 
       {/* ================= ADDONS LIST MODAL ================= */}
       <Modal visible={showAddonsModal} transparent animationType="slide" statusBarTranslucent={true}>
@@ -2023,7 +1849,6 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                   <Pressable
                     onPress={() => {
                       setShowAddonsModal(false);
-                      setShowSummary(true);
                     }}
                   >
                     <Text style={{ fontSize: 20, padding: 5, color: theme.text }}>✕</Text>

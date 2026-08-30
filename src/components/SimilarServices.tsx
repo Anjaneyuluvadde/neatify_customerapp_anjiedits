@@ -3,7 +3,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import React, { useMemo } from 'react';
 import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useBookingCart } from '../context/BookingCartContext';
+import { COLORS } from '../theme/colors';
 import { useTheme } from '../context/ThemeContext';
 import { Service } from '../types/service';
 
@@ -17,7 +17,6 @@ interface SimilarServicesProps {
 
 export default function SimilarServices({ currentService, availableServices }: SimilarServicesProps) {
   const { theme, isDark } = useTheme();
-  const { cartItems: selectedServices, addService: addToGlobalCart, removeService, updateQuantity } = useBookingCart();
   const navigation = useNavigation<any>();
 
   const handleOpenService = (service: Service) => {
@@ -69,38 +68,6 @@ export default function SimilarServices({ currentService, availableServices }: S
     return `₹${Number(cleaned).toLocaleString("en-IN")}`;
   };
 
-  const handleAdd = (service: Service) => {
-    addToGlobalCart({
-      id: service.id,
-      title: service.title,
-      duration: service.duration,
-      price: service.price,
-      service_type: service.service_type,
-      original_price: service.original_price,
-      discount_percent: service.discount_percent,
-      discount_label: service.discount_label,
-      tax_percent: service.tax_percent,
-      image: service.image,
-      quantity: 1,
-    });
-  };
-
-  const handleIncrement = (id: string) => {
-    updateQuantity(id, 1);
-  };
-
-  const handleDecrement = (id: string, currentQty: number) => {
-    if (currentQty <= 1) {
-      removeService(id);
-    } else {
-      updateQuantity(id, -1);
-    }
-  };
-
-  const handleRemove = (id: string) => {
-    removeService(id);
-  };
-
   return (
     <View style={styles.container}>
       <Text style={[styles.title, { color: theme.text }]}>Similar Services</Text>
@@ -111,9 +78,6 @@ export default function SimilarServices({ currentService, availableServices }: S
         contentContainerStyle={styles.scrollContent}
       >
         {similarServices.map((service) => {
-          const cartItem = selectedServices.find(item => item.id === service.id);
-          const quantity = cartItem ? cartItem.quantity || 1 : 0;
-
           const cleanPrice = formatPrice(service.price);
           const cleanOriginal = formatPrice(service.original_price);
           const hasOld = cleanOriginal && Number(cleanOriginal) > Number(cleanPrice);
@@ -159,45 +123,11 @@ export default function SimilarServices({ currentService, availableServices }: S
                   )}
                 </View>
 
-                {/* Add / Quantity Controls */}
+                {/* Card Actions */}
                 <View style={styles.controlsContainer}>
-                  {quantity === 0 ? (
-                    <Pressable
-                      style={styles.addButton}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleAdd(service);
-                      }}
-                    >
-                      <Text style={styles.addButtonText}>+ Add</Text>
-                    </Pressable>
-                  ) : (
-                    <View style={styles.quantityRow}>
-                      <View style={styles.quantityControl}>
-                        <Pressable
-                          style={styles.qtyBtn}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleDecrement(service.id, quantity);
-                          }}
-                        >
-                          <Ionicons name="remove" size={14} color="#000" />
-                        </Pressable>
-
-                        <Text style={[styles.qtyText, { color: theme.text }]}>{quantity}</Text>
-
-                        <Pressable
-                          style={styles.qtyBtn}
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleIncrement(service.id);
-                          }}
-                        >
-                          <Ionicons name="add" size={14} color="#000" />
-                        </Pressable>
-                      </View>
-                    </View>
-                  )}
+                  <View style={styles.viewButton}>
+                    <Text style={styles.viewButtonText}>View</Text>
+                  </View>
                 </View>
               </View>
             </Pressable>
@@ -291,39 +221,15 @@ const styles = StyleSheet.create({
     height: 32,
     justifyContent: 'center',
   },
-  addButton: {
-    backgroundColor: '#FFD700',
+  viewButton: {
+    backgroundColor: COLORS.saffron,
     borderRadius: 6,
     paddingVertical: 6,
     alignItems: 'center',
   },
-  addButtonText: {
+  viewButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#000'
-  },
-  quantityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  quantityControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#FFD700',
-    borderRadius: 6,
-    overflow: 'hidden',
-    width: '100%',
-  },
-  qtyBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(255, 215, 0, 0.2)',
-  },
-  qtyText: {
-    flex: 1,
-    textAlign: 'center',
-    fontWeight: '700',
-    fontSize: 13,
+    color: '#000000'
   },
 });

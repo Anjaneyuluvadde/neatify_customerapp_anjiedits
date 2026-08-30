@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import Header from "../components/Header";
 import ServiceCard from "../components/ServiceCard";
-import FloatingCartSummary from "../components/FloatingCartSummary";
+
 import { useTheme } from "../context/ThemeContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
 import { supabase } from "../lib/supabase";
@@ -97,7 +97,7 @@ export default function CategoryDetailScreen({ route }: Props) {
         />
       )}
       
-      <FloatingCartSummary />
+
     </SafeAreaView>
   );
 }

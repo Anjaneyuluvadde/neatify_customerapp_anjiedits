@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { Image } from "expo-image";
-import { ChevronDown, Eye, EyeOff, Gift, Lock, Mail, Phone, Sparkles, User } from "lucide-react-native";
-import React, { useState, useEffect, useRef } from "react";
+import { ChevronDown, Gift, Phone, Sparkles, User } from "lucide-react-native";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,19 +21,17 @@ import {
 import Animated, {
   FadeInDown,
   FadeInUp,
+  interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
   withSequence,
-  withTiming,
   withSpring,
-  interpolateColor
+  withTiming
 } from "react-native-reanimated";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import DarkThemeLogo from "../../assets/images/Dark Theme logo.png";
 import NeatifyLogo from "../../assets/images/neatifylogo.png";
-import { signInWithGoogle } from "../auth/useGoogleAuth";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useNotification } from "../hooks/useNotification";
@@ -134,95 +132,126 @@ function AnimatedPhoneInput({ value, onChangeText, theme }: any) {
 
 // Custom OTP Input Component
 function OtpInput({ value, onChangeText, length = 6 }: any) {
-  const inputRef = useRef<TextInput>(null);
-  
+  const inputRefs = useRef<Array<TextInput | null>>([]);
+
+  const handleChange = (text: string, index: number) => {
+    // Handle paste
+    if (text.length > 1) {
+      const pastedText = text.replace(/[^0-9]/g, '').slice(0, length);
+      onChangeText(pastedText);
+      if (pastedText.length > 0) {
+        inputRefs.current[Math.min(pastedText.length, length - 1)]?.focus();
+      }
+      return;
+    }
+
+    const cleanText = text.replace(/[^0-9]/g, '');
+
+    // If deleted via onChangeText
+    if (cleanText === '') {
+      const newValue = value.split('');
+      newValue[index] = '';
+      onChangeText(newValue.join(''));
+      if (index > 0) {
+        inputRefs.current[index - 1]?.focus();
+      }
+      return;
+    }
+
+    const newValue = value.split('');
+    newValue[index] = cleanText;
+    onChangeText(newValue.join(''));
+
+    // Auto focus next
+    if (index < length - 1) {
+      inputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === 'Backspace') {
+      // If input is ALREADY empty, onChangeText won't fire. We must handle it here.
+      if (!value[index] && index > 0) {
+        const newValue = value.split('');
+        newValue[index - 1] = '';
+        onChangeText(newValue.join(''));
+        inputRefs.current[index - 1]?.focus();
+      }
+    }
+  };
+
   return (
     <View style={{ width: '100%', alignItems: 'center', marginVertical: 10 }}>
-      <Pressable 
-        style={{ flexDirection: 'row', gap: 10 }} 
-        onPress={() => inputRef.current?.focus()}
-      >
+      <View style={{ flexDirection: 'row', gap: 6, width: '100%', justifyContent: 'center' }}>
         {Array(length).fill(0).map((_, index) => (
-          <View 
-            key={index} 
+          <View
+            key={index}
             style={[
-              styles.animatedInputContainer, 
-              { 
-                width: 45, 
-                height: 55, 
-                justifyContent: 'center', 
-                alignItems: 'center', 
+              styles.animatedInputContainer,
+              {
+                flex: 1,
+                maxWidth: 46,
+                height: 48,
+                justifyContent: 'center',
+                alignItems: 'center',
                 paddingHorizontal: 0,
-                borderColor: value.length === index ? COLORS.saffron : (value[index] ? COLORS.saffron + '80' : '#F0F0F0'),
-                borderWidth: value.length === index ? 2 : 1.5,
+                paddingVertical: 0,
+                borderColor: value.length === index || (index === length - 1 && value.length === length) ? COLORS.saffron : (value[index] ? COLORS.saffron + '80' : '#F0F0F0'),
+                borderWidth: value.length === index || (index === length - 1 && value.length === length) ? 2 : 1.5,
               }
             ]}
           >
-            <Text style={{ fontSize: 24, fontWeight: '700', color: '#111' }}>
-              {value[index] || ''}
-            </Text>
+            <TextInput
+              ref={(ref) => {
+                if (ref) inputRefs.current[index] = ref;
+              }}
+              value={value[index] || ''}
+              onChangeText={(text) => handleChange(text, index)}
+              onKeyPress={(e) => handleKeyPress(e, index)}
+              keyboardType="number-pad"
+              maxLength={length}
+              selectTextOnFocus
+              style={{ fontSize: 24, fontWeight: '700', color: '#111', textAlign: 'center', width: '100%', height: '100%' }}
+            />
           </View>
         ))}
-      </Pressable>
-      <TextInput
-        ref={inputRef}
-        value={value}
-        onChangeText={(text) => onChangeText(text.replace(/[^0-9]/g, '').slice(0, length))}
-        keyboardType="number-pad"
-        maxLength={length}
-        style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }}
-      />
+      </View>
     </View>
   );
 }
 
 // Custom Service Dropdown Component
 function AnimatedServiceDropdown({ selectedService, setShowServiceDropdown }: any) {
-    const [isFocused, setIsFocused] = useState(false);
-    const focusAnim = useSharedValue(0);
-    
-    // Animate on press in/out instead of focus since it's a touchable
-    const handlePressIn = () => { focusAnim.value = withTiming(1, { duration: 200 }); }
-    const handlePressOut = () => { focusAnim.value = withTiming(0, { duration: 200 }); }
+  const [isFocused, setIsFocused] = useState(false);
+  const focusAnim = useSharedValue(0);
 
-    const animatedStyle = useAnimatedStyle(() => {
-        return {
-            borderColor: selectedService ? COLORS.saffron : interpolateColor(focusAnim.value, [0, 1], ["#F0F0F0", COLORS.saffron]),
-            transform: [{ scale: 1 - focusAnim.value * 0.02 }]
-        };
-    });
+  // Animate on press in/out instead of focus since it's a touchable
+  const handlePressIn = () => { focusAnim.value = withTiming(1, { duration: 200 }); }
+  const handlePressOut = () => { focusAnim.value = withTiming(0, { duration: 200 }); }
 
-    return (
-        <Animated.View style={[styles.animatedInputContainer, animatedStyle, { paddingVertical: 0 }]}>
-            <TouchableOpacity 
-                style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingVertical: 12 }} 
-                onPress={() => setShowServiceDropdown(true)}
-                onPressIn={handlePressIn}
-                onPressOut={handlePressOut}
-                activeOpacity={0.9}
-            >
-                <Sparkles size={20} color={COLORS.saffron} />
-                <Text style={[styles.input, { color: selectedService ? "#111" : "#888" }]} numberOfLines={1}>
-                    {selectedService ? selectedService.title : "Select a service for 40% OFF"}
-                </Text>
-                <ChevronDown size={20} color="#888" />
-            </TouchableOpacity>
-        </Animated.View>
-    );
-}
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      borderColor: selectedService ? COLORS.saffron : interpolateColor(focusAnim.value, [0, 1], ["#F0F0F0", COLORS.saffron]),
+      transform: [{ scale: 1 - focusAnim.value * 0.02 }]
+    };
+  });
 
-function PolicyRow({ label, isMet }: { label: string, isMet: boolean }) {
   return (
-    <View style={styles.policyRow}>
-      <Ionicons
-        name={isMet ? "checkmark-circle" : "close-circle"}
-        size={16}
-        color={isMet ? "#111" : "#999"}
-      />
-      <Text style={[styles.policyText, { color: isMet ? "#111" : "#999" }]}>
-        {label}
-      </Text>
-    </View>
+    <Animated.View style={[styles.animatedInputContainer, animatedStyle, { paddingVertical: 0 }]}>
+      <TouchableOpacity
+        style={{ flexDirection: "row", alignItems: "center", flex: 1, paddingVertical: 12 }}
+        onPress={() => setShowServiceDropdown(true)}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        activeOpacity={0.9}
+      >
+        <Sparkles size={20} color={COLORS.saffron} />
+        <Text style={[styles.input, { color: selectedService ? "#111" : "#888" }]} numberOfLines={1}>
+          {selectedService ? selectedService.title : "Select a service for 40% OFF"}
+        </Text>
+        <ChevronDown size={20} color="#888" />
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -238,10 +267,12 @@ export default function LoginScreen(props: any) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
-  const [isLogin, setIsLogin] = useState(!props.route?.params?.isRegister);
   const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'profile'>('phone');
   const [otp, setOtp] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
+  const [termsViewed, setTermsViewed] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   useEffect(() => {
     let interval: any;
@@ -250,17 +281,7 @@ export default function LoginScreen(props: any) {
     }
     return () => clearInterval(interval);
   }, [resendTimer]);
-  const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    if (props.route?.params?.isRegister) {
-      setIsLogin(false);
-    }
-  }, [props.route?.params]);
-
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [referralCode, setReferralCode] = useState("");
 
@@ -296,10 +317,6 @@ export default function LoginScreen(props: any) {
   };
 
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
-
-  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
-  const isValidPassword = (p: string) => /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/.test(p);
 
   const checkProfileAndNavigate = async (userId: string) => {
     try {
@@ -324,17 +341,6 @@ export default function LoginScreen(props: any) {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
-    try {
-      await signInWithGoogle();
-    } catch (err: any) {
-      showAlert({ type: "error", title: "Google Sign-In Failed", message: err.message });
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
 
   const handleSendOtp = async () => {
     const cleanPhone = phone.replace(/\D/g, "").slice(-10);
@@ -347,11 +353,11 @@ export default function LoginScreen(props: any) {
       const { data, error } = await supabase.functions.invoke('msg91-send-otp', {
         body: { phone: cleanPhone }
       });
-      if (error || data?.error) {
-        throw new Error(error?.message || data?.error || 'Failed to send OTP');
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.message || data?.error || 'Failed to send OTP');
       }
       setAuthStep('otp');
-      setResendTimer(30);
+      setResendTimer(60);
       showToast("OTP sent successfully");
     } catch (err: any) {
       showAlert({ type: "error", title: "Error", message: err.message });
@@ -367,26 +373,22 @@ export default function LoginScreen(props: any) {
     }
     setLoading(true);
     try {
-      const cleanPhone = phone.replace(/\D/g, "").slice(-10);
-      const { data, error } = await supabase.functions.invoke('msg91-verify-otp', {
+      const cleanPhone = "91" + phone.replace(/\D/g, "").slice(-10);
+      const { data, error } = await supabase.functions.invoke('verify-otp', {
         body: { phone: cleanPhone, otp }
       });
-      if (error || data?.error) {
-        throw new Error(error?.message || data?.error || 'Failed to verify OTP');
+      if (error || !data?.success) {
+        throw new Error(error?.message || data?.message || data?.error || 'Failed to verify OTP');
+      }
+
+      if (data.session) {
+        await supabase.auth.setSession(data.session);
       }
 
       if (data.isNewUser) {
-        if (isLogin) {
-          setIsLogin(false);
-        }
         setAuthStep('profile');
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: data.email,
-          password: data.tempPassword
-        });
-        if (signInError) throw signInError;
-        await checkProfileAndNavigate((await supabase.auth.getUser()).data.user?.id!);
+        await checkProfileAndNavigate(data.user?.id || (await supabase.auth.getUser()).data.user?.id!);
       }
     } catch (err: any) {
       showAlert({ type: "error", title: "Verification Failed", message: err.message });
@@ -398,16 +400,12 @@ export default function LoginScreen(props: any) {
   const handleSignupSubmit = async () => {
     setLoading(true);
     try {
-      if (!fullName || !email) {
-        showAlert({ type: "warning", title: t("notifications.missingInfo"), message: "Name and Email are required." });
+      if (!fullName) {
+        showAlert({ type: "warning", title: t("notifications.missingInfo"), message: "Name is required." });
         setLoading(false); return;
       }
       if (eligibleServices.length > 0 && !selectedService) {
         showAlert({ type: "warning", title: "Select Service", message: "Please select a service for your 40% OFF discount." });
-        setLoading(false); return;
-      }
-      if (!isValidEmail(email)) {
-        showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
         setLoading(false); return;
       }
 
@@ -422,166 +420,30 @@ export default function LoginScreen(props: any) {
 
       const cleanPhone = phone.replace(/\D/g, "").slice(-10);
       const formattedPhone = `+91${cleanPhone}`;
-      const securePassword = crypto.randomUUID();
 
-      const { data, error } = await supabase.auth.signUp({
-        email, password: securePassword, options: { data: { full_name: fullName.trim(), phone_number: formattedPhone, } }
-      });
+      // Since OTP verification created the user and set the session, retrieve the current user
+      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
+      if (authError || !authUser) throw new Error("Authentication error. Please try again.");
 
-      if (error) throw error;
-      const authUser = data.user;
+      const myReferralCode = generateReferralCode(fullName.trim());
+      const selectedServiceTitle = selectedService?.title || null;
+      const selectedServiceId = selectedService?.id || null;
 
-      if (!authUser?.identities?.length) {
-        throw new Error("This email is already registered. Please login instead.");
+      await Promise.all([
+        supabase.from("profile").upsert({ id: authUser.id, full_name: fullName.trim(), phone: cleanPhone, referral_code: myReferralCode, referred_by_id: referrerId, service_selected: selectedServiceTitle }),
+        supabase.from("signup").upsert({ id: authUser.id, full_name: fullName.trim(), phone: cleanPhone, service_selected: selectedServiceTitle }),
+        supabase.from("wallet").upsert({ user_id: authUser.id, balance: 0 })
+      ]);
+
+      await setClaimedOffer({ serviceId: selectedServiceId, serviceTitle: selectedServiceTitle, offerPercentage: 40, claimedAt: new Date().toISOString() });
+
+      if (referrerId) {
+        await supabase.from("referrals").insert({ referrer_id: referrerId, referred_user_id: authUser.id, status: 'pending', reward_amount: 50 });
+        const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+        await supabase.from("coupons").insert({ coupon_code: welcomeCouponCode, discount_amount: 50, is_used: false, phone_number: cleanPhone });
       }
 
-      if (authUser) {
-        await supabase.auth.updateUser({ data: { full_name: fullName.trim(), phone_number: formattedPhone, } });
-        const myReferralCode = generateReferralCode(fullName.trim());
-        const selectedServiceTitle = selectedService?.title || null;
-        const selectedServiceId = selectedService?.id || null;
-
-        await Promise.all([
-          supabase.from("profile").upsert({ id: authUser.id, full_name: fullName.trim(), email: email.trim(), phone: cleanPhone, referral_code: myReferralCode, referred_by_id: referrerId, service_selected: selectedServiceTitle }),
-          supabase.from("signup").upsert({ id: authUser.id, full_name: fullName.trim(), email: email.trim(), phone: cleanPhone, service_selected: selectedServiceTitle }),
-          supabase.from("wallet").upsert({ user_id: authUser.id, balance: 0 })
-        ]);
-
-        await setClaimedOffer({ serviceId: selectedServiceId, serviceTitle: selectedServiceTitle, offerPercentage: 40, claimedAt: new Date().toISOString() });
-
-        const userMetadataUpdate: any = {};
-        if (selectedServiceTitle) {
-          userMetadataUpdate.show_signup_offer_popup = true;
-          userMetadataUpdate.signup_service_title = selectedServiceTitle;
-          userMetadataUpdate.signup_service_id = selectedServiceId;
-        }
-
-        if (referrerId) {
-          await supabase.from("referrals").insert({ referrer_id: referrerId, referred_user_id: authUser.id, status: 'pending', reward_amount: 50 });
-          const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-          await supabase.from("coupons").insert({ coupon_code: welcomeCouponCode, discount_amount: 50, is_used: false, phone_number: cleanPhone });
-          userMetadataUpdate.show_welcome_reward = true;
-          userMetadataUpdate.welcome_coupon_code = welcomeCouponCode;
-        }
-
-        if (Object.keys(userMetadataUpdate).length > 0) {
-          await supabase.auth.updateUser({ data: userMetadataUpdate });
-        }
-        await checkProfileAndNavigate(authUser.id);
-      }
-    } catch (err: any) {
-      showAlert({ type: "error", title: t("notifications.authFailed"), message: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ==========================================
-  // LEGACY EMAIL/PASSWORD AUTHENTICATION
-  // KEPT FOR FUTURE USE — DO NOT DELETE
-  // ==========================================
-  const handleSubmit = async () => {
-    setLoading(true);
-
-    try {
-      let authUser = null;
-
-      if (isLogin) {
-        if (!email || !password) {
-          showAlert({ type: "warning", title: t("notifications.missingInfo"), message: t("notifications.emailPasswordRequired") });
-          setLoading(false); return;
-        }
-        if (!isValidEmail(email)) {
-          showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
-          setLoading(false); return;
-        }
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        authUser = data.user;
-      } else {
-        if (!fullName || !email || !phone || !password) {
-          showAlert({ type: "warning", title: t("notifications.missingInfo"), message: "All fields are required for signup (Name, Email, Phone, Password)." });
-          setLoading(false); return;
-        }
-        if (eligibleServices.length > 0 && !selectedService) {
-          showAlert({ type: "warning", title: "Select Service", message: "Please select a service for your 40% OFF discount." });
-          setLoading(false); return;
-        }
-        if (!isValidPassword(password)) {
-          showAlert({ type: "error", title: "Invalid Password", message: "Password must contain at least 8 characters, uppercase, lowercase, number, and special character." });
-          setLoading(false); return;
-        }
-
-        let referrerId = null;
-        if (referralCode.trim()) {
-          referrerId = await validateReferralCode(referralCode.trim());
-          if (!referrerId) {
-            showAlert({ type: "warning", title: "Invalid Referral", message: "The referral code you entered is invalid. You can continue without it." });
-            setLoading(false); return;
-          }
-        }
-        if (!isValidEmail(email)) {
-          showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
-          setLoading(false); return;
-        }
-
-        const cleanPhone = phone.replace(/\D/g, "").slice(-10);
-        if (cleanPhone.length < 10) {
-          showAlert({ type: "warning", title: "Invalid Phone", message: "Please enter a valid 10-digit phone number." });
-          setLoading(false); return;
-        }
-
-        const formattedPhone = `+91${cleanPhone}`;
-
-        const { data, error } = await supabase.auth.signUp({
-          email, password, options: { data: { full_name: fullName.trim(), phone_number: formattedPhone, } }
-        });
-
-        if (error) throw error;
-        authUser = data.user;
-
-        if (!authUser?.identities?.length) {
-          throw new Error("This email is already registered. Please login instead.");
-        }
-
-        if (authUser) {
-          await supabase.auth.updateUser({ data: { full_name: fullName.trim(), phone_number: formattedPhone, } });
-          const myReferralCode = generateReferralCode(fullName.trim());
-          const selectedServiceTitle = selectedService?.title || null;
-          const selectedServiceId = selectedService?.id || null;
-
-          await Promise.all([
-            supabase.from("profile").upsert({ id: authUser.id, full_name: fullName.trim(), email: email.trim(), phone: cleanPhone, referral_code: myReferralCode, referred_by_id: referrerId, service_selected: selectedServiceTitle }),
-            supabase.from("signup").upsert({ id: authUser.id, full_name: fullName.trim(), email: email.trim(), phone: cleanPhone, service_selected: selectedServiceTitle }),
-            supabase.from("wallet").upsert({ user_id: authUser.id, balance: 0 })
-          ]);
-
-          await setClaimedOffer({ serviceId: selectedServiceId, serviceTitle: selectedServiceTitle, offerPercentage: 40, claimedAt: new Date().toISOString() });
-
-          const userMetadataUpdate: any = {};
-          if (selectedServiceTitle) {
-            userMetadataUpdate.show_signup_offer_popup = true;
-            userMetadataUpdate.signup_service_title = selectedServiceTitle;
-            userMetadataUpdate.signup_service_id = selectedServiceId;
-          }
-
-          if (referrerId) {
-            await supabase.from("referrals").insert({ referrer_id: referrerId, referred_user_id: authUser.id, status: 'pending', reward_amount: 50 });
-            const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-            await supabase.from("coupons").insert({ coupon_code: welcomeCouponCode, discount_amount: 50, is_used: false, phone_number: cleanPhone });
-            userMetadataUpdate.show_welcome_reward = true;
-            userMetadataUpdate.welcome_coupon_code = welcomeCouponCode;
-          }
-
-          if (Object.keys(userMetadataUpdate).length > 0) {
-            await supabase.auth.updateUser({ data: userMetadataUpdate });
-          }
-        }
-      }
-
-      if (authUser) {
-        await checkProfileAndNavigate(authUser.id);
-      }
+      await checkProfileAndNavigate(authUser.id);
     } catch (err: any) {
       showAlert({ type: "error", title: t("notifications.authFailed"), message: err.message });
     } finally {
@@ -648,18 +510,18 @@ export default function LoginScreen(props: any) {
       >
         <ScrollView
           contentContainerStyle={[
-            styles.scrollContainer, 
+            styles.scrollContainer,
             isDesktop && { flexDirection: "row", alignItems: "center", justifyContent: "center" }
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-            
+
           {/* DESKTOP RIGHT SIDE / MOBILE TOP: 3D Character */}
           <View style={[isDesktop ? styles.desktopCharacterContainer : styles.mobileCharacterContainer]}>
             <Animated.View style={characterAnimatedStyle}>
-              <Image 
-                source={require("../../assets/images/heroimg.png")} 
+              <Image
+                source={require("../../assets/images/heroimg.png")}
                 style={isDesktop ? styles.desktopCharacterImage : styles.mobileCharacterImage}
                 contentFit="contain"
               />
@@ -667,20 +529,19 @@ export default function LoginScreen(props: any) {
           </View>
 
           {/* FORM CONTAINER */}
-          <Animated.View 
+          <Animated.View
             entering={FadeInUp.duration(600).delay(100)}
             style={[styles.formContainer, isDesktop && styles.desktopFormContainer]}
           >
-            {/* HEADER */}
             <View style={styles.header}>
               <Image source={NeatifyLogo} style={styles.logo} contentFit="contain" />
               <Text style={styles.subtitle}>
-                 {isLogin ? "Welcome back! Ready for a clean home?" : "Join Neatify for a sparkling home."}
+                Welcome to Neatify! Ready for a sparkling clean home?
               </Text>
             </View>
 
             <View style={styles.form}>
-              
+
               {authStep === 'phone' && (
                 <Animated.View entering={FadeInDown.duration(400).delay(300)}>
                   <AnimatedPhoneInput value={phone} onChangeText={setPhone} />
@@ -698,12 +559,47 @@ export default function LoginScreen(props: any) {
 
               {authStep === 'otp' && (
                 <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-                  <Text style={{ textAlign: 'center', marginBottom: 10, color: '#555', fontSize: 14 }}>
-                    OTP sent to +91 {phone}
-                  </Text>
+                  <View style={styles.whatsappMessageContainer}>
+                    <Ionicons name="logo-whatsapp" size={24} color="#25D366" style={styles.whatsappIcon} />
+                    <View style={styles.whatsappTextContainer}>
+                      <Text style={styles.whatsappText}>
+                        OTP sent to <Text style={styles.whatsappHighlight}>WhatsApp</Text> this number
+                      </Text>
+                      <Text style={styles.whatsappPhone}>+91 {phone}</Text>
+                    </View>
+                  </View>
                   <OtpInput value={otp} onChangeText={setOtp} length={6} />
-                  
-                  <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleVerifyOtp} disabled={loading} style={{ marginTop: 20 }}>
+
+                  {/* Terms & Conditions Row (UI Only) */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 8, paddingHorizontal: 4 }}>
+                    <TouchableOpacity 
+                      onPress={() => {
+                        if (!termsViewed) {
+                          setShowTermsModal(true);
+                        } else {
+                          setTermsAccepted(!termsAccepted);
+                        }
+                      }}
+                      style={{ marginRight: 8, padding: 4 }}
+                    >
+                      <Ionicons 
+                        name={termsAccepted ? "checkbox" : "square-outline"} 
+                        size={24} 
+                        color={termsAccepted ? COLORS.saffron : "#888"} 
+                      />
+                    </TouchableOpacity>
+                    <Text style={{ fontSize: 13, color: "#111", flex: 1 }}>
+                      I agree to the{" "}
+                      <Text 
+                        style={{ color: COLORS.saffron, fontWeight: "700" }} 
+                        onPress={() => setShowTermsModal(true)}
+                      >
+                        Terms & Conditions
+                      </Text>
+                    </Text>
+                  </View>
+
+                  <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleVerifyOtp} disabled={loading} style={{ marginTop: 12 }}>
                     <Animated.View style={[styles.primaryBtn, buttonAnimatedStyle, otp.length < 4 && { opacity: 0.5 }]}>
                       {loading ? (
                         <ActivityIndicator color="#111" />
@@ -712,7 +608,7 @@ export default function LoginScreen(props: any) {
                       )}
                     </Animated.View>
                   </Pressable>
-                  
+
                   <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 20, gap: 20 }}>
                     <TouchableOpacity onPress={() => {
                       if (resendTimer === 0) handleSendOtp();
@@ -721,7 +617,7 @@ export default function LoginScreen(props: any) {
                         {resendTimer > 0 ? `Resend OTP in ${resendTimer}s` : 'Resend OTP'}
                       </Text>
                     </TouchableOpacity>
-                    
+
                     <TouchableOpacity onPress={() => {
                       setAuthStep('phone');
                       setOtp('');
@@ -732,7 +628,7 @@ export default function LoginScreen(props: any) {
                 </Animated.View>
               )}
 
-              {authStep === 'profile' && !isLogin && (
+              {authStep === 'profile' && (
                 <Animated.View entering={FadeInDown.duration(400).delay(200)} style={{ gap: 12 }}>
                   <AnimatedInput
                     icon={<User size={20} color="#888" />}
@@ -741,14 +637,7 @@ export default function LoginScreen(props: any) {
                     onChange={setFullName}
                     autoCapitalize="words"
                   />
-                  <AnimatedInput
-                    icon={<Mail size={20} color="#888" />}
-                    placeholder={t("login.email")}
-                    value={email}
-                    onChange={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
+
                   <AnimatedInput
                     icon={<Gift size={20} color="#888" />}
                     placeholder="Referral/Discount Code (Optional)"
@@ -759,9 +648,9 @@ export default function LoginScreen(props: any) {
                   {eligibleServices.length > 0 ? (
                     <View style={{ marginBottom: 4 }}>
                       <Text style={styles.dropdownLabel}>🎁 Select Service for 40% OFF:</Text>
-                      <AnimatedServiceDropdown 
-                        selectedService={selectedService} 
-                        setShowServiceDropdown={setShowServiceDropdown} 
+                      <AnimatedServiceDropdown
+                        selectedService={selectedService}
+                        setShowServiceDropdown={setShowServiceDropdown}
                       />
                     </View>
                   ) : (
@@ -770,7 +659,7 @@ export default function LoginScreen(props: any) {
                       <Text style={styles.expiredOfferText}>40% Welcome Offer is currently expired / inactive.</Text>
                     </View>
                   )}
-                  
+
                   <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleSignupSubmit} disabled={loading} style={{ marginTop: 8 }}>
                     <Animated.View style={[styles.primaryBtn, buttonAnimatedStyle]}>
                       {loading ? (
@@ -783,162 +672,7 @@ export default function LoginScreen(props: any) {
                 </Animated.View>
               )}
 
-              {/* 
-                ==========================================
-                LEGACY EMAIL/PASSWORD UI
-                KEPT FOR FUTURE USE — DO NOT DELETE
-                ==========================================
-              */}
-              {/* FULL NAME */}
-              {!isLogin && (
-                <Animated.View entering={FadeInDown.duration(400).delay(200)}>
-                  <AnimatedInput
-                    icon={<User size={20} color="#888" />}
-                    placeholder={t("login.fullName")}
-                    value={fullName}
-                    onChange={setFullName}
-                    autoCapitalize="words"
-                  />
-                </Animated.View>
-              )}
 
-              {/* EMAIL */}
-              <Animated.View entering={FadeInDown.duration(400).delay(250)}>
-                <AnimatedInput
-                  icon={<Mail size={20} color="#888" />}
-                  placeholder={t("login.email")}
-                  value={email}
-                  onChange={setEmail}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              </Animated.View>
-
-              {/* PHONE */}
-              {!isLogin && (
-                <Animated.View entering={FadeInDown.duration(400).delay(300)}>
-                  <AnimatedPhoneInput value={phone} onChangeText={setPhone} />
-                </Animated.View>
-              )}
-
-              {/* REFERRAL CODE */}
-              {!isLogin && (
-                <Animated.View entering={FadeInDown.duration(400).delay(350)}>
-                  <AnimatedInput
-                    icon={<Gift size={20} color="#888" />}
-                    placeholder="Referral/Discount Code (Optional)"
-                    value={referralCode}
-                    onChange={(text: string) => setReferralCode(text.toUpperCase())}
-                    autoCapitalize="characters"
-                  />
-                </Animated.View>
-              )}
-
-              {/* 40% OFF SERVICE DROPDOWN */}
-              {!isLogin && (
-                <Animated.View entering={FadeInDown.duration(400).delay(400)} style={{ marginBottom: 4 }}>
-                  {eligibleServices.length > 0 ? (
-                    <>
-                      <Text style={styles.dropdownLabel}>🎁 Select Service for 40% OFF:</Text>
-                      <AnimatedServiceDropdown 
-                        selectedService={selectedService} 
-                        setShowServiceDropdown={setShowServiceDropdown} 
-                      />
-                    </>
-                  ) : (
-                    <View style={styles.expiredOfferContainer}>
-                      <Sparkles size={16} color="#888" />
-                      <Text style={styles.expiredOfferText}>40% Welcome Offer is currently expired / inactive.</Text>
-                    </View>
-                  )}
-                </Animated.View>
-              )}
-
-              {/* PASSWORD */}
-              <Animated.View entering={FadeInDown.duration(400).delay(isLogin ? 300 : 450)}>
-                <AnimatedInput
-                  icon={<Lock size={20} color="#888" />}
-                  placeholder={t("login.password")}
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChange={setPassword}
-                  rightElement={
-                    <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                      {showPassword ? <EyeOff size={20} color="#888" /> : <Eye size={20} color="#888" />}
-                    </TouchableOpacity>
-                  }
-                />
-              </Animated.View>
-
-              {/* PASSWORD POLICY */}
-              {!isLogin && password.length > 0 && (
-                <Animated.View entering={FadeInDown.duration(300)} style={styles.policyContainer}>
-                  <Text style={styles.policyHeader}>Password should contain:</Text>
-                  <PolicyRow label="At least 8 characters" isMet={password.length >= 8} />
-                  <PolicyRow label="Lowercase letter" isMet={/[a-z]/.test(password)} />
-                  <PolicyRow label="Uppercase letter" isMet={/[A-Z]/.test(password)} />
-                  <PolicyRow label="Number" isMet={/\d/.test(password)} />
-                  <PolicyRow label="Special character (@$!%*?&)" isMet={/[@$!%*?&]/.test(password)} />
-                </Animated.View>
-              )}
-
-              {/* FORGOT PASSWORD */}
-              {isLogin && (
-                <Animated.View entering={FadeInDown.duration(400).delay(350)}>
-                  <TouchableOpacity
-                    style={{ alignSelf: "flex-end", marginTop: -4 }}
-                    onPress={() => navigation.navigate("ResetPassword" as never)}
-                  >
-                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-
-              {/* SUBMIT BUTTON */}
-              <Animated.View entering={FadeInDown.duration(400).delay(isLogin ? 400 : 500)}>
-                <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleSubmit} disabled={loading}>
-                  <Animated.View style={[styles.primaryBtn, buttonAnimatedStyle]}>
-                    {loading ? (
-                      <ActivityIndicator color="#111" />
-                    ) : (
-                      <Text style={styles.primaryText}>{isLogin ? t("login.loginBtn") : t("login.signupBtn")}</Text>
-                    )}
-                  </Animated.View>
-                </Pressable>
-              </Animated.View>
-
-              {/* DIVIDER */}
-              <Animated.View entering={FadeInDown.duration(400).delay(isLogin ? 450 : 550)} style={styles.dividerContainer}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.dividerLine} />
-              </Animated.View>
-
-              {/* GOOGLE BUTTON */}
-              <Animated.View entering={FadeInDown.duration(400).delay(isLogin ? 500 : 600)}>
-                <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleSignIn} disabled={googleLoading}>
-                  {googleLoading ? (
-                    <ActivityIndicator color="#111" />
-                  ) : (
-                    <>
-                      <Image source={{ uri: "https://cdn-icons-png.flaticon.com/512/2991/2991148.png" }} style={styles.googleIcon} />
-                      <Text style={styles.googleText}>Continue with Google</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </Animated.View>
-
-              {/* FOOTER */}
-              <Animated.View entering={FadeInDown.duration(400).delay(isLogin ? 550 : 650)} style={styles.footer}>
-                <Text style={{ color: "#555", fontSize: 14, fontWeight: "500" }}>
-                  {isLogin ? t("login.noAccount") : t("login.hasAccount")}
-                </Text>
-                <TouchableOpacity onPress={() => setIsLogin(!isLogin)}>
-                  <Text style={styles.linkText}>
-                    {isLogin ? ` ${t("login.switchSignup")}` : ` ${t("login.switchLogin")}`}
-                  </Text>
-                </TouchableOpacity>
-              </Animated.View>
 
             </View>
           </Animated.View>
@@ -980,11 +714,99 @@ export default function LoginScreen(props: any) {
         </Pressable>
       </Modal>
 
+      {/* TERMS & CONDITIONS MODAL (UI Only) */}
+      <Modal visible={showTermsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => setShowTermsModal(false)}>
+        <View style={dropdownStyles.overlay}>
+          <View style={[dropdownStyles.container, { padding: 0, overflow: 'hidden', maxHeight: '85%' }]}>
+            <View style={[dropdownStyles.header, { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0', marginBottom: 0 }]}>
+              <Text style={dropdownStyles.title}>Terms & Conditions</Text>
+              <TouchableOpacity onPress={() => setShowTermsModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color="#111" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ paddingHorizontal: 20 }} showsVerticalScrollIndicator={true}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111', marginTop: 16, marginBottom: 8 }}>Welcome to Neatify</Text>
+              
+              <Text style={styles.termTitle}>1. Service Booking</Text>
+              <Text style={styles.termText}>Customers can book available cleaning services through the Neatify app. Bookings are subject to confirmation and availability.</Text>
+
+              <Text style={styles.termTitle}>2. Service Scope</Text>
+              <Text style={styles.termText}>The service provided depends on the selected service, package, property condition, and applicable service limitations. Additional tasks outside the agreed scope may incur extra charges.</Text>
+
+              <Text style={styles.termTitle}>3. Customer Responsibilities</Text>
+              <Text style={styles.termText}>• Provide accurate booking information.{'\n'}• Ensure reasonable access to the service location.{'\n'}• Keep required customer-provided resources available where applicable.{'\n'}• Inform Neatify about relevant service requirements or hazards.</Text>
+
+              <Text style={styles.termTitle}>4. Service Availability</Text>
+              <Text style={styles.termText}>Service availability depends on location, date, time slot, and our operational capacity.</Text>
+
+              <Text style={styles.termTitle}>5. Pricing & Payment</Text>
+              <Text style={styles.termText}>Displayed prices correspond to the selected service/package and applicable add-ons. The final amount reflects the confirmed booking and any applied discounts.</Text>
+
+              <Text style={styles.termTitle}>6. Add-ons</Text>
+              <Text style={styles.termText}>Customers may select available add-ons where applicable. These additions may affect the final booking duration and amount.</Text>
+
+              <Text style={styles.termTitle}>7. Cancellation & Rescheduling</Text>
+              <Text style={styles.termText}>Cancellation or rescheduling of bookings may be subject to the applicable policy shown by Neatify at the time of booking. Repeated last-minute cancellations may restrict future bookings.</Text>
+
+              <Text style={styles.termTitle}>8. Service Access</Text>
+              <Text style={styles.termText}>The customer should provide reasonable access to the property or location at the scheduled time to allow our professionals to perform their duties.</Text>
+
+              <Text style={styles.termTitle}>9. Safety</Text>
+              <Text style={styles.termText}>Hazardous, unsafe, restricted, or unsuitable conditions at the property may affect our ability to perform a service. Professionals reserve the right to refuse service in unsafe conditions.</Text>
+
+              <Text style={styles.termTitle}>10. Service Quality</Text>
+              <Text style={styles.termText}>Neatify aims to provide professional cleaning services, but results can vary depending on the existing condition of surfaces, stains, and the property itself.</Text>
+
+              <Text style={styles.termTitle}>11. Communication</Text>
+              <Text style={styles.termText}>Neatify may communicate with the customer via SMS, WhatsApp, Email, or Push Notifications regarding booking, service status, schedule, or support.</Text>
+
+              <Text style={styles.termTitle}>12. Privacy</Text>
+              <Text style={styles.termText}>We respect your privacy. Your contact and location details are used strictly to facilitate service delivery and improve your experience on our platform.</Text>
+
+              <Text style={styles.termTitle}>13. Updates to Terms</Text>
+              <Text style={styles.termText}>Neatify may update its terms from time to time. The latest version will apply to future use and bookings on the platform.</Text>
+              
+              <View style={{ height: 30 }} />
+            </ScrollView>
+            
+            <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0', backgroundColor: '#FFF' }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: COLORS.saffron,
+                  paddingVertical: 14,
+                  borderRadius: 12,
+                  alignItems: 'center',
+                }}
+                onPress={() => {
+                  setTermsViewed(true);
+                  setTermsAccepted(true);
+                  setShowTermsModal(false);
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#111' }}>✓ I Understand</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  termTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111',
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  termText: {
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 20,
+  },
   bgCircleTop: {
     position: "absolute",
     width: 300,
@@ -1003,11 +825,11 @@ const styles = StyleSheet.create({
     bottom: -150,
     left: -150,
   },
-  scrollContainer: { 
-    flexGrow: 1, 
-    paddingHorizontal: "5%", 
+  scrollContainer: {
+    flexGrow: 1,
+    paddingHorizontal: "5%",
     paddingTop: 30,
-    paddingBottom: 40 
+    paddingBottom: 40
   },
   backBtn: {
     position: "absolute",
@@ -1065,7 +887,7 @@ const styles = StyleSheet.create({
     maxWidth: 500,
     marginVertical: 40,
   },
-  header: { 
+  header: {
     marginBottom: 20,
     alignItems: "center", // Center horizontally
   },
@@ -1074,15 +896,16 @@ const styles = StyleSheet.create({
     height: 38,
     marginBottom: 16, // Spacing between logo and heading
   },
-  subtitle: { 
+  subtitle: {
     color: "#111", // Black/dark text
-    fontSize: 14, // more compact
-    fontWeight: "600",
-    lineHeight: 20,
+    fontSize: 16,
+    fontFamily: Platform.OS === 'android' ? 'sans-serif-rounded' : 'Arial Rounded MT Bold',
+    fontWeight: Platform.OS === 'android' ? 'normal' : '700',
+    lineHeight: 22,
     textAlign: "center",
     paddingHorizontal: 8,
   },
-  form: { 
+  form: {
     gap: 12, // reduced gaps
   },
   animatedInputContainer: {
@@ -1095,34 +918,64 @@ const styles = StyleSheet.create({
     paddingVertical: 12, // shorter height
     paddingHorizontal: 14,
   },
-  input: { 
-    flex: 1, 
-    fontSize: 16, 
-    marginLeft: 12, 
+  input: {
+    flex: 1,
+    fontSize: 16,
+    marginLeft: 12,
     color: "#111",
     fontWeight: "500",
   },
   dropdownLabel: {
-    fontSize: 13, 
-    fontWeight: "700", 
-    color: COLORS.saffron, 
-    marginBottom: 8, 
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.saffron,
+    marginBottom: 8,
     marginLeft: 4,
   },
   expiredOfferContainer: {
-    padding: 12, 
-    backgroundColor: "#F8F8F8", 
-    borderRadius: 12, 
-    flexDirection: "row", 
-    alignItems: "center", 
+    padding: 12,
+    backgroundColor: "#F8F8F8",
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     borderWidth: 1,
     borderColor: "#F0F0F0"
   },
   expiredOfferText: {
-    fontSize: 13, 
-    color: "#555", 
+    fontSize: 13,
+    color: "#555",
     fontWeight: "600",
+  },
+  whatsappMessageContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  whatsappIcon: {
+    marginRight: 12,
+  },
+  whatsappTextContainer: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  whatsappText: {
+    fontFamily: Platform.OS === 'android' ? 'sans-serif-rounded' : 'Arial Rounded MT Bold',
+    color: '#333',
+    fontSize: 14,
+  },
+  whatsappHighlight: {
+    color: '#25D366',
+    fontWeight: '700',
+  },
+  whatsappPhone: {
+    fontFamily: Platform.OS === 'android' ? 'sans-serif-rounded' : 'Arial Rounded MT Bold',
+    color: '#111',
+    fontSize: 15,
+    fontWeight: Platform.OS === 'android' ? 'normal' : '800',
+    marginTop: 2,
   },
   primaryBtn: {
     backgroundColor: COLORS.saffron,
@@ -1137,8 +990,8 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  primaryText: { 
-    color: "#111", 
+  primaryText: {
+    color: "#111",
     fontWeight: "800",
     fontSize: 15,
     letterSpacing: 0.5,
@@ -1149,18 +1002,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   dividerContainer: {
-    flexDirection: "row", 
-    alignItems: "center", 
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: 4,
   },
   dividerLine: {
-    flex: 1, 
-    height: 1, 
+    flex: 1,
+    height: 1,
     backgroundColor: "#F0F0F0"
   },
   dividerText: {
-    marginHorizontal: 12, 
-    color: "#888", 
+    marginHorizontal: 12,
+    color: "#888",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -1175,22 +1028,22 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
   },
-  googleIcon: { 
-    width: 22, 
-    height: 22 
+  googleIcon: {
+    width: 22,
+    height: 22
   },
-  googleText: { 
-    fontSize: 16, 
-    fontWeight: "700", 
-    color: "#111" 
+  googleText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111"
   },
-  footer: { 
-    flexDirection: "row", 
-    justifyContent: "center", 
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
     marginTop: 12,
   },
-  linkText: { 
-    fontWeight: "800", 
+  linkText: {
+    fontWeight: "800",
     color: COLORS.saffron,
     fontSize: 14,
   },

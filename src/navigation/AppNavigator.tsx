@@ -45,6 +45,7 @@ export type SelectedService = {
   tax_percent?: number | null;
   quantity?: number;
   main_category_id?: string | null;
+  is_addon?: boolean;
 };
 
 export type RootStackParamList = {

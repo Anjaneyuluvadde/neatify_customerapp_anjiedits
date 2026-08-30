@@ -1,6 +1,6 @@
 import { RouteProp, useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, KeyboardAvoidingView, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Linking, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useLanguage } from "../context/LanguageContext";
@@ -64,6 +64,8 @@ export default function BookingDetailsScreen({ route }: Props) {
 
   // 🟢 Service Checklist Feature
   const [checklist, setChecklist] = useState<Record<number, boolean>>({});
+  const [submittingChecklist, setSubmittingChecklist] = useState(false);
+  const [isChecklistSubmitted, setIsChecklistSubmitted] = useState(false);
 
   const services = React.useMemo(() => {
     if (!booking.services) return [];
@@ -80,7 +82,61 @@ export default function BookingDetailsScreen({ route }: Props) {
   const checklistItems = React.useMemo(() => {
     const serviceName = (services[0]?.title || services[0]?.service_name || "").toLowerCase();
     
-    let specificItems = [
+    if (serviceName.includes("bathroom")) {
+      return [
+        "Customer & property details verified",
+        "Floor, tiles, toilet, wash basin & fixtures cleaned",
+        "Mirrors & glass surfaces wiped",
+        "Exhaust fan & switchboards cleaned",
+        "Cobwebs removed",
+        "Final inspection completed & customer satisfied"
+      ];
+    } else if (serviceName.includes("kitchen")) {
+      return [
+        "Customer & property details verified",
+        "Countertop, hob, sink, cabinets & floor completed",
+        "Chimney exterior wiped",
+        "Appliances exterior wiped",
+        "Exhaust fan & switchboards cleaned",
+        "Final inspection completed & customer satisfied"
+      ];
+    } else if (serviceName.includes("sofa")) {
+      return [
+        "Customer & property details verified",
+        "Dry vacuuming of sofa completed",
+        "Shampooing and wet vacuuming completed",
+        "Cushions properly cleaned",
+        "Stains spot-treated",
+        "Final inspection completed & customer satisfied"
+      ];
+    } else if (serviceName.includes("window") || serviceName.includes("door")) {
+      return [
+        "Customer & property details verified",
+        "Window panes & glass cleaned",
+        "Tracks & channels vacuumed/wiped",
+        "Mosquito nets brushed",
+        "Doors & frames wiped",
+        "Final inspection completed & customer satisfied"
+      ];
+    } else if (serviceName.includes("balcony")) {
+      return [
+        "Customer & property details verified",
+        "Balcony floor scrubbed & washed",
+        "Railings wiped & cleaned",
+        "Cobwebs removed",
+        "Final inspection completed & customer satisfied"
+      ];
+    } else if (serviceName.includes("express")) {
+      return [
+        "Customer & property details verified",
+        "Dry dusting of all rooms completed",
+        "Floors swept and mopped",
+        "Basic tidying up of living spaces",
+        "Final inspection completed & customer satisfied"
+      ];
+    }
+    
+    return [
       "Customer & property details verified",
       "Required areas/access confirmed",
       "Service scope & requirements confirmed",
@@ -92,16 +148,6 @@ export default function BookingDetailsScreen({ route }: Props) {
       "No visible dirt or waste left behind",
       "Final inspection completed & customer satisfied"
     ];
-
-    if (serviceName.includes("bathroom")) {
-      specificItems[6] = "Floor, tiles, toilet, wash basin & fixtures cleaned";
-    } else if (serviceName.includes("kitchen")) {
-      specificItems[6] = "Countertop, hob, sink, cabinets & floor completed";
-    } else if (serviceName.includes("deep cleaning") || serviceName.includes("full house")) {
-      specificItems[6] = "Living room, bedrooms, kitchen, bathrooms & applicable areas completed";
-    }
-
-    return specificItems;
   }, [services]);
 
   useEffect(() => {
@@ -111,6 +157,10 @@ export default function BookingDetailsScreen({ route }: Props) {
         const stored = await AsyncStorage.getItem(`booking_checklist_${booking.id}`);
         if (stored) {
           setChecklist(JSON.parse(stored));
+        }
+        const submitted = await AsyncStorage.getItem(`booking_checklist_submitted_${booking.id}`);
+        if (submitted === 'true') {
+          setIsChecklistSubmitted(true);
         }
       } catch (e) {
         console.warn("Failed to load checklist", e);
@@ -126,6 +176,51 @@ export default function BookingDetailsScreen({ route }: Props) {
       await AsyncStorage.setItem(`booking_checklist_${booking.id}`, JSON.stringify(updated));
     } catch (e) {
       console.warn("Failed to save checklist", e);
+    }
+  };
+
+  const handleCustomerSubmit = async () => {
+    try {
+      const bookingId = booking?.id;
+      const tasks = checklistItems.map((title, index) => ({
+        title,
+        isCompleted: !!checklist[index],
+      }));
+
+      // 1. Check if bookingId is missing
+      if (!bookingId) {
+        Alert.alert("Error", "Booking ID is missing!");
+        return;
+      }
+
+      setSubmittingChecklist(true);
+
+      const payload = tasks.map((task, index) => ({
+        booking_id: bookingId,
+        task_index: index,
+        task_title: task.title,
+        customer_completed: task.isCompleted,
+      }));
+
+      // 2. Upsert checklist to Supabase
+      const { data, error } = await supabase.from('booking_checklists').upsert(payload, {
+        onConflict: 'booking_id,task_index'
+      });
+
+      // 3. Handle response
+      if (error) {
+        console.log("Error details:", error.message);
+        Alert.alert("Error", "Failed to save: " + error.message);
+      } else {
+        setIsChecklistSubmitted(true);
+        AsyncStorage.setItem(`booking_checklist_submitted_${bookingId}`, 'true');
+        Alert.alert("Success", "Checklist submitted successfully!");
+      }
+    } catch (err: any) {
+      console.log("Submit checklist error:", err);
+      Alert.alert("Error", "Something went wrong while submitting the checklist!");
+    } finally {
+      setSubmittingChecklist(false);
     }
   };
 
@@ -611,53 +706,6 @@ export default function BookingDetailsScreen({ route }: Props) {
                   {/* STAFF ASSIGNMENT - Only show for non-completed bookings */}
                   <View style={{ borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 16, marginTop: 4 }} />
 
-                  {/* SERVICE CHECKLIST */}
-                  <View style={{ marginBottom: 16 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                      <Text style={[styles.section, { color: theme.text, marginBottom: 0, marginTop: 0 }]}>Service Checklist</Text>
-                      <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? "#4ade80" : "#16a34a" }}>
-                        {checklistProgress} / 10 completed
-                      </Text>
-                    </View>
-
-                    {checklistItems.map((item, index) => {
-                      const isChecked = !!checklist[index];
-                      return (
-                        <TouchableOpacity
-                          key={index}
-                          activeOpacity={0.7}
-                          onPress={() => toggleChecklistItem(index)}
-                          style={{
-                            flexDirection: 'row',
-                            alignItems: 'center',
-                            marginBottom: 8,
-                            backgroundColor: theme.surfaceVariant,
-                            padding: 12,
-                            borderRadius: 8
-                          }}
-                        >
-                          <Ionicons
-                            name={isChecked ? "checkbox" : "square-outline"}
-                            size={22}
-                            color={isChecked ? (isDark ? "#4ade80" : "#16a34a") : theme.textLight}
-                            style={{ marginRight: 12 }}
-                          />
-                          <Text style={{
-                            flex: 1,
-                            fontSize: 14,
-                            color: isChecked ? theme.text : theme.text,
-                            textDecorationLine: isChecked ? 'line-through' : 'none',
-                            opacity: isChecked ? 0.6 : 1
-                          }}>
-                            {item}
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <View style={{ borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 16, marginTop: 4 }} />
-
                   <View style={styles.otpContainer}>
                     <View style={[styles.otpBox, { backgroundColor: theme.surfaceVariant }]}>
                       <Text style={[styles.otpLabel, { color: theme.textLight }]}>{t("bookingDetails.startOtp")}</Text>
@@ -770,6 +818,74 @@ export default function BookingDetailsScreen({ route }: Props) {
                 </View>
               )}
             </View>
+          </View>
+        )}
+
+        {/* SERVICE CHECKLIST */}
+        {booking.work_status !== "CANCELLED" && (
+          <View style={{ marginBottom: 20 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={[styles.section, { color: theme.text, marginBottom: 0, marginTop: 0 }]}>Service Checklist</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? "#4ade80" : "#16a34a" }}>
+                {checklistProgress} / {checklistItems.length} completed
+              </Text>
+            </View>
+
+            {checklistItems.map((item, index) => {
+              const isChecked = !!checklist[index];
+              return (
+                <TouchableOpacity
+                  key={index}
+                  activeOpacity={0.7}
+                  onPress={() => toggleChecklistItem(index)}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    marginBottom: 8,
+                    backgroundColor: theme.surfaceVariant,
+                    padding: 12,
+                    borderRadius: 8
+                  }}
+                >
+                  <Ionicons
+                    name={isChecked ? "checkbox" : "square-outline"}
+                    size={22}
+                    color={isChecked ? (isDark ? "#4ade80" : "#16a34a") : theme.textLight}
+                    style={{ marginRight: 12 }}
+                  />
+                  <Text style={{
+                    flex: 1,
+                    fontSize: 14,
+                    color: isChecked ? theme.textLight : theme.text,
+                    textDecorationLine: isChecked ? 'line-through' : 'none',
+                    opacity: isChecked ? 0.6 : 1
+                  }}>
+                    {item}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+            
+            <TouchableOpacity 
+              style={{
+                backgroundColor: isChecklistSubmitted ? "#10B981" : "#F4C430",
+                paddingVertical: 14,
+                borderRadius: 12,
+                alignItems: "center",
+                marginTop: 12,
+                opacity: (submittingChecklist || isChecklistSubmitted) ? 0.7 : 1
+              }} 
+              onPress={handleCustomerSubmit}
+              disabled={submittingChecklist || isChecklistSubmitted}
+            >
+              {submittingChecklist ? (
+                <ActivityIndicator color="#111" />
+              ) : (
+                <Text style={{ color: isChecklistSubmitted ? "#fff" : "#111", fontWeight: "700", fontSize: 16 }}>
+                  {isChecklistSubmitted ? "Submitted" : "Submit Checklist"}
+                </Text>
+              )}
+            </TouchableOpacity>
           </View>
         )}
 

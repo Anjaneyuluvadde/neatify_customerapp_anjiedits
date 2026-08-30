@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import React, { memo } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
-import { useBookingCart } from "../context/BookingCartContext";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { COLORS } from "../theme/colors";
@@ -18,9 +17,6 @@ type Props = {
 export default memo(function ServiceCard({ service, onPress }: Props) {
   const { t } = useLanguage();
   const { theme, isDark } = useTheme();
-  const { cartItems, addService, updateQuantity, removeService } = useBookingCart();
-
-  const cartItem = cartItems.find(s => s.id === service.id);
 
   return (
     <Pressable
@@ -73,46 +69,11 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
             ) : null}
           </View>
 
-          {/* Cart Actions */}
+          {/* Card Actions */}
           <View style={styles.cartActionContainer}>
-            {cartItem ? (
-              <View style={styles.quantityControl}>
-                <Pressable
-                  style={styles.qtyBtn}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    if (cartItem.quantity && cartItem.quantity > 1) {
-                      updateQuantity(service.id, -1);
-                    } else {
-                      removeService(service.id);
-                    }
-                  }}
-                >
-                  <Ionicons name="remove" size={16} color={COLORS.black} />
-                </Pressable>
-                <Text style={styles.qtyText}>{cartItem.quantity || 1}</Text>
-                <Pressable
-                  style={styles.qtyBtn}
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    updateQuantity(service.id, 1);
-                  }}
-                >
-                  <Ionicons name="add" size={16} color={COLORS.black} />
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                style={styles.addButton}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  addService(service);
-                }}
-              >
-                <Ionicons name="add" size={14} color={COLORS.black} />
-                <Text style={styles.addButtonText}>Add</Text>
-              </Pressable>
-            )}
+            <View style={styles.viewButton}>
+              <Text style={styles.viewButtonText}>View</Text>
+            </View>
           </View>
         </View>
       </View>
@@ -182,15 +143,22 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   durationText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '500',
-    color: "#64748B",
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    flexWrap: 'wrap',
+    paddingRight: 8,
   },
   bottomRow: {
     flexDirection: "row",
     justifyContent: 'space-between',
     alignItems: 'center',
-    width: '100%',
+    marginTop: 'auto',
   },
   priceColumn: {
     flexDirection: 'column',
@@ -211,38 +179,19 @@ const styles = StyleSheet.create({
   cartActionContainer: {
     alignItems: 'flex-end',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FDE047',
-    paddingHorizontal: 12,
+  viewButton: {
+    backgroundColor: COLORS.saffron,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
-    gap: 4,
-  },
-  addButtonText: {
-    fontWeight: '700',
-    color: COLORS.black,
-    fontSize: 13,
-  },
-  quantityControl: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FDE047',
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  qtyBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  qtyText: {
+  viewButtonText: {
     fontWeight: '700',
+    color: '#000000',
     fontSize: 13,
-    color: COLORS.black,
-    paddingHorizontal: 4,
   },
 });
