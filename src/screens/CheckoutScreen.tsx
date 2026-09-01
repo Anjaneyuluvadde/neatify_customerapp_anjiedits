@@ -1,9 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { RouteProp, useFocusEffect, useNavigation } from "@react-navigation/native";
 import * as Location from "expo-location";
-import * as Haptics from "expo-haptics";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import LocationService from "../services/LocationService";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -21,6 +19,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import LocationService from "../services/LocationService";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
@@ -29,9 +28,9 @@ import LoadingOverlay from "../components/LoadingOverlay";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
+import { invokeFunction } from "../lib/backendClient";
 import { processPayment } from "../lib/paymentService";
 import { supabase } from "../lib/supabase";
-import { invokeFunction } from "../lib/backendClient";
 import { RootStackParamList, SelectedService } from "../navigation/AppNavigator";
 import { COLORS } from "../theme/colors";
 import { clearClaimedOffer, getClaimedOffer } from "../utils/priceUtils";
@@ -325,6 +324,7 @@ export default function CheckoutScreen({ route }: Props) {
   /* ================= PINCODE CHECK FUNCTION ================= */
 
   const checkPincodeServiceable = async (pin: string) => {
+    console.log(`[SERVICEABILITY STEP 2] Pincode received: ${pin}`);
     const cleanedPin = pin.trim();
 
     if (cleanedPin.length !== 6) {
@@ -334,37 +334,39 @@ export default function CheckoutScreen({ route }: Props) {
 
     try {
       setCheckingPincode(true);
+      console.log(`[SERVICEABILITY STEP 2] Checking hub_locations:`);
 
       const { data, error } = await supabase
-        .from("neatify_service_areas")
-        .select("id, pincode")
-        .ilike("pincode", `%${cleanedPin}%`)
+        .from("hub_locations")
+        .select("id, hub_name, pincode, is_active")
+        .eq("pincode", cleanedPin)
+        .eq("is_active", true)
         .limit(1);
 
       if (error) {
-        console.log("⚠️ Pincode check DB/RLS error:", error.message);
-        // Fallback to true if RLS blocks query so users aren't blocked incorrectly
-        setIsPincodeServiceable(true);
+        console.log(`[SERVICEABILITY STEP 2] Final: NOT_AVAILABLE`);
+        setIsPincodeServiceable(false);
         return;
       }
 
-      setIsPincodeServiceable(!!(data && data.length > 0));
-    } catch (err) {
-      console.log("Pincode check failed:", err);
-      setIsPincodeServiceable(true);
+      const available = Array.isArray(data) && data.length > 0;
+      setIsPincodeServiceable(available);
+
+      console.log(`[SERVICEABILITY STEP 2] Matching rows: ${data ? data.length : 0}`);
+      console.log(`[SERVICEABILITY STEP 2] Matching hub: ${available ? data[0].hub_name : 'null'}`);
+      console.log(`[SERVICEABILITY STEP 2] Final: ${available ? 'AVAILABLE' : 'NOT_AVAILABLE'}`);
+
+    } catch (err: any) {
+      console.log(`[SERVICEABILITY STEP 2] Final: NOT_AVAILABLE`);
+      setIsPincodeServiceable(false);
     } finally {
       setCheckingPincode(false);
     }
   };
 
   useEffect(() => {
-    const pinMatch = manualAddress.match(/\b(\d{6})\b/);
-    const pinToCheck = pincode.trim() || (pinMatch ? pinMatch[1] : "");
-    if (pinMatch && !pincode) {
-      setPincode(pinMatch[1]);
-    }
-    checkPincodeServiceable(pinToCheck);
-  }, [pincode, manualAddress]);
+    checkPincodeServiceable(pincode);
+  }, [pincode]);
 
   /* ================= FETCH COUPON ================= */
 
@@ -471,20 +473,17 @@ export default function CheckoutScreen({ route }: Props) {
 
       // ✅ Initial coupon fetch moved to useEffect [profile?.phone]
 
-      setPincode(profileData.pincode || "");
+      const cachedLoc = await LocationService.getSelectedLocation();
+      const freshPin = cachedLoc?.postalCode || "";
 
-      if (profileData.address) {
-        const addressWithoutPincode = profileData.address
-          .replace(/\s*-\s*\d{6}\s*$/, "")
-          .trim();
-
-        setManualAddress(addressWithoutPincode);
-        setIsAddressSummaryMode(true);
-        setHasUsedLocationFetch(true);
-
-        // ✅ Automatically geocode the saved profile address on load
-        handleManualGeocode(`${addressWithoutPincode}, ${profileData.pincode || ""}`);
+      setPincode(freshPin);
+      setManualAddress(cachedLoc?.fullAddress || "");
+      if (cachedLoc) {
+        setBookingLatitude(cachedLoc.latitude);
+        setBookingLongitude(cachedLoc.longitude);
       }
+      setIsAddressSummaryMode(true);
+      setHasUsedLocationFetch(true);
     } else {
       setAlertConfig({
         title: 'Profile Not Found',
@@ -902,8 +901,8 @@ export default function CheckoutScreen({ route }: Props) {
             coupon_discount_percentage: couponApplied && coupon ? couponDiscount : 0,
             coupon_discount_amount: couponApplied && coupon
               ? (coupon.discount_amount && coupon.discount_amount > 0
-                  ? coupon.discount_amount
-                  : Number((((totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice) * couponDiscount) / 100).toFixed(2)))
+                ? coupon.discount_amount
+                : Number((((totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice) * couponDiscount) / 100).toFixed(2)))
               : 0,
           }
         ])

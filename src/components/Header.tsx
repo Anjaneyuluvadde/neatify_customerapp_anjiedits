@@ -110,14 +110,22 @@ export default function Header({ isCurved = false }: HeaderProps) {
     if (!isSilent) setLocationName("Fetching location...");
 
     try {
-      const result = await LocationService.fetchCurrentLocation();
+      if (isInitial) {
+        console.log("[LOCATION STEP 1] App location initialization started");
+        console.log("[LOCATION STEP 1] Requesting fresh device GPS");
+      }
 
-      if (result.status === 'permission_denied') {
-        setLocationName("Permission denied");
+      // Force GPS on initial load by passing `isInitial` as `forceGPS`
+      const result = await LocationService.fetchCurrentLocation(undefined, isInitial);
+
+      if (result.status === 'permission_denied' || result.status === 'services_disabled') {
+        if (isInitial) console.log("[LOCATION STEP 1] GPS FAILED");
+        setLocationName(result.status === 'permission_denied' ? "Permission denied" : "Location services disabled");
         return;
       }
 
       if (result.status === 'unserviceable') {
+        if (isInitial) console.log("[LOCATION STEP 1] GPS FAILED");
         navigation.reset({
           index: 0,
           routes: [{ name: "ComingSoon" }]
@@ -126,6 +134,7 @@ export default function Header({ isCurved = false }: HeaderProps) {
       }
 
       if (result.status === 'error') {
+        if (isInitial) console.log("[LOCATION STEP 1] GPS FAILED");
         setLocationName("Unable to update location");
         if (!isInitial && oldLocation !== "Fetching location..." && oldLocation !== "Unable to update location") {
           setTimeout(() => setLocationName(oldLocation), 2500);
@@ -134,10 +143,21 @@ export default function Header({ isCurved = false }: HeaderProps) {
       }
 
       // Success
+      if (isInitial) {
+        console.log("[LOCATION STEP 1] GPS latitude:", result.latitude);
+        console.log("[LOCATION STEP 1] GPS longitude:", result.longitude);
+        console.log("[LOCATION STEP 1] Reverse geocode postalCode:", result.postalCode);
+        console.log("[LOCATION STEP 1] Final location pincode:", result.postalCode);
+
+        // Update the cached/selected location state so subsequent non-forced fetches use it
+        await LocationService.setSelectedLocation(result);
+      }
+
       setLocationName(result.locality);
       setFullAddress(result.fullAddress);
 
     } catch (error) {
+      if (isInitial) console.log("[LOCATION STEP 1] GPS FAILED");
       console.warn("Location error:", error);
       if (!isSilent) setLocationName("Unable to update location");
       setFullAddress("");

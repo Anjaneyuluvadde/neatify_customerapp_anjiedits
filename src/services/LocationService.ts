@@ -154,18 +154,18 @@ class LocationService {
       if (postalCode) {
         try {
           const { data, error } = await supabase
-            .from("neatify_service_areas")
-            .select("area_name")
-            .ilike("pincode", `%${postalCode}%`)
+            .from("hub_locations")
+            .select("hub_name, is_active")
+            .eq("pincode", postalCode)
+            .eq("is_active", true)
             .limit(1);
 
           if (error) {
             console.warn("Supabase error fetching service areas:", error.message);
-            serviceStatus = finalServiceable ? 'success' : 'unserviceable';
+            finalServiceable = false;
+            serviceStatus = 'error';
           } else if (data && data.length > 0) {
-            if (data[0].area_name) {
-              finalLocality = data[0].area_name;
-            }
+            finalLocality = data[0].hub_name || finalLocality;
             finalServiceable = true;
             serviceStatus = 'success';
           } else {
@@ -174,10 +174,12 @@ class LocationService {
           }
         } catch (e) {
           console.warn("Network error fetching service areas:", e);
-          serviceStatus = finalServiceable ? 'success' : 'unserviceable';
+          finalServiceable = false;
+          serviceStatus = 'error';
         }
       } else {
-        serviceStatus = finalServiceable ? 'success' : 'unserviceable';
+        serviceStatus = 'unserviceable';
+        finalServiceable = false;
       }
 
       return {

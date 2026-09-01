@@ -826,66 +826,91 @@ export default function BookingDetailsScreen({ route }: Props) {
           <View style={{ marginBottom: 20 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text style={[styles.section, { color: theme.text, marginBottom: 0, marginTop: 0 }]}>Service Checklist</Text>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? "#4ade80" : "#16a34a" }}>
-                {checklistProgress} / {checklistItems.length} completed
-              </Text>
-            </View>
-
-            {checklistItems.map((item, index) => {
-              const isChecked = !!checklist[index];
-              return (
-                <TouchableOpacity
-                  key={index}
-                  activeOpacity={0.7}
-                  onPress={() => toggleChecklistItem(index)}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    marginBottom: 8,
-                    backgroundColor: theme.surfaceVariant,
-                    padding: 12,
-                    borderRadius: 8
-                  }}
-                >
-                  <Ionicons
-                    name={isChecked ? "checkbox" : "square-outline"}
-                    size={22}
-                    color={isChecked ? (isDark ? "#4ade80" : "#16a34a") : theme.textLight}
-                    style={{ marginRight: 12 }}
-                  />
-                  <Text style={{
-                    flex: 1,
-                    fontSize: 14,
-                    color: isChecked ? theme.textLight : theme.text,
-                    textDecorationLine: isChecked ? 'line-through' : 'none',
-                    opacity: isChecked ? 0.6 : 1
-                  }}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-            
-            <TouchableOpacity 
-              style={{
-                backgroundColor: isChecklistSubmitted ? "#10B981" : "#F4C430",
-                paddingVertical: 14,
-                borderRadius: 12,
-                alignItems: "center",
-                marginTop: 12,
-                opacity: (submittingChecklist || isChecklistSubmitted) ? 0.7 : 1
-              }} 
-              onPress={handleCustomerSubmit}
-              disabled={submittingChecklist || isChecklistSubmitted}
-            >
-              {submittingChecklist ? (
-                <ActivityIndicator color="#111" />
-              ) : (
-                <Text style={{ color: isChecklistSubmitted ? "#fff" : "#111", fontWeight: "700", fontSize: 16 }}>
-                  {isChecklistSubmitted ? "Submitted" : "Submit Checklist"}
+              {booking.work_status === "COMPLETED" && (
+                <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? "#4ade80" : "#16a34a" }}>
+                  {checklistProgress} / {checklistItems.length} completed
                 </Text>
               )}
-            </TouchableOpacity>
+            </View>
+
+            {booking.work_status !== "COMPLETED" ? (
+              <View style={{
+                backgroundColor: theme.surfaceVariant,
+                padding: 24,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: 1,
+                borderColor: theme.border,
+                borderStyle: "dashed"
+              }}>
+                <Ionicons name="lock-closed" size={32} color={theme.textLight} style={{ marginBottom: 12 }} />
+                <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700", textAlign: "center", marginBottom: 6 }}>
+                  Checklist Locked
+                </Text>
+                <Text style={{ color: theme.textLight, fontSize: 13, textAlign: "center", lineHeight: 20 }}>
+                  Service must be completed (Start and End OTPs verified) to unlock this checklist.
+                </Text>
+              </View>
+            ) : (
+              <>
+                {checklistItems.map((item, index) => {
+                  const isChecked = !!checklist[index];
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      activeOpacity={0.7}
+                      onPress={() => toggleChecklistItem(index)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        marginBottom: 8,
+                        backgroundColor: theme.surfaceVariant,
+                        padding: 12,
+                        borderRadius: 8
+                      }}
+                    >
+                      <Ionicons
+                        name={isChecked ? "checkbox" : "square-outline"}
+                        size={22}
+                        color={isChecked ? (isDark ? "#4ade80" : "#16a34a") : theme.textLight}
+                        style={{ marginRight: 12 }}
+                      />
+                      <Text style={{
+                        flex: 1,
+                        fontSize: 14,
+                        color: isChecked ? theme.textLight : theme.text,
+                        textDecorationLine: isChecked ? 'line-through' : 'none',
+                        opacity: isChecked ? 0.6 : 1
+                      }}>
+                        {item}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                
+                <TouchableOpacity 
+                  style={{
+                    backgroundColor: isChecklistSubmitted ? "#10B981" : "#F4C430",
+                    paddingVertical: 14,
+                    borderRadius: 12,
+                    alignItems: "center",
+                    marginTop: 12,
+                    opacity: (submittingChecklist || isChecklistSubmitted) ? 0.7 : 1
+                  }} 
+                  onPress={handleCustomerSubmit}
+                  disabled={submittingChecklist || isChecklistSubmitted}
+                >
+                  {submittingChecklist ? (
+                    <ActivityIndicator color="#111" />
+                  ) : (
+                    <Text style={{ color: isChecklistSubmitted ? "#fff" : "#111", fontWeight: "700", fontSize: 16 }}>
+                      {isChecklistSubmitted ? "Submitted" : "Submit Checklist"}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         )}
 

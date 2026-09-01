@@ -133,6 +133,13 @@ function AnimatedPhoneInput({ value, onChangeText, theme }: any) {
 // Custom OTP Input Component
 function OtpInput({ value, onChangeText, length = 6 }: any) {
   const inputRefs = useRef<Array<TextInput | null>>([]);
+  const { width } = useWindowDimensions();
+
+  // Calculate exact cell width to prevent flex collapse on some Android devices
+  // formContainer padding (24*2=48) + margin (16*2=32) = 80px total spacing
+  const totalGapWidth = (length - 1) * 6;
+  const availableWidth = width - 80 - totalGapWidth;
+  const cellWidth = Math.max(32, Math.floor(Math.min(46, availableWidth / length)));
 
   const handleChange = (text: string, index: number) => {
     // Handle paste
@@ -189,8 +196,7 @@ function OtpInput({ value, onChangeText, length = 6 }: any) {
             style={[
               styles.animatedInputContainer,
               {
-                flex: 1,
-                maxWidth: 46,
+                width: cellWidth,
                 height: 48,
                 justifyContent: 'center',
                 alignItems: 'center',
@@ -594,7 +600,7 @@ export default function LoginScreen(props: any) {
                         style={{ color: COLORS.saffron, fontWeight: "700" }} 
                         onPress={() => setShowTermsModal(true)}
                       >
-                        Terms & Conditions
+                        Privacy Policy
                       </Text>
                     </Text>
                   </View>
@@ -714,57 +720,41 @@ export default function LoginScreen(props: any) {
         </Pressable>
       </Modal>
 
-      {/* TERMS & CONDITIONS MODAL (UI Only) */}
+      {/* PRIVACY POLICY MODAL */}
       <Modal visible={showTermsModal} transparent animationType="slide" statusBarTranslucent={true} onRequestClose={() => setShowTermsModal(false)}>
         <View style={dropdownStyles.overlay}>
           <View style={[dropdownStyles.container, { padding: 0, overflow: 'hidden', maxHeight: '85%' }]}>
             <View style={[dropdownStyles.header, { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F0F0F0', marginBottom: 0 }]}>
-              <Text style={dropdownStyles.title}>Terms & Conditions</Text>
+              <Text style={dropdownStyles.title}>Privacy Policy</Text>
               <TouchableOpacity onPress={() => setShowTermsModal(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                 <Ionicons name="close" size={24} color="#111" />
               </TouchableOpacity>
             </View>
             <ScrollView style={{ paddingHorizontal: 20 }} showsVerticalScrollIndicator={true}>
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111', marginTop: 16, marginBottom: 8 }}>Welcome to Neatify</Text>
               
-              <Text style={styles.termTitle}>1. Service Booking</Text>
-              <Text style={styles.termText}>Customers can book available cleaning services through the Neatify app. Bookings are subject to confirmation and availability.</Text>
+              <Text style={styles.termTitle}>1. About Us</Text>
+              <Text style={styles.termText}>We welcome you to our mobile application / website / platform THE NEATIFY TEAM. THE NEATIFY TEAM is a service operated by The Neatify Services (OPC) Private Limited that has developed an on-demand cleaning service platform that connects users with professional cleaning service providers for residential and commercial cleaning services. THE NEATIFY TEAM enables businesses to effortlessly provide housekeeping services to the users including general cleaning of premises, laundry assistance, bathroom and kitchen assistance among others.{'\n\n'}• Website Booking Services:{'\n'}Purpose and Scope: This service is crafted for clients who prioritize simplicity, efficiency, and reliability in their cleaning services.{'\n\n'}Features and Offerings: The website facilitates individual services or a package/bundle of services designed to make cleaning services for users a pleasant and hassle-free services.{'\n\n'}Our Privacy Policy is incorporated as part of this Mobile Application / Website / Platform. Please register yourself in the platform and access or view the platform only if you are agreeable to be bound by this Privacy Policy. In case you are not agreeable to the terms of the privacy policy or do not wish to be bound / obligated by these policies and / or terms and conditions, we kindly request you not to register access / view the platform.{'\n\n'}Please read this Privacy Policy and our Terms of Use carefully before accessing / registering yourself. By continuing to access the platform, please note that you agree to be bound by the provisions of this Privacy Policy.{'\n'}Our services have to be used legally and as permitted by law. THE NEATIFY TEAM has the right to completely stop providing or suspend the services if you do not comply with our terms or privacy policies. The contents and any information provided in the platform may be changed at any time by us without notice by updating the privacy policy. You agree to review the Terms and conditions of the website / Privacy Policy regularly and your continued access or use of the platform will mean that you agree to and abide by the updated Terms & Conditions / Privacy Policy.</Text>
 
-              <Text style={styles.termTitle}>2. Service Scope</Text>
-              <Text style={styles.termText}>The service provided depends on the selected service, package, property condition, and applicable service limitations. Additional tasks outside the agreed scope may incur extra charges.</Text>
+              <Text style={styles.termTitle}>2. Information:</Text>
+              <Text style={styles.termText}>We collect the information of the user as provided by them such as the individual / business entity name, email address, Contact address, country, payment details, email id, IP address and the like. The nature of the services offered by THE NEATIFY TEAM requires them to collect information like contact details, browsing history, geographical location.{'\n\n'}We also collect and store certain information using cookies for ease of use by the customers.  As a user, you are first required to register yourselves prior to using our services. Note that the collected information during the user registration process is governed as per the privacy policy. Please read the privacy policy before divulging the above-mentioned personal information.{'\n\n'}On being prompted for Registration as a new user, you are required to provide basic information such as Name, age, phone number, email address, physical address, and geographical location.{'\n\n'}As a user willing to register and to use the services rendered by us you understand and agree that by availing the services we may directly or indirectly collect and store information regarding your access and use of our platform and your personal details. You agree that we may use such information for any purpose related to any use of the platform including but not limited to:{'\n\n'}i. Provide, troubleshoot and improving the performance of the platform;{'\n'}ii. verifying compliance with the terms and other conditions.{'\n'}iii. For internal purposes such as enhancing security of the Platform, auditing, testing, troubleshooting, data analysis and research conducted either indirectly/directly by Company;{'\n'}iv. To protect the users by preventing fraud and abuse and to protect the security of our merchants and the users.</Text>
 
-              <Text style={styles.termTitle}>3. Customer Responsibilities</Text>
-              <Text style={styles.termText}>• Provide accurate booking information.{'\n'}• Ensure reasonable access to the service location.{'\n'}• Keep required customer-provided resources available where applicable.{'\n'}• Inform Neatify about relevant service requirements or hazards.</Text>
+              <Text style={styles.termTitle}>3. Reason for collection of Information:</Text>
+              <Text style={styles.termText}>The Website / Platform is involved in rendering services relating to providing the required services by choosing from available cleaning persons THE NEATIFY TEAM vets carefully. The said cleaning persons may or may be on the regular rolls of THE NEATIFY TEAM. THE NEATIFY TEAM is not involved in any of the internal dealings between the users and any third party service links found on the website. The platform collects preferences of the users and provides personalized suggestions to the users based on their past service requests and browsing history. The site may track the IP address of a user’s computer and save certain information on their system in the form of cookies. A user has the option to accept or decline the cookies by modifying it on their browser.{'\n\n'}The information from users is collected for the following reasons:{'\n'}• Contact Number (One Time Password) to login securely, to deliver a customized experience and to maintain user sessions.{'\n'}• Country (To enhance the user experience by offering relevant information based on their geography){'\n'}• City (To enhance the user experience by offering relevant information based on their geography){'\n'}• To provide updates on the platform that suits the user’s needs{'\n'}• To enable compliance with appropriate laws- legal and regulatory{'\n'}• To maintain a database of our users and for our internal assessment.{'\n'}• To Create and manage user account{'\n'}• To Process service bookings{'\n'}• To Assign service professionals{'\n'}• To Provide customer support{'\n'}• To Improve app performance and service quality</Text>
 
-              <Text style={styles.termTitle}>4. Service Availability</Text>
-              <Text style={styles.termText}>Service availability depends on location, date, time slot, and our operational capacity.</Text>
+              <Text style={styles.termTitle}>4. Applicability of this Privacy policy:</Text>
+              <Text style={styles.termText}>The terms mentioned in this privacy policy herein shall apply to the users, who have visited the platform to browse with no intention of committing their information and the registered users who are willing to divulge their information to ensure continued support of a personalized nature from the platform. Clients may submit photos for promotional use (with consent), enhancing community engagement and the photos are governed by the Privacy policy and the users agree to the same before submitting such photos or videos for collaboration.</Text>
 
-              <Text style={styles.termTitle}>5. Pricing & Payment</Text>
-              <Text style={styles.termText}>Displayed prices correspond to the selected service/package and applicable add-ons. The final amount reflects the confirmed booking and any applied discounts.</Text>
+              <Text style={styles.termTitle}>5. Details of information is collected & shared:</Text>
+              <Text style={styles.termText}>The personal details / information that are given by the users like name, email address, mobile number, age, city and country of current residence, location, IP addresses are collected. The platform however, is not liable for any information compromised as a result of interaction of the users with any third-party sites which has been advertised / found in our Website / Platform.{'\n\n'}In the event that the users do not want THE NEATIFY TEAM to collect any information or intend to remove their details from the database of THE NEATIFY TEAM, there is an option to opt out by sending an email to the email address provided on the website.{'\n'}Information: That is collected from Registered Users: If you create and register an account with us, you are required to give us certain information during creation of your account. We ask all registered users to provide a name, email address, mobile number, age, city and country of current residence and other details.{'\n'}Information entered once by the users is by default stored in the database of the website to ensure seamless logging in process by the users. The users may opt out of the same.{'\n\n'}We may collect information of the user based on the users’ requirement from THE NEATIFY TEAM.  We shall share all the information as and when needed to you. We undertake not to share the same with any third parties exceeding the scope of engaging such third parties.{'\n\n'}THE NEATIFY TEAM may require to send a One-Time Password to users and collects data relating to geographical location of the users.{'\n\n'}THE NEATIFY TEAM does not collect, store or use any data relating to payment information like credit card or debit card details, UPI or other bank details.{'\n\n'}THE NEATIFY TEAM shall not sell or rent data to third parties in any manner.{'\n\n'}The users agree and understand that the cleaning persons engaged by THE NEATIFY TEAM may not be on the permanent rolls of the Company and ad hoc cleaning persons may be arranged in the event of high demand. Hence, THE NEATIFY TEAM shall be constrained to reveal the geographical location and phone number details of the users. The persons however shall be instructed with the privacy requirements and THE NEATIFY TEAM shall take utmost care to reasonable ensure the information so divulged shall not be used by the cleaning staff for purposes beyond the scope of the Privacy Policy.{'\n'}You agree that user information or any other information relating to use of the services may contain confidential and personal information.  You agree and undertake that all the Confidential or personal Information will remain the sole property of THE NEATIFY TEAM and that we will not use such Information for purposes beyond the scope of providing the services within the scope of this Privacy Policy.{'\n'}Please note that the information provided by the users is shared to third parties only to the extent as required.</Text>
 
-              <Text style={styles.termTitle}>6. Add-ons</Text>
-              <Text style={styles.termText}>Customers may select available add-ons where applicable. These additions may affect the final booking duration and amount.</Text>
+              <Text style={styles.termTitle}>6. Data Retention & Deletion</Text>
+              <Text style={styles.termText}>The user data collected by THE NEATIFY TEAM  - User data is retained only as long as necessary. Users may opt out of collection of cookies by THE NEATIFY TEAM during any time of their interaction. The users may also request for deletion of their account and personal information by sending an email to THE NEATIFY TEAM. Upon deletion, personal data will be removed unless retention is legally required</Text>
 
-              <Text style={styles.termTitle}>7. Cancellation & Rescheduling</Text>
-              <Text style={styles.termText}>Cancellation or rescheduling of bookings may be subject to the applicable policy shown by Neatify at the time of booking. Repeated last-minute cancellations may restrict future bookings.</Text>
+              <Text style={styles.termTitle}>7. Security Issues:</Text>
+              <Text style={styles.termText}>The Accuracy and Confidentiality of Your Account Information Is Your Responsibility: You are responsible for maintaining the secrecy and accuracy of your password, email address and other account information at all times. We recommend a strong password that you do not use with other services. We are not responsible for personal data transmitted to a third party as a result of incorrect details.{'\n'}THE NEATIFY TEAM shall take utmost precaution to ensure the data of the users is safe and implement reasonable administrative, technical, and physical safeguards to protect user data in compliance with applicable Indian data protection laws.</Text>
 
-              <Text style={styles.termTitle}>8. Service Access</Text>
-              <Text style={styles.termText}>The customer should provide reasonable access to the property or location at the scheduled time to allow our professionals to perform their duties.</Text>
-
-              <Text style={styles.termTitle}>9. Safety</Text>
-              <Text style={styles.termText}>Hazardous, unsafe, restricted, or unsuitable conditions at the property may affect our ability to perform a service. Professionals reserve the right to refuse service in unsafe conditions.</Text>
-
-              <Text style={styles.termTitle}>10. Service Quality</Text>
-              <Text style={styles.termText}>Neatify aims to provide professional cleaning services, but results can vary depending on the existing condition of surfaces, stains, and the property itself.</Text>
-
-              <Text style={styles.termTitle}>11. Communication</Text>
-              <Text style={styles.termText}>Neatify may communicate with the customer via SMS, WhatsApp, Email, or Push Notifications regarding booking, service status, schedule, or support.</Text>
-
-              <Text style={styles.termTitle}>12. Privacy</Text>
-              <Text style={styles.termText}>We respect your privacy. Your contact and location details are used strictly to facilitate service delivery and improve your experience on our platform.</Text>
-
-              <Text style={styles.termTitle}>13. Updates to Terms</Text>
-              <Text style={styles.termText}>Neatify may update its terms from time to time. The latest version will apply to future use and bookings on the platform.</Text>
+              <Text style={styles.termTitle}>8. Applicable Law & Jurisdiction</Text>
+              <Text style={styles.termText}>Please note that in case of any dispute with THE NEATIFY TEAM generally or specifically related to the privacy policy or the terms and conditions, belongs to exclusive jurisdiction of Courts at Hyderabad, India and is governed exclusively by Indian Laws.</Text>
               
               <View style={{ height: 30 }} />
             </ScrollView>

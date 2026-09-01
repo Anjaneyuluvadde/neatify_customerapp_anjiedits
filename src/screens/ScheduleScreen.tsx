@@ -22,6 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
+import LocationService from "../services/LocationService";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
@@ -479,45 +480,53 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
   // Pincode Serviceability Check
   const checkPincodeServiceable = async (pin: string) => {
+    console.log(`[SERVICEABILITY STEP 2] Pincode received: ${pin}`);
     const cleanedPin = pin.trim();
+
     if (cleanedPin.length !== 6) {
       setIsPincodeServiceable(false);
       setIsPincodeInArea(false);
       return;
     }
+
     try {
       setCheckingPincode(true);
+      console.log(`[SERVICEABILITY STEP 2] Checking hub_locations:`);
+      
       const { data, error } = await supabase
-        .from("neatify_service_areas")
-        .select("id, pincode")
-        .ilike("pincode", `%${cleanedPin}%`)
+        .from("hub_locations")
+        .select("id, hub_name, pincode, is_active")
+        .eq("pincode", cleanedPin)
+        .eq("is_active", true)
         .limit(1);
 
       if (error) {
-        console.log("⚠️ Pincode check DB/RLS error:", error.message);
-        setIsPincodeServiceable(true);
-        setIsPincodeInArea(true);
+        console.log(`[SERVICEABILITY STEP 2] Final: NOT_AVAILABLE`);
+        setIsPincodeServiceable(false);
+        setIsPincodeInArea(false);
         return;
       }
-      const inArea = !!(data && data.length > 0);
-      setIsPincodeInArea(inArea);
-      setIsPincodeServiceable(inArea && isHubCapacityAvailable);
-    } catch (err) {
-      setIsPincodeServiceable(true);
-      setIsPincodeInArea(true);
+
+      const available = Array.isArray(data) && data.length > 0;
+      setIsPincodeServiceable(available);
+      setIsPincodeInArea(available);
+
+      console.log(`[SERVICEABILITY STEP 2] Matching rows: ${data ? data.length : 0}`);
+      console.log(`[SERVICEABILITY STEP 2] Matching hub: ${available ? data[0].hub_name : 'null'}`);
+      console.log(`[SERVICEABILITY STEP 2] Final: ${available ? 'AVAILABLE' : 'NOT_AVAILABLE'}`);
+
+    } catch (err: any) {
+      console.log(`[SERVICEABILITY STEP 2] Final: NOT_AVAILABLE`);
+      setIsPincodeServiceable(false);
+      setIsPincodeInArea(false);
     } finally {
       setCheckingPincode(false);
     }
   };
 
   useEffect(() => {
-    const pinMatch = manualAddress.match(/\b(\d{6})\b/);
-    const pinToCheck = pincode.trim() || (pinMatch ? pinMatch[1] : "");
-    if (pinMatch && !pincode) {
-      setPincode(pinMatch[1]);
-    }
-    checkPincodeServiceable(pinToCheck);
-  }, [pincode, manualAddress]);
+    checkPincodeServiceable(pincode);
+  }, [pincode]);
 
   // Load Profile from Supabase
   const loadProfile = useCallback(async () => {
@@ -544,19 +553,18 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         phone: formatDisplayPhone(profileData.phone)
       };
       setProfile(cleanedProfile);
-      setPincode(profileData.pincode || "");
+      
+      const cachedLoc = await LocationService.getSelectedLocation();
+      const freshPin = cachedLoc?.postalCode || "";
 
-      if (profileData.address) {
-        const addressWithoutPincode = profileData.address
-          .replace(/\s*-\s*\d{6}\s*$/, "")
-          .trim();
-
-        setManualAddress(addressWithoutPincode);
-
-        handleManualGeocode(`${addressWithoutPincode}, ${profileData.pincode || ""}`);
-      } else {
-        setIsAddressSummaryMode(false);
+      setPincode(freshPin);
+      setManualAddress(cachedLoc?.fullAddress || "");
+      if (cachedLoc) {
+        setBookingLatitude(cachedLoc.latitude);
+        setBookingLongitude(cachedLoc.longitude);
       }
+      setIsAddressSummaryMode(true);
+      setHasUsedLocationFetch(true);
     } else {
       setIsAddressSummaryMode(false);
     }
@@ -951,35 +959,17 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
 
   useEffect(() => {
     const updateCategoryServiceability = async () => {
+      // We only resolve the hub name for contextual use if needed.
+      // We explicitly DO NOT override isPincodeServiceable based on category capacity, 
+      // ensuring availability is purely location-based.
       if (selectedServices && selectedServices.length > 0) {
-        const { hubName, isActive } = await resolveHubFromLocation(pincode, manualAddress);
-        if (!hubName || !isActive) {
-          setSelectedHubName(hubName || "");
-          setCategoryStaffCount(0);
-          setIsHubCapacityAvailable(false);
-          setIsPincodeServiceable(false);
-          if (pincode.trim().length === 6 && isPincodeInArea) {
-            setShowEmergencyModal(true);
-          }
-          return;
-        }
-
-        setSelectedHubName(hubName);
-        const count = await fetchHubCategoryStaffCount(hubName, selectedServices);
-        setCategoryStaffCount(count);
-        const hasStaff = count > 0;
-        setIsHubCapacityAvailable(hasStaff);
-        if (pincode.trim().length === 6) {
-          setIsPincodeServiceable(hasStaff);
-          if (!hasStaff && isPincodeInArea) {
-            setShowEmergencyModal(true);
-          }
-        }
+        const { hubName } = await resolveHubFromLocation(pincode, manualAddress);
+        setSelectedHubName(hubName || "");
       }
     };
 
     updateCategoryServiceability();
-  }, [selectedServices, pincode, manualAddress, fetchHubCategoryStaffCount, resolveHubFromLocation, isPincodeInArea]);
+  }, [selectedServices, pincode, manualAddress, resolveHubFromLocation]);
 
   // Compute total service duration in minutes
   const totalDurationMinutes = useMemo(() => {
@@ -2345,7 +2335,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                 marginBottom: 10
               }}
               onPress={() => {
-                Linking.openURL("tel:7617618567").catch(() => {});
+                Linking.openURL("tel:7617618567").catch(() => { });
               }}
             >
               <Ionicons name="call-outline" size={20} color="#FFF" />

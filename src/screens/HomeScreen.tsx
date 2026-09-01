@@ -27,6 +27,7 @@ import Header from "../components/Header";
 import HomeHero from "../components/HomeHero";
 import ServiceCard from "../components/ServiceCard";
 import WhyChooseUs from "../components/WhyChooseUs";
+import PromotionalBannerSlider, { PromotionalBanner } from "../components/PromotionalBannerSlider";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext"; // @ts-ignore
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
@@ -34,7 +35,8 @@ import { useNotification } from "../hooks/useNotification";
 import { supabase, SUPABASE_URL } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { MainCategory, Service } from "../types/service";
-import { setClaimedOffer } from "../utils/priceUtils";
+import { setClaimedOffer, getClaimedOffer, clearClaimedOffer } from "../utils/priceUtils";
+import LocationService from '../services/LocationService';
 
 const { width, height } = Dimensions.get("window");
 const SLIDER_HEIGHT = height * 0.25; // Increased height to reduce empty space
@@ -86,6 +88,7 @@ export default function HomeScreen({ navigation }: any) {
 
   // ✅ Hero banners state
   const [heroBanners, setHeroBanners] = useState<ImageSourcePropType[]>([]);
+  const [promotionalBanners, setPromotionalBanners] = useState<PromotionalBanner[]>([]);
 
   // ✅ Refs
   const sliderRef = useRef<FlatList>(null);
@@ -115,6 +118,13 @@ export default function HomeScreen({ navigation }: any) {
   // ✅ Signup 40% OFF Offer Popup state
   const [showSignupOfferPopup, setShowSignupOfferPopup] = useState(false);
   const [signupOfferInfo, setSignupOfferInfo] = useState<{ title: string; id?: string } | null>(null);
+
+  // ✅ Promo Banner state
+  const [activePromoBanner, setActivePromoBanner] = useState<PromotionalBanner | null>(null);
+  const [loadingPromoServices, setLoadingPromoServices] = useState(false);
+  const [showServiceSelectModal, setShowServiceSelectModal] = useState(false);
+  const [selectedPromoServiceId, setSelectedPromoServiceId] = useState<string | null>(null);
+  const [promoBannerServices, setPromoBannerServices] = useState<any[]>([]);
 
   const checkWelcomeReward = useCallback(async () => {
     try {
@@ -259,6 +269,111 @@ export default function HomeScreen({ navigation }: any) {
     // if (data && data.length > 0) setActiveMainCategory(data[0].id);
   }, []);
 
+  const handleBannerPress = useCallback(async (banner: PromotionalBanner) => {
+    console.log("[PROMO] Banner tapped");
+    console.log("[PROMO] Service scope:", banner.service_scope);
+    
+    if (!banner.offer_percentage || banner.offer_percentage <= 0) {
+      return;
+    }
+
+    try {
+      const existingClaim = await getClaimedOffer();
+      console.log("[PROMO] Existing claimed offer:", existingClaim);
+      
+      let isValidClaim = false;
+      if (existingClaim) {
+        if (!existingClaim.bannerId) {
+          // Legacy claim (e.g., welcome offer)
+          isValidClaim = true;
+        } else {
+          // Verify if banner still exists in active promotional banners
+          const stillActive = promotionalBanners.some(b => b.id === existingClaim.bannerId);
+          if (stillActive) {
+            isValidClaim = true;
+          } else {
+            console.log("[PROMO] Stale banner claim detected. Clearing...");
+            await clearClaimedOffer();
+          }
+        }
+      }
+      
+      if (isValidClaim) {
+        showToast("An offer is already claimed.", "info");
+        return;
+      }
+
+      if (banner.service_scope === "selected") {
+        setActivePromoBanner(banner);
+        setLoadingPromoServices(true);
+        setShowServiceSelectModal(true);
+        setSelectedPromoServiceId(null);
+
+        console.log("[PROMO] Fetching services for banner:", banner.id);
+        const { data: svcRels } = await supabase
+          .from("promotional_banner_services")
+          .select("service_id")
+          .eq("banner_id", banner.id);
+        
+        if (svcRels && svcRels.length > 0) {
+          const serviceIds = svcRels.map(r => r.service_id);
+          console.log("[PROMO] Promotional service IDs:", serviceIds);
+          const { data: svcData } = await supabase
+            .from("services")
+            .select("id, title")
+            .in("id", serviceIds);
+          
+          if (svcData) {
+            console.log("[PROMO] Services displayed:", svcData);
+            setPromoBannerServices(svcData);
+          }
+        }
+        setLoadingPromoServices(false);
+      } else {
+        const claimObject = {
+          bannerId: banner.id,
+          offerPercentage: banner.offer_percentage,
+          claimedAt: new Date().toISOString(),
+        };
+        console.log("[PROMO] Final claim:", claimObject);
+        await setClaimedOffer(claimObject);
+        showToast(`Offer Claimed! ${banner.offer_percentage}% discount is ready for your booking.`, "success");
+      }
+    } catch (e) {
+      console.error("Error claiming banner offer:", e);
+      showToast("Failed to claim offer. Please try again.", "error");
+    }
+  }, [showToast]);
+
+  const handleSelectedServiceClaim = async () => {
+    if (!selectedPromoServiceId || !activePromoBanner) return;
+    
+    const selectedSvc = promoBannerServices.find(s => s.id === selectedPromoServiceId);
+    if (!selectedSvc) return;
+
+    console.log("[PROMO] Selected service:", selectedSvc);
+
+    try {
+      console.log("[PROMO] Claiming selected service offer:", selectedSvc.title);
+      const claimObject = {
+        bannerId: activePromoBanner.id,
+        serviceId: selectedSvc.id,
+        serviceTitle: selectedSvc.title,
+        offerPercentage: activePromoBanner.offer_percentage ?? 0,
+        claimedAt: new Date().toISOString(),
+      };
+      
+      await setClaimedOffer(claimObject);
+      
+      setShowServiceSelectModal(false);
+      console.log("[PROMO] Claim successful");
+      showToast(`Offer Claimed! ${activePromoBanner.offer_percentage}% discount is ready for your booking.`, "success");
+    } catch (e) {
+      console.error("Error claiming selected service offer:", e);
+      showToast("Failed to claim offer. Please try again.", "error");
+    }
+  };
+
   const fetchHeroBanners = useCallback(async () => {
     const { data, error } = await supabase
       .from("hero_banners")
@@ -286,6 +401,137 @@ export default function HomeScreen({ navigation }: any) {
     }
     setHeroBanners(fallbackBanners);
   }, []);
+
+              const fetchPromotionalBanners = useCallback(async () => {
+      const { data, error } = await supabase
+        .from("promotional_banners")
+        .select("*")
+        .eq("is_active", true)
+        .order("display_order", { ascending: true });
+  
+      if (error) {
+        console.log("Promotional Banners error:", error);
+        return;
+      }
+
+      if (data) {
+        // --- Phase 2 Customer, Location, and Service Eligibility Check ---
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const userId = session?.user?.id;
+          
+          let bookingCount = 0;
+          if (userId) {
+            const { count, error: countError } = await supabase
+              .from("bookings")
+              .select("*", { count: "exact", head: true })
+              .eq("user_id", userId);
+              
+            if (!countError && count !== null) {
+              bookingCount = count;
+            }
+          }
+
+          let customerPincode: string | null = null;
+          let customerHubIds: string[] = [];
+          
+          try {
+            const locResult = await LocationService.getSelectedLocation();
+            if (locResult && locResult.postalCode) {
+              customerPincode = locResult.postalCode;
+            }
+            
+            if (customerPincode) {
+              const { data: hubData } = await supabase
+                .from("hub_locations")
+                .select("id")
+                .eq("pincode", customerPincode);
+                
+              if (hubData) {
+                customerHubIds = hubData.map(h => h.id);
+              }
+            }
+          } catch (e) {
+            console.log("Error resolving customer location:", e);
+          }
+
+          const { data: bannerLocations } = await supabase
+            .from("promotional_banner_locations")
+            .select("banner_id, location_id");
+
+          const bannerLocMap: Record<string, string[]> = {};
+          if (bannerLocations) {
+            bannerLocations.forEach(bl => {
+              if (!bannerLocMap[bl.banner_id]) {
+                bannerLocMap[bl.banner_id] = [];
+              }
+              bannerLocMap[bl.banner_id].push(bl.location_id);
+            });
+          }
+
+          // Fetch service scopes
+          const { data: bannerServices } = await supabase
+            .from("promotional_banner_services")
+            .select("banner_id, service_id");
+          
+          const bannerSvcMap: Record<string, string[]> = {};
+          if (bannerServices) {
+            bannerServices.forEach(bs => {
+              if (!bannerSvcMap[bs.banner_id]) {
+                bannerSvcMap[bs.banner_id] = [];
+              }
+              bannerSvcMap[bs.banner_id].push(bs.service_id);
+            });
+          }
+
+          // HomeScreen does NOT have a specific current service context active.
+          const currentServiceId: string | null = null;
+
+          console.log("=== BANNER ELIGIBILITY CHECK ===");
+          console.log("User ID:", userId);
+          console.log("Booking Count:", bookingCount);
+          console.log("Customer Pincode:", customerPincode);
+          console.log("Resolved Hub IDs:", customerHubIds);
+          console.log("Current Service ID:", currentServiceId);
+
+          const eligibleBanners = data.filter(banner => {
+            // 1. Customer Check
+            let customerEligible = false;
+            if (!banner.customer_type || banner.customer_type === "everyone") {
+              customerEligible = true;
+            } else if (banner.customer_type === "new") {
+              customerEligible = bookingCount === 0;
+            } else if (banner.customer_type === "existing") {
+              customerEligible = bookingCount > 0;
+            }
+
+            // 2. Location Check
+            let locationEligible = false;
+            if (!banner.pincode_scope || banner.pincode_scope === "all") {
+              locationEligible = true;
+            } else if (banner.pincode_scope === "selected") {
+              const allowedLocs = bannerLocMap[banner.id] || [];
+              locationEligible = customerHubIds.some(hubId => allowedLocs.includes(hubId));
+            }
+
+            // 3. Service Check is deferred to the modal for banner visibility on HomeScreen
+            // The banner should be visible as long as customer and location match
+            let serviceEligible = true; 
+
+            const finalEligible = customerEligible && locationEligible;
+
+            console.log(`Banner ${banner.id} | CustType: ${banner.customer_type} (${customerEligible}) | LocScope: ${banner.pincode_scope} (${locationEligible}) | Final: ${finalEligible} `);
+            return finalEligible;
+          });
+          
+          console.log("================================");
+          setPromotionalBanners(eligibleBanners);
+        } catch (err) {
+          console.error("Error evaluating banner eligibility:", err);
+          setPromotionalBanners(data);
+        }
+      }
+    }, []);
 
   const fetchPopups = useCallback(async () => {
     if (hasShownPopupThisSession) return;
@@ -324,7 +570,7 @@ export default function HomeScreen({ navigation }: any) {
       const loadAll = async () => {
         try {
           await Promise.all([fetchMainCategories(), fetchServices()]);
-          await Promise.all([fetchHeroBanners(), fetchPopups()]);
+          await Promise.all([fetchHeroBanners(), fetchPromotionalBanners(), fetchPopups()]);
           await checkWelcomeReward();
           await checkSignupOfferReward();
         } catch (err) {
@@ -340,12 +586,12 @@ export default function HomeScreen({ navigation }: any) {
       });
 
       return () => interactionPromise.cancel();
-    }, [fetchServices, fetchHeroBanners, fetchPopups, fetchMainCategories, checkWelcomeReward, checkSignupOfferReward])
+    }, [fetchServices, fetchHeroBanners, fetchPromotionalBanners, fetchPopups, fetchMainCategories, checkWelcomeReward, checkSignupOfferReward])
   );
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchMainCategories(), fetchServices(), fetchHeroBanners(), fetchPopups()]);
+    await Promise.all([fetchMainCategories(), fetchServices(), fetchHeroBanners(), fetchPromotionalBanners(), fetchPopups()]);
     setRefreshing(false);
   };
 
@@ -660,36 +906,7 @@ export default function HomeScreen({ navigation }: any) {
           <HomeHero onBookNow={navigateToExpressCleaning} />
 
           {/* New User Promo Banner (Matching Website Image 1) */}
-          <View style={promoBannerStyles.container}>
-            <View style={promoBannerStyles.leftContent}>
-              <Text style={promoBannerStyles.discountText}>40% OFF</Text>
-              <Text style={promoBannerStyles.subTitleText}>On Your First Service</Text>
-              <Text style={promoBannerStyles.descriptionText}>
-                Book now and enjoy professional{"\n"}cleaning at a great price!
-              </Text>
-
-              <TouchableOpacity
-                style={promoBannerStyles.claimBtn}
-                activeOpacity={0.8}
-                onPress={() => navigation.navigate("Login", { isRegister: true })}
-              >
-                <Text style={promoBannerStyles.claimBtnText}>Claim 40% OFF  <Ionicons name="arrow-forward" size={12} color="#0F172A" /></Text>
-              </TouchableOpacity>
-            </View>
-
-            <Image
-              source={require("../../assets/images/bannerimg.png")}
-              style={promoBannerStyles.bannerImage}
-              contentFit="contain"
-            />
-
-            {/* LIMITED TIME OFFER Tag */}
-            <View style={promoBannerStyles.tagContainer}>
-              <Text style={promoBannerStyles.tagText}>LIMITED</Text>
-              <Text style={promoBannerStyles.tagText}>TIME</Text>
-              <Text style={promoBannerStyles.tagText}>OFFER</Text>
-            </View>
-          </View>
+          <PromotionalBannerSlider banners={promotionalBanners} theme={theme} onBannerPress={handleBannerPress} />
 
 
           {/* 3. Main Category Grid (Explore all services) */}
@@ -917,6 +1134,95 @@ export default function HomeScreen({ navigation }: any) {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Promotional Banner Selected Service Modal */}
+      <Modal visible={showServiceSelectModal} transparent animationType="slide" onRequestClose={() => setShowServiceSelectModal(false)}>
+        <Pressable style={popupStyles.overlay} onPress={() => setShowServiceSelectModal(false)}>
+          <Pressable onPress={(e) => e.stopPropagation()} style={[sheetStyles.sheetContainer, { backgroundColor: theme.background, position: 'absolute', bottom: 0, width: '100%', padding: 24, borderTopLeftRadius: 24, borderTopRightRadius: 24 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: theme.text }}>Special Offer</Text>
+              <Pressable onPress={() => setShowServiceSelectModal(false)} style={[popupStyles.iconCloseBtn, { backgroundColor: theme.surfaceVariant || "#F0F0F0" }]}>
+                <Ionicons name="close" size={20} color={theme.text} />
+              </Pressable>
+            </View>
+
+            <Text style={{ fontSize: 14, color: theme.textLight, marginBottom: 20 }}>Select a service to use this offer. Only ONE service can be selected.</Text>
+
+            {loadingPromoServices ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <ActivityIndicator size="large" color={theme.primary} />
+                <Text style={{ marginTop: 12, color: theme.textLight }}>Loading services...</Text>
+              </View>
+            ) : promoBannerServices.length === 0 ? (
+              <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                <Text style={{ color: theme.textLight }}>No services available for this offer.</Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: height * 0.4, marginBottom: 20 }}>
+                {promoBannerServices.map((svc) => {
+                  const isSelected = selectedPromoServiceId === svc.id;
+                  return (
+                    <TouchableOpacity
+                      key={svc.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 14,
+                        paddingHorizontal: 16,
+                        borderWidth: 1,
+                        borderColor: isSelected ? theme.primary : (theme.border || "#E2E8F0"),
+                        borderRadius: 12,
+                        marginBottom: 10,
+                        backgroundColor: isSelected ? theme.primary + "10" : "transparent"
+                      }}
+                      onPress={() => setSelectedPromoServiceId(svc.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: isSelected ? theme.primary : "#CBD5E1",
+                        marginRight: 12,
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                      }}>
+                        {isSelected && <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.primary }} />}
+                      </View>
+                      <Text style={{ fontSize: 15, fontWeight: isSelected ? '700' : '500', color: theme.text }}>{svc.title}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 'auto' }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border || "#E2E8F0", alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => setShowServiceSelectModal(false)}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textLight }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  flex: 1,
+                  paddingVertical: 14,
+                  borderRadius: 14,
+                  backgroundColor: selectedPromoServiceId ? theme.primary : "#E2E8F0",
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                onPress={handleSelectedServiceClaim}
+                disabled={!selectedPromoServiceId || loadingPromoServices}
+              >
+                <Text style={{ fontSize: 15, fontWeight: '700', color: selectedPromoServiceId ? "#FFFFFF" : "#94A3B8" }}>Claim Offer</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Floating Go Up Button */}
 
       {showGoUp && (
@@ -1329,3 +1635,14 @@ const promoBannerStyles = StyleSheet.create({
     lineHeight: 9,
   }
 });
+
+
+
+
+
+
+
+
+
+
+
