@@ -22,7 +22,6 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
-import LocationService from "../services/LocationService";
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
 import { useBottomNavPadding } from "../hooks/useBottomNavPadding";
@@ -32,6 +31,7 @@ import {
   RootStackParamList,
   SelectedService,
 } from "../navigation/AppNavigator";
+import LocationService from "../services/LocationService";
 import { COLORS } from "../theme/colors";
 import { Service } from "../types/service";
 
@@ -492,7 +492,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
     try {
       setCheckingPincode(true);
       console.log(`[SERVICEABILITY STEP 2] Checking hub_locations:`);
-      
+
       const { data, error } = await supabase
         .from("hub_locations")
         .select("id, hub_name, pincode, is_active")
@@ -553,7 +553,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
         phone: formatDisplayPhone(profileData.phone)
       };
       setProfile(cleanedProfile);
-      
+
       const cachedLoc = await LocationService.getSelectedLocation();
       const freshPin = cachedLoc?.postalCode || "";
 

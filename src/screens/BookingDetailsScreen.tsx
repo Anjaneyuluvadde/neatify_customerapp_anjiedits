@@ -25,6 +25,7 @@ export default function BookingDetailsScreen({ route }: Props) {
   const { theme, isDark } = useTheme();
   const { showAlert, showToast } = useNotification();
   const [booking, setBooking] = useState(initialBooking);
+  const normalizedWorkStatus = String(booking?.work_status || "").trim().toUpperCase();
   const [isEligibleToCancel, setIsEligibleToCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
@@ -316,7 +317,7 @@ export default function BookingDetailsScreen({ route }: Props) {
   useEffect(() => {
     const checkEligibility = () => {
       let clientEligible = true;
-      if (['COMPLETED', 'CANCELLED'].includes(booking.work_status)) {
+      if (['COMPLETED', 'CANCELLED'].includes(normalizedWorkStatus)) {
         clientEligible = false;
       }
       setIsEligibleToCancel(clientEligible);
@@ -429,7 +430,7 @@ export default function BookingDetailsScreen({ route }: Props) {
 
   // Fetch existing review
   useEffect(() => {
-    if (booking.work_status === "COMPLETED") {
+    if (normalizedWorkStatus === "COMPLETED") {
       fetchReview();
     }
   }, [booking.id, booking.work_status]);
@@ -596,7 +597,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         </View>
 
         {/* CANCELLATION WARNING BANNER */}
-        {diffHours <= 6 && diffHours > 0 && !['CANCELLED', 'COMPLETED'].includes(booking.work_status) && (
+        {diffHours <= 6 && diffHours > 0 && !['CANCELLED', 'COMPLETED'].includes(normalizedWorkStatus) && (
           <View style={styles.warningBanner}>
             <Ionicons name="alert-circle" size={18} color="#ef4444" />
             <Text style={styles.warningText}>
@@ -655,7 +656,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         </View>
 
         {/* STAFF ASSIGNMENT - Only show for non-completed bookings */}
-        {booking.work_status !== "COMPLETED" && booking.work_status !== "CANCELLED" && booking.payment_status !== "failed" && (
+        {normalizedWorkStatus !== "COMPLETED" && normalizedWorkStatus !== "CANCELLED" && booking.payment_status !== "failed" && (
           <>
             <Text style={[styles.section, { color: theme.textLight }]}>{t("bookingDetails.staffAssignment")}</Text>
             <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
@@ -729,7 +730,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         )}
 
         {/* CANCEL BUTTON */}
-        {booking.work_status !== 'CANCELLED' && booking.work_status !== 'COMPLETED' && booking.payment_status !== 'failed' && booking.work_status !== 'PAYMENT FAILED' ? (
+        {normalizedWorkStatus !== 'CANCELLED' && normalizedWorkStatus !== 'COMPLETED' && booking.payment_status !== 'failed' && normalizedWorkStatus !== 'PAYMENT FAILED' ? (
           <View>
             <TouchableOpacity
               style={[
@@ -776,7 +777,7 @@ export default function BookingDetailsScreen({ route }: Props) {
         )}
 
         {/* REVIEW SECTION (Only if Completed) */}
-        {booking.work_status === "COMPLETED" && (
+        {normalizedWorkStatus === "COMPLETED" && (
           <View style={[styles.reviewContainer, { backgroundColor: theme.background }]}>
             <Text style={[styles.section, { color: theme.textLight }]}>{t("serviceDetail.reviews")}</Text>
             <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
@@ -822,18 +823,18 @@ export default function BookingDetailsScreen({ route }: Props) {
         )}
 
         {/* SERVICE CHECKLIST */}
-        {booking.work_status !== "CANCELLED" && (
+        {normalizedWorkStatus !== "CANCELLED" && (
           <View style={{ marginBottom: 20 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <Text style={[styles.section, { color: theme.text, marginBottom: 0, marginTop: 0 }]}>Service Checklist</Text>
-              {booking.work_status === "COMPLETED" && (
+              {normalizedWorkStatus === "COMPLETED" && (
                 <Text style={{ fontSize: 14, fontWeight: '700', color: isDark ? "#4ade80" : "#16a34a" }}>
                   {checklistProgress} / {checklistItems.length} completed
                 </Text>
               )}
             </View>
 
-            {booking.work_status !== "COMPLETED" ? (
+            {normalizedWorkStatus !== "COMPLETED" ? (
               <View style={{
                 backgroundColor: theme.surfaceVariant,
                 padding: 24,

@@ -46,15 +46,8 @@ export default function ServiceEquipmentSection({ equipmentData }: ServiceEquipm
               elevation: 1,
             }}
           >
-            <View
-              style={{
-                backgroundColor: isDark ? "rgba(255,201,40,0.1)" : "#FDFCE8",
-                padding: 12,
-                borderRadius: 12,
-                marginBottom: 8,
-              }}
-            >
-              <MaterialCommunityIcons name={tool.icon as any} size={28} color={COLORS.saffron} />
+            <View style={{ marginBottom: 8 }}>
+              <MaterialCommunityIcons name={tool.icon as any} size={28} color={theme.text} />
             </View>
             <Text style={{ fontSize: 14, fontWeight: "600", color: theme.text, textAlign: "center" }}>
               {tool.name}

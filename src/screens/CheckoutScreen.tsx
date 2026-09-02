@@ -143,7 +143,7 @@ export default function CheckoutScreen({ route }: Props) {
   const [policies, setPolicies] = useState<Policies | null>(null);
 
   // ✅ Coupon state
-  const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage?: number; discount_amount?: number } | null>(null);
+  const [coupon, setCoupon] = useState<{ id: string; coupon_code: string; discount_percentage?: number; discount_amount?: number; source?: "MANUAL_COUPON" | "PROMOTIONAL_BANNER" | "SERVICE_DISCOUNT" | "NEW_USER" | "GENERIC_OFFER" | "MANUAL_ENTRY" } | null>(null);
   const [couponApplied, setCouponApplied] = useState(false);
   const [couponDiscount, setCouponDiscount] = useState(0);
 
@@ -197,6 +197,11 @@ export default function CheckoutScreen({ route }: Props) {
       const claimed = await getClaimedOffer();
 
       if (claimed) {
+        console.log("[COUPON STEP 2] Claimed offer:", claimed);
+        console.log("[COUPON STEP 2] Claim type:", claimed.type);
+
+        let isValidClaim = false;
+
         if (claimed.serviceId || claimed.serviceTitle) {
           const matchesService = checkoutServices.some((s) => {
             if (claimed.serviceId && s.id === claimed.serviceId) return true;
@@ -211,23 +216,106 @@ export default function CheckoutScreen({ route }: Props) {
           });
 
           if (!matchesService) {
-            console.log("ℹ️ 40% Welcome Offer is restricted to a different service. Discount not applied.");
-            return;
+            console.log("ℹ️ Offer is restricted to a different service. Discount not applied.");
+          } else {
+            isValidClaim = true;
           }
+        } else {
+          isValidClaim = true;
         }
 
-        const pct = claimed.offerPercentage || 40;
-        if (!isMounted) return;
-        setCoupon({
-          id: "claimed_new_user",
-          coupon_code: `NEW${pct}_OFFER`,
-          discount_percentage: pct,
-          discount_amount: 0,
-        });
-        setCouponDiscount(pct);
-        setCouponApplied(true);
-        setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off for ${claimed.serviceTitle || "selected service"}` });
-        return;
+        if (isValidClaim) {
+          const pct = claimed.offerPercentage || 40;
+
+          if (claimed.type === "NEW_USER") {
+            const { data: { session } } = await supabase.auth.getSession();
+            let bookingCount = 0;
+            if (session?.user) {
+              const { count } = await supabase
+                .from('bookings')
+                .select('*', { count: 'exact', head: true })
+                .eq('user_id', session.user.id);
+              bookingCount = count || 0;
+            }
+            
+            console.log("[COUPON STEP 2] Booking count:", bookingCount);
+            if (bookingCount > 0) {
+              console.log("[COUPON STEP 2] Eligibility: EXISTING USER. Rejecting NEW_USER offer.");
+            } else {
+              console.log("[COUPON STEP 2] Eligibility: NEW USER. Applying offer.");
+              if (!isMounted) return;
+              setCoupon({
+                id: "claimed_new_user",
+                coupon_code: `NEW${pct}_OFFER`,
+                discount_percentage: pct,
+                discount_amount: 0,
+                source: "NEW_USER",
+              });
+              setCouponDiscount(pct);
+              setCouponApplied(true);
+              setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off for ${claimed.serviceTitle || "selected service"}` });
+              console.log("[COUPON STEP 2] Coupon applied: true");
+              console.log(`[COUPON STEP 2] Final coupon code: NEW${pct}_OFFER`);
+              return;
+            }
+          } else if (claimed.type === "PROMOTIONAL_BANNER") {
+            console.log("[COUPON STEP 8] Eligibility: PROMOTIONAL_BANNER. Applying exact banner offer.");
+
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user && claimed.bannerId) {
+              const { count } = await supabase
+                .from("bookings")
+                .select("*", { count: "exact", head: true })
+                .eq("user_id", session.user.id)
+                .eq("promotional_banner_id", claimed.bannerId)
+                .eq("payment_status", "paid")
+                .eq("payment_verified", true);
+
+              if (count && count > 0) {
+                console.log("[COUPON STEP 8] Offer already used. Rejecting banner claim.");
+                await clearClaimedOffer();
+                return;
+              }
+            }
+
+            if (!isMounted) return;
+            const promoCode = claimed.bannerId 
+              ? `PROMO_${claimed.bannerId.substring(0, 8).toUpperCase()}_${pct}OFF`
+              : `PROMO_${pct}OFF`;
+
+            setCoupon({
+              id: claimed.bannerId || "claimed_promo_banner",
+              coupon_code: promoCode,
+              discount_percentage: pct,
+              discount_amount: 0,
+              source: "PROMOTIONAL_BANNER",
+            });
+            setCouponDiscount(pct);
+            setCouponApplied(true);
+            setCouponStatus({ type: 'success', message: `Promotional banner applied! ${pct}% off` });
+            console.log(`[COUPON STEP 8] Final coupon: ${promoCode}`);
+            return;
+          } else if (claimed.type === "GENERIC_OFFER") {
+            console.log("[COUPON STEP 2] Eligibility: GENERIC_OFFER. Applying offer.");
+            if (!isMounted) return;
+            const finalCode = `PROMO_${pct}OFF`;
+            setCoupon({
+              id: "claimed_generic_offer",
+              coupon_code: finalCode,
+              discount_percentage: pct,
+              discount_amount: claimed.offerPrice || 0,
+              source: "GENERIC_OFFER",
+            });
+            setCouponDiscount(pct);
+            setCouponApplied(true);
+            setCouponStatus({ type: 'success', message: `Coupon applied! ${pct}% off for ${claimed.serviceTitle || "selected service"}` });
+            console.log("[COUPON STEP 2] Coupon applied: true");
+            console.log(`[COUPON STEP 2] Final coupon code: ${finalCode}`);
+            return;
+          } else {
+            console.log("[COUPON STEP 2] Eligibility: LEGACY CLAIM (type undefined). Ignoring.");
+          }
+        }
       }
 
       // If no claimed offer, check if any service in checkout has discount_percent > 0 (e.g. 40% OFF)
@@ -240,6 +328,7 @@ export default function CheckoutScreen({ route }: Props) {
           coupon_code: serviceWithDiscount.discount_label ? String(serviceWithDiscount.discount_label).toUpperCase().replace(/\s+/g, '') : `OFFER_${pct}%`,
           discount_percentage: pct,
           discount_amount: 0,
+          source: "SERVICE_DISCOUNT",
         });
         setCouponDiscount(pct);
         setCouponApplied(true);
@@ -371,13 +460,6 @@ export default function CheckoutScreen({ route }: Props) {
   /* ================= FETCH COUPON ================= */
 
   const fetchUserCoupon = async (phone: string) => {
-    // Prevent overwriting if a session-claimed offer is present
-    const claimed = await getClaimedOffer();
-    if (claimed) {
-      console.log("ℹ️ Skipping DB coupon fetch because a claimed offer exists.");
-      return;
-    }
-
     if (!phone) return;
 
     const userPhone10 = formatDisplayPhone(phone);
@@ -401,19 +483,44 @@ export default function CheckoutScreen({ route }: Props) {
       return;
     }
 
-    // ✅ STRICT CHECK: Only show if is_used is NOT true (unused)
-    if (couponData && !couponData.is_used) {
-      console.log("✅ Valid unused coupon found:", couponData.coupon_code);
-      setCoupon({
-        id: couponData.id,
-        coupon_code: couponData.coupon_code,
-        discount_percentage: couponData.discount_percentage || couponData.discount_p || 0,
-        discount_amount: couponData.discount_amount || 0
-      });
-    } else {
-      console.log("ℹ️ Coupon not shown: either not found or already used.");
-      setCoupon(null);
-    }
+    setCoupon((prev) => {
+      console.log("[COUPON STEP 5] Existing coupon before fetchUserCoupon:", prev ? prev.coupon_code : "none");
+
+      if (prev) {
+        if (couponData && !couponData.is_used) {
+          console.log("[COUPON STEP 5] Manual coupon found:", couponData.coupon_code);
+        } else {
+          console.log("[COUPON STEP 5] Manual coupon not found");
+        }
+        console.log("[COUPON STEP 5] Preserving existing claimed offer coupon:", prev.coupon_code);
+        console.log("[COUPON STEP 5] Final coupon state:", prev.coupon_code);
+        return prev;
+      }
+
+      if (couponData && !couponData.is_used) {
+        console.log("✅ Valid unused coupon found:", couponData.coupon_code);
+        console.log("[COUPON STEP 5] Final coupon state:", couponData.coupon_code);
+        
+        // Fix for manual coupons: ensure they actually apply the discount
+        setTimeout(() => {
+          const discountPct = couponData.discount_percentage || couponData.discount_p || 0;
+          setCouponDiscount(discountPct);
+          setCouponApplied(true);
+        }, 0);
+
+        return {
+          id: couponData.id,
+          coupon_code: couponData.coupon_code,
+          discount_percentage: couponData.discount_percentage || couponData.discount_p || 0,
+          discount_amount: couponData.discount_amount || 0,
+          source: "MANUAL_COUPON"
+        };
+      } else {
+        console.log("[COUPON STEP 5] Manual coupon not found");
+        console.log("[COUPON STEP 5] Final coupon state: none");
+        return null;
+      }
+    });
   };
 
   useEffect(() => {
@@ -642,7 +749,8 @@ export default function CheckoutScreen({ route }: Props) {
             id: data.id,
             coupon_code: data.coupon_code,
             discount_percentage: data.discount_percentage || data.discount_p || 0,
-            discount_amount: data.discount_amount || 0
+            discount_amount: data.discount_amount || 0,
+            source: "MANUAL_ENTRY"
           });
           const discountPct = data.discount_percentage || data.discount_p || 0;
           setCouponDiscount(discountPct);
@@ -875,6 +983,14 @@ export default function CheckoutScreen({ route }: Props) {
     try {
       /* ================= 1️⃣ CREATE BOOKING (PENDING) ================= */
 
+      let promotionalBannerId = null;
+      if (couponApplied && coupon && coupon.source === "PROMOTIONAL_BANNER") {
+        const claimed = await getClaimedOffer();
+        if (claimed && claimed.bannerId) {
+          promotionalBannerId = claimed.bannerId;
+        }
+      }
+
       const { data: bookingData, error: insertError } = await supabase
         .from("bookings")
         .insert([
@@ -904,6 +1020,8 @@ export default function CheckoutScreen({ route }: Props) {
                 ? coupon.discount_amount
                 : Number((((totalOriginalPrice > 0 ? totalOriginalPrice : totalPrice) * couponDiscount) / 100).toFixed(2)))
               : 0,
+            
+            promotional_banner_id: promotionalBannerId,
           }
         ])
         .select("id")
@@ -974,7 +1092,7 @@ export default function CheckoutScreen({ route }: Props) {
         .eq("id", bookingId);
 
       // ✅ Mark coupon as used (if applied)
-      if (couponApplied && coupon && coupon.id !== "claimed_new_user") {
+      if (couponApplied && coupon && (coupon.source === "MANUAL_COUPON" || coupon.source === "MANUAL_ENTRY")) {
         await supabase
           .from("coupons")
           .update({ is_used: true })

@@ -80,12 +80,18 @@ export default function MyBookingsScreen() {
   /* ================= FILTERS ================= */
 
   const currentBookings = useMemo(
-    () => bookings.filter((b) => b.work_status !== "COMPLETED"),
+    () => bookings.filter((b) => {
+      const normalizedWorkStatus = String(b.work_status || "").trim().toUpperCase();
+      return normalizedWorkStatus !== "COMPLETED";
+    }),
     [bookings],
   );
 
   const completedBookings = useMemo(
-    () => bookings.filter((b) => b.work_status === "COMPLETED"),
+    () => bookings.filter((b) => {
+      const normalizedWorkStatus = String(b.work_status || "").trim().toUpperCase();
+      return normalizedWorkStatus === "COMPLETED";
+    }),
     [bookings],
   );
 
@@ -173,18 +179,20 @@ export default function MyBookingsScreen() {
                   {t(item.emptyKey)}
                 </Text>
               }
-              renderItem={({ item: b }) => (
+              renderItem={({ item: b }) => {
+                const normalizedWorkStatus = String(b.work_status || "").trim().toUpperCase();
+                return (
                 <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
                   <View style={styles.cardHeader}>
                     <Text style={[styles.name, { color: theme.text }]}>{b.customer_name}</Text>
                     <View
                       style={[
                         styles.statusBadge,
-                        b.work_status === "COMPLETED"
+                        normalizedWorkStatus === "COMPLETED"
                           ? styles.completed
-                          : b.work_status === "CANCELLED"
+                          : normalizedWorkStatus === "CANCELLED"
                             ? styles.cancelled
-                            : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
+                            : (b.payment_status === "failed" || normalizedWorkStatus === "PAYMENT FAILED")
                               ? styles.paymentFailed
                               : b.assigned_staff_email
                                 ? styles.assigned
@@ -192,11 +200,11 @@ export default function MyBookingsScreen() {
                       ]}
                     >
                       <Text style={styles.statusText}>
-                        {b.work_status === "COMPLETED"
+                        {normalizedWorkStatus === "COMPLETED"
                           ? t("bookings.status.completed")
-                          : b.work_status === "CANCELLED"
+                          : normalizedWorkStatus === "CANCELLED"
                             ? t("bookings.status.cancelled")
-                            : (b.payment_status === "failed" || b.work_status === "PAYMENT FAILED")
+                            : (b.payment_status === "failed" || normalizedWorkStatus === "PAYMENT FAILED")
                               ? "PAYMENT FAILED"
                               : b.assigned_staff_email
                                 ? t("bookings.status.assigned")
@@ -215,7 +223,8 @@ export default function MyBookingsScreen() {
                     <Text style={[styles.viewText, { color: isDark ? theme.background : "#000" }]}>{t("bookings.view")}</Text>
                   </Pressable>
                 </View>
-              )}
+                );
+              }}
             />
           </View>
         )}

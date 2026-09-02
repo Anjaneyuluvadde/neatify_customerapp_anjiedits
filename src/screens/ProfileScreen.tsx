@@ -165,9 +165,12 @@ export default function ProfileScreen() {
 
         setReferralCode(currentCode);
 
+        const dbEmail = data.email || user.email || "";
+        const finalEmail = dbEmail.includes("@phone.neatify.app") ? "" : dbEmail;
+
         setFormData({
           full_name: data.full_name || "",
-          email: data.email || user.email || "",
+          email: finalEmail,
           phone: data.phone || "",
           address: data.address || "",
           pincode: data.pincode || "",
@@ -188,9 +191,11 @@ export default function ProfileScreen() {
           setWalletBalance(0);
         }
       } else {
+        const fallbackEmail = user.email || "";
+        const finalFallback = fallbackEmail.includes("@phone.neatify.app") ? "" : fallbackEmail;
         setFormData((p) => ({
           ...p,
-          email: user.email || "",
+          email: finalFallback,
         }));
       }
     } catch {

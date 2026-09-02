@@ -929,8 +929,8 @@ export default function ServiceDetailScreen({ route }: Props) {
               marginBottom: 32
             }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 10, borderRadius: 10, marginRight: 12 }}>
-                  <Ionicons name="water" size={22} color="#0EA5E9" />
+                <View style={{ marginRight: 12 }}>
+                  <MaterialCommunityIcons name="bucket-outline" size={28} color={theme.text} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Bucket & Water</Text>
@@ -938,8 +938,8 @@ export default function ServiceDetailScreen({ route }: Props) {
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-                <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 10, borderRadius: 10, marginRight: 12 }}>
-                  <Ionicons name="flash" size={22} color="#EAB308" />
+                <View style={{ marginRight: 12 }}>
+                  <MaterialCommunityIcons name="power-plug-outline" size={28} color={theme.text} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Power Point</Text>
@@ -947,8 +947,8 @@ export default function ServiceDetailScreen({ route }: Props) {
                 </View>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <View style={{ backgroundColor: isDark ? 'rgba(255,201,40,0.1)' : '#FDFCE8', padding: 10, borderRadius: 10, marginRight: 12 }}>
-                  <Ionicons name="podium" size={22} color="#F97316" />
+                <View style={{ marginRight: 12 }}>
+                  <MaterialCommunityIcons name="ladder" size={28} color={theme.text} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text }}>Ladder / Stool</Text>

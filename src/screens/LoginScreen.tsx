@@ -441,7 +441,7 @@ export default function LoginScreen(props: any) {
         supabase.from("wallet").upsert({ user_id: authUser.id, balance: 0 })
       ]);
 
-      await setClaimedOffer({ serviceId: selectedServiceId, serviceTitle: selectedServiceTitle, offerPercentage: 40, claimedAt: new Date().toISOString() });
+      await setClaimedOffer({ type: "NEW_USER", serviceId: selectedServiceId, serviceTitle: selectedServiceTitle, offerPercentage: 40, claimedAt: new Date().toISOString() });
 
       if (referrerId) {
         await supabase.from("referrals").insert({ referrer_id: referrerId, referred_user_id: authUser.id, status: 'pending', reward_amount: 50 });

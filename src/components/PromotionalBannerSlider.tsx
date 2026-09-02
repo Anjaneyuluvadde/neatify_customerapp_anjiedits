@@ -7,6 +7,8 @@ const { width } = Dimensions.get("window");
 export interface PromotionalBanner {
   offer_percentage?: number;
   service_scope?: string;
+  customer_type?: string;
+  pincode_scope?: string;
   id: string;
   image_url: string;
   is_active: boolean;

@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export type ClaimedOffer = {
+  type?: "NEW_USER" | "GENERIC_OFFER" | "PROMOTIONAL_BANNER";
   bannerId?: string | null;
   serviceId?: string | null;
   serviceTitle?: string | null;

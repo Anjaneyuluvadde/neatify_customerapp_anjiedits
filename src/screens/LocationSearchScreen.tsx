@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, TextInput, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 import { useTheme } from '../context/ThemeContext';
-import { COLORS } from '../theme/colors';
 import { supabase } from '../lib/supabase';
 import LocationService, { LocationResult } from '../services/LocationService';
+import { COLORS } from '../theme/colors';
 
 export default function LocationSearchScreen() {
   const navigation = useNavigation<any>();
@@ -16,9 +16,9 @@ export default function LocationSearchScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Location.LocationGeocodedLocation[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  
+
   const [savedProfile, setSavedProfile] = useState<{ address: string | null } | null>(null);
-  
+
   const [isFetchingCurrent, setIsFetchingCurrent] = useState(false);
   const [fetchedLocation, setFetchedLocation] = useState<LocationResult | null>(null);
 
@@ -42,6 +42,7 @@ export default function LocationSearchScreen() {
 
   const handleSearch = async (text: string) => {
     setSearchQuery(text);
+    console.log(`[LOCATION SEARCH] Search query: ${text}`);
     if (text.length > 2) {
       setIsSearching(true);
       try {
@@ -58,6 +59,8 @@ export default function LocationSearchScreen() {
   };
 
   const selectSearchResult = async (coords: Location.LocationGeocodedLocation) => {
+    console.log(`[LOCATION SEARCH] Selected location: ${JSON.stringify(coords)}`);
+    setIsSearching(true);
     try {
       const addressList = await Location.reverseGeocodeAsync({
         latitude: coords.latitude,
@@ -69,22 +72,70 @@ export default function LocationSearchScreen() {
         const fullAddress = [addr.name, addr.street, locality, addr.region, addr.country]
           .filter(Boolean)
           .join(", ");
-          
+
+        const resolvedPincode = addr.postalCode || "";
+        console.log(`[LOCATION SEARCH] Resolved pincode: ${resolvedPincode}`);
+
+        let isServiceable = false;
+
+        if (resolvedPincode) {
+          const cleanedPin = resolvedPincode.trim();
+          console.log(`[LOCATION SEARCH] Checking hub_locations for pincode: ${cleanedPin}`);
+
+          if (cleanedPin.length === 6) {
+            const { data, error } = await supabase
+              .from("hub_locations")
+              .select("id, hub_name, pincode, is_active")
+              .eq("pincode", cleanedPin)
+              .eq("is_active", true)
+              .limit(1);
+
+            if (error) {
+              console.log("[LOCATION SEARCH] Final: NOT_AVAILABLE");
+              isServiceable = false;
+            } else {
+              const available = Array.isArray(data) && data.length > 0;
+              console.log(`[LOCATION SEARCH] Matching active hubs: ${data ? data.length : 0}`);
+              if (available) {
+                console.log("[LOCATION SEARCH] Final: AVAILABLE");
+                isServiceable = true;
+              } else {
+                console.log("[LOCATION SEARCH] Final: NOT_AVAILABLE");
+                isServiceable = false;
+              }
+            }
+          } else {
+            console.log("[LOCATION SEARCH] Final: NOT_AVAILABLE");
+          }
+        } else {
+          console.log("[LOCATION SEARCH] Final: NOT_AVAILABLE");
+        }
+
         const result: LocationResult = {
           locality,
           fullAddress,
           latitude: coords.latitude,
           longitude: coords.longitude,
-          status: 'success',
-          postalCode: addr.postalCode || null,
-          isServiceable: true,
+          status: isServiceable ? 'success' : 'unserviceable',
+          postalCode: resolvedPincode || null,
+          isServiceable: isServiceable,
           rawAddress: addr
         };
         await LocationService.setSelectedLocation(result);
-        navigation.goBack();
+
+        if (isServiceable) {
+          Alert.alert("✓ Service Available", "You can continue with booking.", [
+            { text: "OK", onPress: () => navigation.goBack() }
+          ]);
+        } else {
+          Alert.alert("Service Not Available", "We will be available soon in your area.");
+        }
       }
     } catch (e) {
       console.warn("Reverse geocode error:", e);
+      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -94,7 +145,7 @@ export default function LocationSearchScreen() {
     try {
       // Pass true to force GPS fetch, bypassing any cached manual location
       const result = await LocationService.fetchCurrentLocation(Location.Accuracy.High, true);
-      
+
       if (result.status === 'success') {
         setFetchedLocation(result);
         await LocationService.setSelectedLocation(result);
@@ -125,26 +176,26 @@ export default function LocationSearchScreen() {
         setIsSearching(true);
         const results = await Location.geocodeAsync(savedProfile.address);
         if (results.length > 0) {
-           await selectSearchResult(results[0]);
+          await selectSearchResult(results[0]);
         } else {
-           // Fallback if geocoding fails
-           const result: LocationResult = {
-             locality: "Saved Address",
-             fullAddress: savedProfile.address,
-             latitude: 0,
-             longitude: 0,
-             status: 'success',
-             postalCode: null,
-             isServiceable: true,
-             rawAddress: null
-           };
-           await LocationService.setSelectedLocation(result);
-           navigation.goBack();
+          // Fallback if geocoding fails
+          const result: LocationResult = {
+            locality: "Saved Address",
+            fullAddress: savedProfile.address,
+            latitude: 0,
+            longitude: 0,
+            status: 'success',
+            postalCode: null,
+            isServiceable: true,
+            rawAddress: null
+          };
+          await LocationService.setSelectedLocation(result);
+          navigation.goBack();
         }
       } catch (e) {
-         console.warn(e);
+        console.warn(e);
       } finally {
-         setIsSearching(false);
+        setIsSearching(false);
       }
     }
   };
@@ -179,15 +230,22 @@ export default function LocationSearchScreen() {
         {searchResults.length > 0 && (
           <View style={styles.searchResultsContainer}>
             {searchResults.map((result, index) => (
-              <TouchableOpacity 
-                key={index} 
-                style={styles.searchResultItem} 
+              <TouchableOpacity
+                key={index}
+                style={styles.searchResultItem}
                 onPress={() => selectSearchResult(result)}
               >
                 <Ionicons name="location-outline" size={20} color={theme.textMuted} style={{ marginRight: 12 }} />
                 <Text style={{ color: theme.text }}>Location at {result.latitude.toFixed(4)}, {result.longitude.toFixed(4)}</Text>
               </TouchableOpacity>
             ))}
+          </View>
+        )}
+
+        {/* Empty State */}
+        {searchQuery.length > 2 && searchResults.length === 0 && !isSearching && (
+          <View style={{ padding: 16, alignItems: 'center' }}>
+            <Text style={{ color: theme.textMuted, fontSize: 15 }}>No locations found</Text>
           </View>
         )}
 
@@ -205,7 +263,7 @@ export default function LocationSearchScreen() {
             <Ionicons name="chevron-forward" size={20} color={theme.textMuted} style={{ marginLeft: 'auto' }} />
           )}
         </TouchableOpacity>
-        
+
         {/* Fetched Location Display */}
         {fetchedLocation && (
           <TouchableOpacity style={styles.fetchedLocationContainer} onPress={() => navigation.goBack()}>
@@ -229,7 +287,7 @@ export default function LocationSearchScreen() {
         {savedProfile?.address && (
           <View style={styles.savedAddressesSection}>
             <Text style={[styles.sectionTitle, { color: theme.textMuted }]}>SAVED ADDRESSES</Text>
-            
+
             <TouchableOpacity style={styles.addressItem} onPress={handleSelectSavedAddress}>
               <Ionicons name="home-outline" size={20} color={theme.text} style={styles.addressIcon} />
               <View style={styles.addressDetails}>

@@ -1,5 +1,5 @@
-import React, { useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, ScrollView } from "react-native";
 import { Image } from "expo-image";
 import { useNavigation } from "@react-navigation/native";
 import Animated, { 
@@ -13,9 +13,12 @@ import Animated, {
   withSpring
 } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons } from '@expo/vector-icons';
 
 import { COLORS } from "../theme/colors";
 import NeatifyLogo from "../../assets/images/neatifylogo.png";
+import { supabase } from "../lib/supabase";
+import LocationService, { LocationResult } from "../services/LocationService";
 
 export default function ComingSoonScreen() {
   const navigation = useNavigation<any>();
@@ -26,16 +29,40 @@ export default function ComingSoonScreen() {
   const buttonScale = useSharedValue(1);
   const characterBob = useSharedValue(0);
 
+  const [hubLocations, setHubLocations] = useState<any[]>([]);
+
   useEffect(() => {
-    // 3D character bobbing animation (6-10px)
+    // 3D character bobbing animation
     characterBob.value = withRepeat(
       withSequence(
-        withTiming(-8, { duration: 1800 }),
+        withTiming(-6, { duration: 1800 }),
         withTiming(0, { duration: 1800 })
       ),
       -1,
       true
     );
+
+    // Fetch active hub locations
+    const fetchLocations = async () => {
+      const { data, error } = await supabase
+        .from('hub_locations')
+        .select('hub_name, location_name, pincode')
+        .eq('is_active', true);
+      
+      if (data && !error) {
+        const unique = new Map<string, any>();
+        for (const row of data) {
+          const name = row.location_name || row.hub_name;
+          const key = `${name}-${row.pincode}`;
+          if (!unique.has(key)) {
+            unique.set(key, { name, pincode: row.pincode });
+          }
+        }
+        // Show all active unique locations
+        setHubLocations(Array.from(unique.values()));
+      }
+    };
+    fetchLocations();
   }, []);
 
   const characterAnimatedStyle = useAnimatedStyle(() => {
@@ -58,6 +85,24 @@ export default function ComingSoonScreen() {
     navigation.replace("LocationAccess");
   };
 
+  const handleLocationPress = async (hub: any) => {
+    // Reconstruct a simple location result for the selected hub
+    const loc: Partial<LocationResult> = {
+      locality: hub.name,
+      fullAddress: `${hub.name}, ${hub.pincode}`,
+      latitude: 17.4065, // Default/fallback for map behavior if needed
+      longitude: 78.4772,
+      postalCode: hub.pincode,
+      isServiceable: true,
+      status: 'success'
+    };
+    await LocationService.setSelectedLocation(loc as LocationResult);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "HomeDrawer" }],
+    });
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Background Decorators */}
@@ -66,18 +111,19 @@ export default function ComingSoonScreen() {
         <View style={styles.bgCircleBottom} />
       </View>
 
-      <View style={[styles.content, isDesktop && styles.desktopContent]}>
+      <ScrollView 
+        contentContainerStyle={[styles.content, isDesktop && styles.desktopContent]}
+        showsVerticalScrollIndicator={false}
+      >
         
         {/* LOGO */}
-        <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.logoContainer}>
+        <Animated.View entering={FadeInUp.duration(600).delay(50)} style={styles.logoContainer}>
           <Image source={NeatifyLogo} style={styles.logo} contentFit="contain" />
         </Animated.View>
 
         {/* HERO SECTION */}
         <View style={styles.heroSection}>
-          
-          {/* 3D Character */}
-          <Animated.View entering={FadeInDown.duration(600).delay(200)} style={characterAnimatedStyle}>
+          <Animated.View entering={FadeInDown.duration(600).delay(100)} style={characterAnimatedStyle}>
             <Image 
               source={require("../../assets/images/heroimg.png")} 
               style={styles.characterImage}
@@ -85,21 +131,44 @@ export default function ComingSoonScreen() {
             />
           </Animated.View>
 
-          {/* Coming Soon UI */}
-          <Animated.View entering={FadeInDown.duration(600).delay(400)} style={styles.textContainer}>
+          <Animated.View entering={FadeInDown.duration(600).delay(200)} style={styles.textContainer}>
             <Text style={styles.title}>We're coming soon! 📍</Text>
             <Text style={styles.subtitle}>
               Neatify isn't available in your area yet.
             </Text>
             <Text style={styles.desc}>
-              We're rapidly expanding our services across Hyderabad and hope to reach you very soon.
+              Please try a different location to find available services near you.
             </Text>
           </Animated.View>
         </View>
 
+        {/* LOCATIONS SECTION */}
+        {hubLocations.length > 0 && (
+          <Animated.View entering={FadeInDown.duration(600).delay(300)} style={styles.locationsSection}>
+            <Text style={styles.locationsTitle}>Try These Locations</Text>
+            
+            <View style={styles.grid}>
+              {hubLocations.map((hub, idx) => (
+                <TouchableOpacity 
+                  key={idx} 
+                  style={styles.locationCard}
+                  activeOpacity={0.7}
+                  onPress={() => handleLocationPress(hub)}
+                >
+                  <View style={styles.iconContainer}>
+                    <Ionicons name="location-outline" size={22} color={COLORS.saffron} />
+                  </View>
+                  <Text style={styles.locationName} numberOfLines={1}>{hub.name}</Text>
+                  <Text style={styles.locationPincode}>{hub.pincode}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+
         {/* ACTIONS */}
         <View style={styles.actionContainer}>
-          <Animated.View entering={FadeInDown.duration(600).delay(600)}>
+          <Animated.View entering={FadeInDown.duration(600).delay(400)}>
             <TouchableOpacity 
               activeOpacity={0.8}
               onPressIn={handlePressIn} 
@@ -112,7 +181,8 @@ export default function ComingSoonScreen() {
             </TouchableOpacity>
           </Animated.View>
         </View>
-      </View>
+
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -123,9 +193,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
   },
   content: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+    flexGrow: 1,
+    paddingHorizontal: 20,
+    justifyContent: "space-between",
+    paddingBottom: 24,
   },
   desktopContent: {
     maxWidth: 500,
@@ -152,51 +223,103 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     alignItems: "center",
-    marginTop: 40,
-    marginBottom: 10,
+    marginTop: 16,
+    marginBottom: 4,
   },
   logo: {
-    width: 140,
-    height: 40,
+    width: 130,
+    height: 36,
   },
   heroSection: {
-    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -40,
+    flexShrink: 1,
   },
   characterImage: {
-    width: 220,
-    height: 200,
-    marginBottom: 40,
+    width: 160,
+    height: 140,
+    marginBottom: 16,
   },
   textContainer: {
     alignItems: "center",
     paddingHorizontal: 10,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#111",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#444",
+    marginBottom: 6,
+    textAlign: "center",
+  },
+  desc: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 20,
+    fontWeight: "500",
+  },
+  locationsSection: {
+    marginTop: 16,
+    flexShrink: 0,
+  },
+  locationsTitle: {
+    fontSize: 16,
     fontWeight: "800",
     color: "#111",
     marginBottom: 12,
     textAlign: "center",
   },
-  subtitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#444",
-    marginBottom: 8,
-    textAlign: "center",
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
   },
-  desc: {
-    fontSize: 15,
-    color: "#666",
+  locationCard: {
+    width: "48%",
+    backgroundColor: "#F8FAFC",
+    borderRadius: 16,
+    padding: 12,
+    alignItems: "center",
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#F1F5F9",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  iconContainer: {
+    backgroundColor: "#FFFBEB",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 8,
+  },
+  locationName: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#334155",
     textAlign: "center",
-    lineHeight: 22,
-    fontWeight: "500",
+    marginBottom: 4,
+  },
+  locationPincode: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
   },
   actionContainer: {
-    marginTop: 20,
+    marginTop: 8,
+    flexShrink: 0,
   },
   primaryBtn: {
     backgroundColor: COLORS.saffron,

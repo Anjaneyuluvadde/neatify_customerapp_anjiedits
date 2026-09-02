@@ -75,10 +75,17 @@ export default function CompleteProfileScreen() {
 
             // Pre-fill from Auth
             setFullName(user.user_metadata?.full_name || "");
-            setEmail(user.email || "");
+            
+            const authEmail = user.email || "";
+            if (authEmail.includes("@phone.neatify.app")) {
+                setEmail("");
+                setNeedsEmail(true);
+            } else {
+                setEmail(authEmail);
+                setNeedsEmail(!authEmail);
+            }
+            
             setPhone(cleanPhone(user.user_metadata?.phone_number) || cleanPhone(user.user_metadata?.phone) || cleanPhone(user.phone));
-
-            setNeedsEmail(!user.email);
 
             // Pre-fill from Profile table
             const { data: profile } = await supabase
@@ -89,7 +96,7 @@ export default function CompleteProfileScreen() {
 
             if (profile) {
                 if (profile.full_name) setFullName(profile.full_name);
-                if (profile.email) setEmail(profile.email);
+                if (profile.email && !profile.email.includes("@phone.neatify.app")) setEmail(profile.email);
                 if (profile.phone) {
                     setPhone(cleanPhone(profile.phone));
                 }
@@ -330,10 +337,11 @@ export default function CompleteProfileScreen() {
                             <Phone size={20} color={theme.textLight} />
                             <Text style={{ marginLeft: 10, fontSize: 16, color: theme.text, fontWeight: '600' }}>+91</Text>
                             <TextInput
-                                style={[styles.input, { color: theme.text }]}
+                                style={[styles.input, { color: theme.textLight }]}
                                 placeholder="Phone Number"
                                 placeholderTextColor={theme.textLight}
                                 value={phone}
+                                editable={false}
                                 onChangeText={(text) => {
                                     // Strip all non-digits
                                     let cleaned = text.replace(/\D/g, '');
