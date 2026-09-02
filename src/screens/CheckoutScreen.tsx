@@ -233,8 +233,10 @@ export default function CheckoutScreen({ route }: Props) {
             if (session?.user) {
               const { count } = await supabase
                 .from('bookings')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', session.user.id);
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', session.user.id)
+                .eq('payment_verified', true)
+                .ilike('payment_status', 'paid');
               bookingCount = count || 0;
             }
             
@@ -259,24 +261,38 @@ export default function CheckoutScreen({ route }: Props) {
               return;
             }
           } else if (claimed.type === "PROMOTIONAL_BANNER") {
-            console.log("[COUPON STEP 8] Eligibility: PROMOTIONAL_BANNER. Applying exact banner offer.");
-
             const { data: { session } } = await supabase.auth.getSession();
             if (session?.user && claimed.bannerId) {
-              const { count } = await supabase
+              const { count, error } = await supabase
                 .from("bookings")
-                .select("*", { count: "exact", head: true })
+                .select("id", { count: "exact", head: true })
                 .eq("user_id", session.user.id)
                 .eq("promotional_banner_id", claimed.bannerId)
-                .eq("payment_status", "paid")
-                .eq("payment_verified", true);
+                .eq("payment_verified", true)
+                .ilike("payment_status", "paid");
+
+              console.log("[COUPON STEP 7] PROMOTIONAL_BANNER redemption check:", {
+                bannerId: claimed.bannerId,
+                count,
+                error
+              });
+
+              if (error) {
+                console.error("[COUPON STEP 7] Error checking promotional banner redemption:", error);
+                return;
+              }
 
               if (count && count > 0) {
-                console.log("[COUPON STEP 8] Offer already used. Rejecting banner claim.");
+                console.log("[COUPON STEP 7] PROMOTIONAL_BANNER already redeemed. Blocking reuse.");
                 await clearClaimedOffer();
+                setCoupon(null);
+                setCouponApplied(false);
+                setCouponDiscount(0);
                 return;
               }
             }
+
+            console.log("[COUPON STEP 8] Eligibility: PROMOTIONAL_BANNER. Applying exact banner offer.");
 
             if (!isMounted) return;
             const promoCode = claimed.bannerId 
@@ -1455,8 +1471,23 @@ export default function CheckoutScreen({ route }: Props) {
           <Text style={[styles.sectionHeading, { color: theme.text }]}>{t("checkout.serviceAddress")}</Text>
 
           <View style={[styles.card, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            
+            {/* ✅ Customer Details */}
+            <View style={{ marginBottom: 16, paddingHorizontal: 16, paddingTop: 16 }}>
+              <Text style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}>Name</Text>
+              <Text style={{ fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 12 }}>{profile?.full_name || "N/A"}</Text>
+              
+              <Text style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}>Phone Number</Text>
+              <Text style={{ fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 12 }}>{profile?.phone || "N/A"}</Text>
+
+              <Text style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}>Email</Text>
+              <Text style={{ fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 4 }}>{profile?.email || "N/A"}</Text>
+            </View>
+
+            <View style={[styles.divider, { backgroundColor: theme.border, marginHorizontal: 16 }]} />
+
             {/* Address Box */}
-            <View style={[styles.addressSection, { backgroundColor: theme.background, borderColor: theme.border }]}>
+            <View style={[styles.addressSection, { backgroundColor: theme.background, borderColor: theme.border, borderTopWidth: 0 }]}>
               {/* ✅ SELECTED ADDRESS CARD */}
               {isAddressSummaryMode && hasUsedLocationFetch ? (
                 <View style={[styles.summaryCard, { backgroundColor: theme.surfaceVariant }]}>

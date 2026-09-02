@@ -14,10 +14,10 @@ import {
     View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useTheme } from "../context/ThemeContext";
 import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
-import { useTheme } from "../context/ThemeContext";
 import { generateReferralCode, validateReferralCode } from "../utils/referralUtils";
 
 export default function CompleteProfileScreen() {
@@ -171,17 +171,12 @@ export default function CompleteProfileScreen() {
                 }
             };
 
-            if (email !== user.email) {
-                updatePayload.email = email.trim();
-            }
-
             if (needsPassword && password) {
                 updatePayload.password = password;
             }
 
             const { error: updateError } = await supabase.auth.updateUser(
-                updatePayload,
-                { emailRedirectTo: 'theneatifyteam://home' }
+                updatePayload
             );
             if (updateError) throw updateError;
 
@@ -201,27 +196,32 @@ export default function CompleteProfileScreen() {
             const myReferralCode = generateReferralCode(fullName.trim());
 
             // Sync with local tables
-            await Promise.all([
-                supabase.from("profile").upsert({
+            const { error: profileError } = await supabase
+                .from("profile")
+                .upsert({
                     id: currentUser?.id,
                     full_name: fullName.trim(),
                     email: email.trim(),
                     phone: cleanDigits,
                     referral_code: myReferralCode,
                     referred_by_id: referrerId,
-                }),
-                supabase.from("signup").upsert({
-                    id: currentUser?.id,
-                    full_name: fullName.trim(),
-                    email: email.trim(),
-                    phone: cleanDigits,
-                }),
-                // Initialize Wallet
-                supabase.from("wallet").upsert({
-                    user_id: currentUser?.id,
-                    balance: 0
-                })
-            ]);
+                });
+
+            if (profileError) {
+                console.error("PROFILE SAVE FAILED", {
+                    code: profileError.code,
+                    message: profileError.message,
+                    details: profileError.details,
+                    hint: profileError.hint,
+                });
+                throw profileError;
+            }
+
+            // Initialize Wallet
+            await supabase.from("wallet").upsert({
+                user_id: currentUser?.id,
+                balance: 0
+            });
 
             // If referred, create the tracking record AND the ₹50 coupon
             if (referrerId) {

@@ -280,44 +280,60 @@ export default function HomeScreen({ navigation }: any) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        const { count } = await supabase
+        // Check for specific banner reuse
+        const { count: bannerCount } = await supabase
           .from("bookings")
-          .select("*", { count: "exact", head: true })
+          .select("id", { count: "exact", head: true })
           .eq("user_id", session.user.id)
           .eq("promotional_banner_id", banner.id)
-          .eq("payment_status", "paid")
-          .eq("payment_verified", true);
+          .eq("payment_verified", true)
+          .ilike("payment_status", "paid");
 
-        if (count && count > 0) {
-          showToast("Offer already used.", "info");
+        if (bannerCount && bannerCount > 0) {
+          showToast("This offer has already been used.", "info");
           return;
+        }
+
+        // Check for NEW_USER eligibility if banner is for new users
+        if (banner.customer_type === "new") {
+          const { count: totalPaidCount } = await supabase
+            .from("bookings")
+            .select("id", { count: "exact", head: true })
+            .eq("user_id", session.user.id)
+            .eq("payment_verified", true)
+            .ilike("payment_status", "paid");
+
+          if (totalPaidCount && totalPaidCount > 0) {
+            showToast("This offer is for new users only.", "info");
+            // If they have a stale NEW_USER claim locally, clear it since they are no longer eligible
+            const existing = await getClaimedOffer();
+            if (existing && existing.type === "NEW_USER") {
+              await clearClaimedOffer();
+            }
+            return;
+          }
         }
       }
 
       const existingClaim = await getClaimedOffer();
       console.log("[PROMO] Existing claimed offer:", existingClaim);
 
-      let isValidClaim = false;
       if (existingClaim) {
         console.log("[COUPON STEP 8] Existing claim:", existingClaim);
 
         if (existingClaim.bannerId === banner.id) {
-          // Exactly the same banner is already claimed
-          isValidClaim = true;
+          // It's the same banner. Do not return early.
+          // Allow the flow to continue so the service selection modal opens.
+          console.log("[PROMO] Same banner already claimed locally, proceeding to service selection.");
         } else if (existingClaim.type === "GENERIC_OFFER") {
           // Preserve generic offers
-          isValidClaim = true;
+          showToast("An offer is already claimed.", "info");
+          return;
         } else {
           // Different banner or stale claim -> clear it to allow the new one
           console.log("[COUPON STEP 8] Clearing different/stale claim to allow new banner.");
           await clearClaimedOffer();
-          isValidClaim = false;
         }
-      }
-
-      if (isValidClaim) {
-        showToast("An offer is already claimed.", "info");
-        return;
       }
 
       if (banner.service_scope === "selected") {

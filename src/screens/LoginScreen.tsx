@@ -392,6 +392,25 @@ export default function LoginScreen(props: any) {
       }
 
       if (data.isNewUser) {
+        // Create the minimal profile row immediately to satisfy database relationships
+        // before the user completes their profile.
+        const authUser = data.user || (await supabase.auth.getUser()).data.user;
+        if (authUser) {
+          const { error: profileError } = await supabase.from("profile").upsert({
+            id: authUser.id,
+            phone: cleanPhone,
+          }).select().single();
+
+          if (profileError) {
+            console.error("LoginScreen Profile Upsert Error:", {
+              code: profileError.code,
+              message: profileError.message,
+              details: profileError.details,
+              hint: profileError.hint,
+            });
+            throw profileError;
+          }
+        }
         setAuthStep('profile');
       } else {
         await checkProfileAndNavigate(data.user?.id || (await supabase.auth.getUser()).data.user?.id!);
@@ -437,7 +456,6 @@ export default function LoginScreen(props: any) {
 
       await Promise.all([
         supabase.from("profile").upsert({ id: authUser.id, full_name: fullName.trim(), phone: cleanPhone, referral_code: myReferralCode, referred_by_id: referrerId, service_selected: selectedServiceTitle }),
-        supabase.from("signup").upsert({ id: authUser.id, full_name: fullName.trim(), phone: cleanPhone, service_selected: selectedServiceTitle }),
         supabase.from("wallet").upsert({ user_id: authUser.id, balance: 0 })
       ]);
 
@@ -578,7 +596,7 @@ export default function LoginScreen(props: any) {
 
                   {/* Terms & Conditions Row (UI Only) */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, marginBottom: 8, paddingHorizontal: 4 }}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       onPress={() => {
                         if (!termsViewed) {
                           setShowTermsModal(true);
@@ -588,16 +606,16 @@ export default function LoginScreen(props: any) {
                       }}
                       style={{ marginRight: 8, padding: 4 }}
                     >
-                      <Ionicons 
-                        name={termsAccepted ? "checkbox" : "square-outline"} 
-                        size={24} 
-                        color={termsAccepted ? COLORS.saffron : "#888"} 
+                      <Ionicons
+                        name={termsAccepted ? "checkbox" : "square-outline"}
+                        size={24}
+                        color={termsAccepted ? COLORS.saffron : "#888"}
                       />
                     </TouchableOpacity>
                     <Text style={{ fontSize: 13, color: "#111", flex: 1 }}>
                       I agree to the{" "}
-                      <Text 
-                        style={{ color: COLORS.saffron, fontWeight: "700" }} 
+                      <Text
+                        style={{ color: COLORS.saffron, fontWeight: "700" }}
                         onPress={() => setShowTermsModal(true)}
                       >
                         Privacy Policy
@@ -731,7 +749,7 @@ export default function LoginScreen(props: any) {
               </TouchableOpacity>
             </View>
             <ScrollView style={{ paddingHorizontal: 20 }} showsVerticalScrollIndicator={true}>
-              
+
               <Text style={styles.termTitle}>1. About Us</Text>
               <Text style={styles.termText}>We welcome you to our mobile application / website / platform THE NEATIFY TEAM. THE NEATIFY TEAM is a service operated by The Neatify Services (OPC) Private Limited that has developed an on-demand cleaning service platform that connects users with professional cleaning service providers for residential and commercial cleaning services. THE NEATIFY TEAM enables businesses to effortlessly provide housekeeping services to the users including general cleaning of premises, laundry assistance, bathroom and kitchen assistance among others.{'\n\n'}• Website Booking Services:{'\n'}Purpose and Scope: This service is crafted for clients who prioritize simplicity, efficiency, and reliability in their cleaning services.{'\n\n'}Features and Offerings: The website facilitates individual services or a package/bundle of services designed to make cleaning services for users a pleasant and hassle-free services.{'\n\n'}Our Privacy Policy is incorporated as part of this Mobile Application / Website / Platform. Please register yourself in the platform and access or view the platform only if you are agreeable to be bound by this Privacy Policy. In case you are not agreeable to the terms of the privacy policy or do not wish to be bound / obligated by these policies and / or terms and conditions, we kindly request you not to register access / view the platform.{'\n\n'}Please read this Privacy Policy and our Terms of Use carefully before accessing / registering yourself. By continuing to access the platform, please note that you agree to be bound by the provisions of this Privacy Policy.{'\n'}Our services have to be used legally and as permitted by law. THE NEATIFY TEAM has the right to completely stop providing or suspend the services if you do not comply with our terms or privacy policies. The contents and any information provided in the platform may be changed at any time by us without notice by updating the privacy policy. You agree to review the Terms and conditions of the website / Privacy Policy regularly and your continued access or use of the platform will mean that you agree to and abide by the updated Terms & Conditions / Privacy Policy.</Text>
 
@@ -755,10 +773,10 @@ export default function LoginScreen(props: any) {
 
               <Text style={styles.termTitle}>8. Applicable Law & Jurisdiction</Text>
               <Text style={styles.termText}>Please note that in case of any dispute with THE NEATIFY TEAM generally or specifically related to the privacy policy or the terms and conditions, belongs to exclusive jurisdiction of Courts at Hyderabad, India and is governed exclusively by Indian Laws.</Text>
-              
+
               <View style={{ height: 30 }} />
             </ScrollView>
-            
+
             <View style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#F0F0F0', backgroundColor: '#FFF' }}>
               <TouchableOpacity
                 style={{
@@ -1112,3 +1130,4 @@ const dropdownStyles = StyleSheet.create({
     backgroundColor: COLORS.saffron + "20",
   },
 });
+
