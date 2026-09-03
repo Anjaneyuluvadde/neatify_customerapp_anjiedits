@@ -24,6 +24,7 @@ import LocationService from "../services/LocationService";
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
 import LoadingOverlay from "../components/LoadingOverlay";
+import TermsModal from "../components/TermsModal";
 
 import { useLanguage } from "../context/LanguageContext";
 import { useTheme } from "../context/ThemeContext";
@@ -1718,36 +1719,11 @@ export default function CheckoutScreen({ route }: Props) {
       </Modal>
 
       {/* Terms Modal */}
-      <Modal
+      <TermsModal
         visible={showTermsModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowTermsModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>{t("checkout.terms")}</Text>
-              <Pressable onPress={() => setShowTermsModal(false)}>
-                <Ionicons name="close" size={24} color={theme.text} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalHeading}>Agreement to Terms</Text>
-              <Text style={[styles.modalText, { color: theme.textLight }]}>
-                {policies?.terms_and_conditions
-                  ? policies.terms_and_conditions.replace(/^- /gm, '• ')
-                  : "Loading terms..."}
-              </Text>
-            </ScrollView>
-
-            <Pressable style={[styles.modalCloseButton, { backgroundColor: theme.primary }]} onPress={() => setShowTermsModal(false)}>
-              <Text style={[styles.modalCloseButtonText, { color: theme.background }]}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShowTermsModal(false)}
+        prefetchedTerms={policies?.terms_and_conditions}
+      />
 
       {/* Success Modal */}
       <Modal
