@@ -85,7 +85,13 @@ export default function CompleteProfileScreen() {
                 setNeedsEmail(!authEmail);
             }
             
-            setPhone(cleanPhone(user.user_metadata?.phone_number) || cleanPhone(user.user_metadata?.phone) || cleanPhone(user.phone));
+            let extractedPhone = cleanPhone(user.user_metadata?.phone_number) || cleanPhone(user.user_metadata?.phone) || cleanPhone(user.phone);
+            
+            if (!extractedPhone && authEmail.includes("@phone.neatify.app")) {
+                extractedPhone = cleanPhone(authEmail.split("@")[0]);
+            }
+            
+            setPhone(extractedPhone);
 
             // Pre-fill from Profile table
             const { data: profile } = await supabase
@@ -124,45 +130,63 @@ export default function CompleteProfileScreen() {
     };
 
     const handleSubmit = async () => {
-        if (!fullName.trim()) {
-            showAlert({ type: "warning", title: "Missing Information", message: "Please enter your full name." });
-            return;
-        }
-
-        if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-            showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
-            return;
-        }
-
-        if (!phone.trim() || phone.length < 10) {
-            showAlert({ type: "warning", title: "Invalid Phone", message: "Please enter a valid 10-digit phone number." });
-            return;
-        }
-
-        if (needsPassword) {
-            if (!password || password.length < 6) {
-                showAlert({ type: "warning", title: "Weak Password", message: "Password must be at least 6 characters long." });
-                return;
-            }
-
-            if (password !== confirmPassword) {
-                showAlert({ type: "warning", title: "Password Mismatch", message: "Passwords do not match." });
-                return;
-            }
-        }
-
         setSaving(true);
-
+        
         try {
-            // Always store phone as clean 10-digit number in DB
-            const cleanDigits = phone.replace(/\D/g, "").slice(-10);
-            const formattedPhone = `+91${cleanDigits}`;
-            let currentUser = null;
-
             // Existing user: Update
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) throw new Error("No authenticated user found.");
-            currentUser = user;
+            
+            // Re-verify the phone number straight from auth to avoid React state race condition
+            const cleanPhoneHelper = (raw?: string | null) => {
+                if (!raw) return "";
+                return raw.replace(/\D/g, "").slice(-10);
+            };
+
+            let verifiedPhone = cleanPhoneHelper(user.user_metadata?.phone_number) || cleanPhoneHelper(user.user_metadata?.phone) || cleanPhoneHelper(user.phone);
+            const authEmail = user.email || "";
+            if (!verifiedPhone && authEmail.includes("@phone.neatify.app")) {
+                verifiedPhone = cleanPhoneHelper(authEmail.split("@")[0]);
+            }
+            if (!verifiedPhone) {
+                verifiedPhone = cleanPhoneHelper(phone);
+            }
+
+            // Perform validations using the accurately computed local variables
+            if (!fullName.trim()) {
+                showAlert({ type: "warning", title: "Missing Information", message: "Please enter your full name." });
+                setSaving(false);
+                return;
+            }
+
+            if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+                showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
+                setSaving(false);
+                return;
+            }
+
+            if (!verifiedPhone || verifiedPhone.length < 10) {
+                showAlert({ type: "warning", title: "Invalid Phone", message: "Please enter a valid 10-digit phone number." });
+                setSaving(false);
+                return;
+            }
+
+            if (needsPassword) {
+                if (!password || password.length < 6) {
+                    showAlert({ type: "warning", title: "Weak Password", message: "Password must be at least 6 characters long." });
+                    setSaving(false);
+                    return;
+                }
+
+                if (password !== confirmPassword) {
+                    showAlert({ type: "warning", title: "Password Mismatch", message: "Passwords do not match." });
+                    setSaving(false);
+                    return;
+                }
+            }
+
+            const formattedPhone = `+91${verifiedPhone}`;
+            let currentUser = user;
 
             const updatePayload: any = {
                 data: {
@@ -179,8 +203,6 @@ export default function CompleteProfileScreen() {
                 updatePayload
             );
             if (updateError) throw updateError;
-
-            if (!currentUser) throw new Error("User operation failed.");
 
             // Handle Referral Logic
             let referrerId = null;
@@ -199,10 +221,10 @@ export default function CompleteProfileScreen() {
             const { error: profileError } = await supabase
                 .from("profile")
                 .upsert({
-                    id: currentUser?.id,
+                    id: currentUser.id,
                     full_name: fullName.trim(),
                     email: email.trim(),
-                    phone: cleanDigits,
+                    phone: verifiedPhone,
                     referral_code: myReferralCode,
                     referred_by_id: referrerId,
                 });
@@ -238,7 +260,7 @@ export default function CompleteProfileScreen() {
                     coupon_code: welcomeCouponCode,
                     discount_amount: 50,
                     is_used: false,
-                    phone_number: cleanDigits // Link to user's phone
+                    phone_number: verifiedPhone // Link to user's phone
                 });
                 
                 // Store in user metadata so Home Screen knows to show the popup
@@ -248,6 +270,28 @@ export default function CompleteProfileScreen() {
                         welcome_coupon_code: welcomeCouponCode
                     }
                 });
+            }
+
+            // Verify that the profile row was actually saved with correct data
+            const { data: verifyData, error: verifyError } = await supabase
+                .from("profile")
+                .select("id,full_name,email,phone")
+                .eq("id", currentUser.id)
+                .maybeSingle();
+                
+            if (verifyError || !verifyData) {
+                console.error("VERIFICATION FAILED: Row not found or error", verifyError);
+                throw new Error("Profile was not saved correctly to the database. Row not found.");
+            } else {
+                let diffs = [];
+                if (verifyData.id !== currentUser.id) diffs.push(`ID mismatch: expected ${currentUser.id}, got ${verifyData.id}`);
+                if (verifyData.full_name !== fullName.trim()) diffs.push(`Name mismatch: expected ${fullName.trim()}, got ${verifyData.full_name}`);
+                if (verifyData.email !== email.trim()) diffs.push(`Email mismatch: expected ${email.trim()}, got ${verifyData.email}`);
+                if (verifyData.phone !== verifiedPhone) diffs.push(`Phone mismatch: expected ${verifiedPhone}, got ${verifyData.phone}`);
+
+                if (diffs.length > 0) {
+                    throw new Error(`Profile save conflict detected by DB verification:\n${diffs.join("\n")}`);
+                }
             }
 
             // Everything done — go to Home

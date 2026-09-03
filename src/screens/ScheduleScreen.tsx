@@ -1860,10 +1860,9 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                       );
 
                       return (
-                        <Pressable
+                        <View
                           key={addon.id}
-                          onPress={() => setSelectedAddonDetail(addon)}
-                          style={({ pressed }) => ({
+                          style={{
                             flexDirection: "row",
                             backgroundColor: theme.background,
                             borderRadius: 14,
@@ -1871,9 +1870,8 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                             borderWidth: 1,
                             borderColor: theme.border,
                             overflow: "hidden",
-                            opacity: pressed ? 0.7 : 1,
                             padding: 10,
-                          })}
+                          }}
                         >
                           {/* Left Side: Image */}
                           <View style={{ width: 100, height: 100, borderRadius: 10, overflow: 'hidden' }}>
@@ -2036,7 +2034,7 @@ export default function ScheduleScreen({ route }: ScheduleScreenProps) {
                               )}
                             </View>
                           </View>
-                        </Pressable>
+                        </View>
                       );
                     })
                   )}

@@ -36,14 +36,15 @@ export default memo(function ServiceCard({ service, onPress }: Props) {
           source={{ uri: service.image }}
           style={styles.image}
         />
+      </View>
+
+      <View style={styles.content}>
         {/* Special Offer Badge */}
         <View style={styles.specialOfferBadge}>
           <Ionicons name="pricetag" size={10} color="#92400E" />
           <Text style={styles.specialOfferText}>Special Offer</Text>
         </View>
-      </View>
 
-      <View style={styles.content}>
         <Text
           numberOfLines={2}
           ellipsizeMode="tail"
@@ -107,9 +108,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   specialOfferBadge: {
-    position: 'absolute',
-    top: 8,
-    left: 8,
+    alignSelf: 'flex-start',
     backgroundColor: 'rgba(254, 243, 199, 0.95)',
     flexDirection: 'row',
     alignItems: 'center',
@@ -117,6 +116,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 6,
     gap: 4,
+    marginBottom: 6,
   },
   specialOfferText: {
     color: '#92400E',

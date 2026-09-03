@@ -485,9 +485,9 @@ export default function ProfileScreen() {
               </View>
 
               <View style={[styles.codeContainer, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
-                <View>
+                <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={[styles.codeLabel, { color: theme.textMuted }]}>YOUR REFERRAL CODE</Text>
-                  <Text style={[styles.codeText, { color: theme.text }]}>{referralCode}</Text>
+                  <Text style={[styles.codeText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>{referralCode}</Text>
                 </View>
                 <View style={styles.codeActions}>
                   <TouchableOpacity onPress={copyToClipboard} style={styles.iconBtn}>
@@ -519,9 +519,9 @@ export default function ProfileScreen() {
               </View>
 
               <View style={[styles.codeContainer, { backgroundColor: theme.surfaceVariant, borderColor: theme.border }]}>
-                <View>
+                <View style={{ flex: 1, marginRight: 12 }}>
                   <Text style={[styles.codeLabel, { color: theme.textMuted }]}>AVAILABLE BALANCE</Text>
-                  <Text style={[styles.codeText, { color: theme.text }]}>₹{walletBalance}</Text>
+                  <Text style={[styles.codeText, { color: theme.text }]} numberOfLines={1} adjustsFontSizeToFit>₹{walletBalance}</Text>
                 </View>
                 <View style={styles.codeActions}>
                   <View style={[styles.shareBtnSmall, { backgroundColor: theme.primary }]}>

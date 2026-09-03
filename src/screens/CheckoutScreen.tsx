@@ -2353,6 +2353,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   couponAppliedBadge: {
+    flex: 1,
     backgroundColor: "#D1FAE5",
     borderRadius: 8,
     paddingVertical: 10,

@@ -392,30 +392,7 @@ export default function LoginScreen(props: any) {
         await supabase.auth.setSession(data.session);
       }
 
-      if (data.isNewUser) {
-        // Create the minimal profile row immediately to satisfy database relationships
-        // before the user completes their profile.
-        const authUser = data.user || (await supabase.auth.getUser()).data.user;
-        if (authUser) {
-          const { error: profileError } = await supabase.from("profile").upsert({
-            id: authUser.id,
-            phone: cleanPhone,
-          }).select().single();
-
-          if (profileError) {
-            console.error("LoginScreen Profile Upsert Error:", {
-              code: profileError.code,
-              message: profileError.message,
-              details: profileError.details,
-              hint: profileError.hint,
-            });
-            throw profileError;
-          }
-        }
-        setAuthStep('profile');
-      } else {
-        await checkProfileAndNavigate(data.user?.id || (await supabase.auth.getUser()).data.user?.id!);
-      }
+      await checkProfileAndNavigate(data.user?.id || (await supabase.auth.getUser()).data.user?.id!);
     } catch (err: any) {
       showAlert({ type: "error", title: "Verification Failed", message: err.message });
     } finally {
