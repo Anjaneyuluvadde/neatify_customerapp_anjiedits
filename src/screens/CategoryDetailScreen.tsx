@@ -76,11 +76,7 @@ export default function CategoryDetailScreen({ route }: Props) {
         <View style={{ width: 40 }} />
       </View>
 
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={theme.primary} />
-        </View>
-      ) : services.length === 0 ? (
+      {services.length === 0 && !loading ? (
         <View style={styles.center}>
           <Ionicons name="search-outline" size={48} color={theme.textMuted} />
           <Text style={[styles.emptyText, { color: theme.textMuted }]}>No services found in this category.</Text>

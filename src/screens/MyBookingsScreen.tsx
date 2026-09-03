@@ -100,13 +100,7 @@ export default function MyBookingsScreen() {
 
   /* ================= LOADING ================= */
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+
 
   /* ================= UI ================= */
 

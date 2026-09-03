@@ -619,15 +619,20 @@ export default function ServiceDetailScreen({ route }: Props) {
 
   /* ================= UI ================= */
 
-  if (loadingService) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
-        <Text style={{ color: theme.textLight }}>{t("common.loading")}</Text>
-      </SafeAreaView>
-    );
-  }
+
 
   if (!service) {
+    if (loadingService) {
+      return (
+        <View style={{ flex: 1, backgroundColor: theme.background }}>
+          <View style={{ padding: 16, marginTop: 40 }}>
+            <View style={{ height: 250, backgroundColor: theme.surfaceVariant, borderRadius: 16, marginBottom: 16 }} />
+            <View style={{ height: 32, width: '60%', backgroundColor: theme.surfaceVariant, borderRadius: 8, marginBottom: 8 }} />
+            <View style={{ height: 20, width: '40%', backgroundColor: theme.surfaceVariant, borderRadius: 4 }} />
+          </View>
+        </View>
+      );
+    }
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.background, justifyContent: 'center', alignItems: 'center' }}>
         <Text style={{ color: theme.textLight }}>{t("serviceDetail.notFound")}</Text>

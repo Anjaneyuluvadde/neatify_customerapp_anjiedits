@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import LocationService from "../services/LocationService";
+import { isTempEmail } from "../utils/authUtils";
 
 import AnimatedGradientBorder from "../components/AnimatedGradientBorder";
 import Header from "../components/Header";
@@ -107,6 +108,7 @@ export default function CheckoutScreen({ route }: Props) {
   const [userId, setUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [invoiceEmail, setInvoiceEmail] = useState("");
 
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -595,6 +597,10 @@ export default function CheckoutScreen({ route }: Props) {
       };
       setProfile(cleanedProfile);
 
+      if (profileData.email && !isTempEmail(profileData.email)) {
+        setInvoiceEmail(profileData.email);
+      }
+
       // ✅ Initial coupon fetch moved to useEffect [profile?.phone]
 
       const cachedLoc = await LocationService.getSelectedLocation();
@@ -1014,7 +1020,7 @@ export default function CheckoutScreen({ route }: Props) {
           {
             user_id: userId,
             customer_name: profile.full_name,
-            email: profile.email,
+            email: invoiceEmail,
             phone_number: profile.phone,
             full_address: fullAddress,
             latitude: finalLat,
@@ -1071,7 +1077,7 @@ export default function CheckoutScreen({ route }: Props) {
         payment = await processPayment(Number(grandTotal.toFixed(2)), {
           firstName,
           lastName,
-          email: profile.email,
+          email: invoiceEmail,
           phone: profile.phone,
           address: fullAddress,
           city: "", // Consolidated into fullAddress
@@ -1481,8 +1487,27 @@ export default function CheckoutScreen({ route }: Props) {
               <Text style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}>Phone Number</Text>
               <Text style={{ fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 12 }}>{profile?.phone || "N/A"}</Text>
 
-              <Text style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}>Email</Text>
-              <Text style={{ fontSize: 16, color: theme.text, fontWeight: '500', marginBottom: 4 }}>{profile?.email || "N/A"}</Text>
+              <Text style={{ fontSize: 12, color: theme.textLight, marginBottom: 4 }}>Email for Invoice</Text>
+              <TextInput
+                style={{
+                  fontSize: 16,
+                  color: theme.text,
+                  fontWeight: '500',
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                  borderRadius: 8,
+                  backgroundColor: theme.surfaceVariant,
+                  marginBottom: 4,
+                }}
+                value={invoiceEmail}
+                onChangeText={setInvoiceEmail}
+                placeholder="Where should we send your receipt?"
+                placeholderTextColor={theme.textLight}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
             </View>
 
             <View style={[styles.divider, { backgroundColor: theme.border, marginHorizontal: 16 }]} />
@@ -1650,36 +1675,44 @@ export default function CheckoutScreen({ route }: Props) {
 
 
           {/* PAY BUTTON */}
-          <Pressable
-            style={[
-              styles.payBtn,
-              { backgroundColor: theme.primary },
-              (isProcessing ||
+          {(!manualAddress.trim() || !pincode.trim() || !invoiceEmail.trim()) ? (
+            <View style={{ padding: 16, alignItems: 'center', opacity: 0.7 }}>
+              <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center' }}>
+                Please provide a valid service address and invoice email to place your order.
+              </Text>
+            </View>
+          ) : (
+            <Pressable
+              style={[
+                styles.payBtn,
+                { backgroundColor: theme.primary },
+                (isProcessing ||
+                  checkingPincode ||
+                  !acceptedPolicies ||
+                  !acceptedTerms ||
+                  !isPincodeServiceable) &&
+                styles.payBtnDisabled,
+              ]}
+              onPress={handlePlaceOrder}
+              disabled={
+                isProcessing ||
                 checkingPincode ||
                 !acceptedPolicies ||
                 !acceptedTerms ||
-                !isPincodeServiceable) &&
-              styles.payBtnDisabled,
-            ]}
-            onPress={handlePlaceOrder}
-            disabled={
-              isProcessing ||
-              checkingPincode ||
-              !acceptedPolicies ||
-              !acceptedTerms ||
-              !isPincodeServiceable
-            }
-          >
-            <Text style={[styles.payText, { color: theme.background }]}>
-              {isProcessing
-                ? t("checkout.processing")
-                : checkingPincode
-                  ? t("checkout.checking")
-                  : !isPincodeServiceable && pincode.length === 6
-                    ? t("checkout.serviceNotAvailable")
-                    : t("checkout.placeOrder")}
-            </Text>
-          </Pressable>
+                !isPincodeServiceable
+              }
+            >
+              <Text style={[styles.payText, { color: theme.background }]}>
+                {isProcessing
+                  ? t("checkout.processing")
+                  : checkingPincode
+                    ? t("checkout.checking")
+                    : !isPincodeServiceable && pincode.length === 6
+                      ? t("checkout.serviceNotAvailable")
+                      : t("checkout.placeOrder")}
+              </Text>
+            </Pressable>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 

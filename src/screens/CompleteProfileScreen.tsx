@@ -19,6 +19,7 @@ import { useNotification } from "../hooks/useNotification";
 import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { generateReferralCode, validateReferralCode } from "../utils/referralUtils";
+import { isTempEmail } from "../utils/authUtils";
 
 export default function CompleteProfileScreen() {
     const navigation = useNavigation<any>();
@@ -77,7 +78,7 @@ export default function CompleteProfileScreen() {
             setFullName(user.user_metadata?.full_name || "");
             
             const authEmail = user.email || "";
-            if (authEmail.includes("@phone.neatify.app")) {
+            if (isTempEmail(authEmail)) {
                 setEmail("");
                 setNeedsEmail(true);
             } else {
@@ -87,7 +88,7 @@ export default function CompleteProfileScreen() {
             
             let extractedPhone = cleanPhone(user.user_metadata?.phone_number) || cleanPhone(user.user_metadata?.phone) || cleanPhone(user.phone);
             
-            if (!extractedPhone && authEmail.includes("@phone.neatify.app")) {
+            if (!extractedPhone && isTempEmail(authEmail)) {
                 extractedPhone = cleanPhone(authEmail.split("@")[0]);
             }
             
@@ -102,7 +103,7 @@ export default function CompleteProfileScreen() {
 
             if (profile) {
                 if (profile.full_name) setFullName(profile.full_name);
-                if (profile.email && !profile.email.includes("@phone.neatify.app")) setEmail(profile.email);
+                if (profile.email && !isTempEmail(profile.email)) setEmail(profile.email);
                 if (profile.phone) {
                     setPhone(cleanPhone(profile.phone));
                 }
@@ -145,11 +146,18 @@ export default function CompleteProfileScreen() {
 
             let verifiedPhone = cleanPhoneHelper(user.user_metadata?.phone_number) || cleanPhoneHelper(user.user_metadata?.phone) || cleanPhoneHelper(user.phone);
             const authEmail = user.email || "";
-            if (!verifiedPhone && authEmail.includes("@phone.neatify.app")) {
+            if (!verifiedPhone && isTempEmail(authEmail)) {
                 verifiedPhone = cleanPhoneHelper(authEmail.split("@")[0]);
             }
             if (!verifiedPhone) {
                 verifiedPhone = cleanPhoneHelper(phone);
+            }
+
+            let finalEmailToSave = email.trim();
+
+            // If the user left it blank, but they have a temp email, preserve it
+            if (!finalEmailToSave && isTempEmail(authEmail)) {
+                finalEmailToSave = authEmail;
             }
 
             // Perform validations using the accurately computed local variables
@@ -159,7 +167,7 @@ export default function CompleteProfileScreen() {
                 return;
             }
 
-            if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+            if (!finalEmailToSave || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(finalEmailToSave)) {
                 showAlert({ type: "warning", title: "Invalid Email", message: "Please enter a valid email address." });
                 setSaving(false);
                 return;
@@ -195,6 +203,11 @@ export default function CompleteProfileScreen() {
                 }
             };
 
+            // Only update email in auth if it is different from the current auth email
+            if (finalEmailToSave !== authEmail) {
+                updatePayload.email = finalEmailToSave;
+            }
+
             if (needsPassword && password) {
                 updatePayload.password = password;
             }
@@ -223,7 +236,7 @@ export default function CompleteProfileScreen() {
                 .upsert({
                     id: currentUser.id,
                     full_name: fullName.trim(),
-                    email: email.trim(),
+                    email: finalEmailToSave,
                     phone: verifiedPhone,
                     referral_code: myReferralCode,
                     referred_by_id: referrerId,
@@ -286,7 +299,7 @@ export default function CompleteProfileScreen() {
                 let diffs = [];
                 if (verifyData.id !== currentUser.id) diffs.push(`ID mismatch: expected ${currentUser.id}, got ${verifyData.id}`);
                 if (verifyData.full_name !== fullName.trim()) diffs.push(`Name mismatch: expected ${fullName.trim()}, got ${verifyData.full_name}`);
-                if (verifyData.email !== email.trim()) diffs.push(`Email mismatch: expected ${email.trim()}, got ${verifyData.email}`);
+                if (verifyData.email !== finalEmailToSave) diffs.push(`Email mismatch: expected ${finalEmailToSave}, got ${verifyData.email}`);
                 if (verifyData.phone !== verifiedPhone) diffs.push(`Phone mismatch: expected ${verifiedPhone}, got ${verifyData.phone}`);
 
                 if (diffs.length > 0) {
@@ -319,13 +332,7 @@ export default function CompleteProfileScreen() {
         }
     };
 
-    if (loading) {
-        return (
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.background }}>
-                <ActivityIndicator size="large" color={theme.primary} />
-            </View>
-        );
-    }
+
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
@@ -362,19 +369,6 @@ export default function CompleteProfileScreen() {
                             />
                         </View>
 
-                        {/* EMAIL */}
-                        <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>
-                            <Mail size={20} color={theme.textLight} />
-                            <TextInput
-                                style={[styles.input, { color: theme.text }]}
-                                placeholder="Email Address"
-                                placeholderTextColor={theme.textLight}
-                                value={email}
-                                onChangeText={setEmail}
-                                keyboardType="email-address"
-                                autoCapitalize="none"
-                            />
-                        </View>
 
                         {/* PHONE NUMBER - Simple input, no OTP verification */}
                         <View style={[styles.inputContainer, { backgroundColor: theme.background, borderColor: theme.border }]}>

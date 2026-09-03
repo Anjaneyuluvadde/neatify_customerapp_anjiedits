@@ -71,15 +71,7 @@ export default function CartScreen() {
         ) : null}
       </View>
 
-      {/* ✅ LOADING */}
-      {loadingCart ? (
-        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={{ marginTop: 12, color: theme.textLight }}>
-            Loading cart...
-          </Text>
-        </View>
-      ) : cartItems.length === 0 ? (
+      {cartItems.length === 0 && !loadingCart ? (
         /* ✅ EMPTY CART */
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
           <Ionicons name="cart-outline" size={50} color={theme.textLight} />

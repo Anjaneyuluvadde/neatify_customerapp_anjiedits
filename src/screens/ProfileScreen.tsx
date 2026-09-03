@@ -32,6 +32,7 @@ import { supabase } from "../lib/supabase";
 import { COLORS } from "../theme/colors";
 import { registerForPushNotificationsAsync, removePushTokenFromSupabase } from "../utils/pushNotifications";
 import { generateReferralCode } from "../utils/referralUtils";
+import { isTempEmail } from "../utils/authUtils";
 
 /* ======================================================
    FIELD CARD (MOVED OUTSIDE – FIXES KEYBOARD ISSUE)
@@ -166,7 +167,7 @@ export default function ProfileScreen() {
         setReferralCode(currentCode);
 
         const dbEmail = data.email || user.email || "";
-        const finalEmail = dbEmail.includes("@phone.neatify.app") ? "" : dbEmail;
+        const finalEmail = isTempEmail(dbEmail) ? "" : dbEmail;
 
         setFormData({
           full_name: data.full_name || "",
@@ -192,7 +193,7 @@ export default function ProfileScreen() {
         }
       } else {
         const fallbackEmail = user.email || "";
-        const finalFallback = fallbackEmail.includes("@phone.neatify.app") ? "" : fallbackEmail;
+        const finalFallback = isTempEmail(fallbackEmail) ? "" : fallbackEmail;
         setFormData((p) => ({
           ...p,
           email: finalFallback,
@@ -241,6 +242,7 @@ export default function ProfileScreen() {
         .from("profile")
         .update({
           full_name: formData.full_name.trim(),
+          email: formData.email.trim(),
           phone: cleanPhone,
           address: formData.address.trim(),
           pincode: formData.pincode.trim(),
@@ -349,13 +351,7 @@ export default function ProfileScreen() {
 
   /* ================= LOADING ================= */
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={COLORS.saffron} />
-      </View>
-    );
-  }
+
 
   /* ================= UI ================= */
 
@@ -416,11 +412,18 @@ export default function ProfileScreen() {
             fallback={t("profile.notProvided")}
           />
 
-          <View style={[styles.fieldCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
-            <Text style={[styles.label, { color: theme.textMuted }]}>{t("profile.email")}</Text>
-            <Text style={[styles.valueMuted, { color: theme.textMuted }]}>{formData.email}</Text>
-            <Text style={[styles.hintText, { color: theme.textMuted }]}>{t("profile.emailHint")}</Text>
-          </View>
+          <FieldCard
+            label={t("profile.email")}
+            value={formData.email}
+            isEditing={isEditing}
+            editable
+            keyboardType="email-address"
+            onChangeText={(t) =>
+              setFormData((p) => ({ ...p, email: t }))
+            }
+            placeholder={t("profile.emailHint") || "Enter your email"}
+            fallback="--"
+          />
 
           <FieldCard
             label={t("profile.phone")}

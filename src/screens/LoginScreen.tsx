@@ -274,7 +274,7 @@ export default function LoginScreen(props: any) {
   const { width } = useWindowDimensions();
   const isDesktop = width >= 768;
 
-  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'profile'>('phone');
+  const [authStep, setAuthStep] = useState<'phone' | 'otp'>('phone');
   const [otp, setOtp] = useState('');
   const [resendTimer, setResendTimer] = useState(0);
   const [termsViewed, setTermsViewed] = useState(false);
@@ -289,6 +289,7 @@ export default function LoginScreen(props: any) {
     return () => clearInterval(interval);
   }, [resendTimer]);
   const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [referralCode, setReferralCode] = useState("");
 
@@ -395,59 +396,6 @@ export default function LoginScreen(props: any) {
       await checkProfileAndNavigate(data.user?.id || (await supabase.auth.getUser()).data.user?.id!);
     } catch (err: any) {
       showAlert({ type: "error", title: "Verification Failed", message: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSignupSubmit = async () => {
-    setLoading(true);
-    try {
-      if (!fullName) {
-        showAlert({ type: "warning", title: t("notifications.missingInfo"), message: "Name is required." });
-        setLoading(false); return;
-      }
-      if (eligibleServices.length > 0 && !selectedService) {
-        showAlert({ type: "warning", title: "Select Service", message: "Please select a service for your 40% OFF discount." });
-        setLoading(false); return;
-      }
-
-      let referrerId = null;
-      if (referralCode.trim()) {
-        referrerId = await validateReferralCode(referralCode.trim());
-        if (!referrerId) {
-          showAlert({ type: "warning", title: "Invalid Referral", message: "The referral code you entered is invalid. You can continue without it." });
-          setLoading(false); return;
-        }
-      }
-
-      const cleanPhone = phone.replace(/\D/g, "").slice(-10);
-      const formattedPhone = `+91${cleanPhone}`;
-
-      // Since OTP verification created the user and set the session, retrieve the current user
-      const { data: { user: authUser }, error: authError } = await supabase.auth.getUser();
-      if (authError || !authUser) throw new Error("Authentication error. Please try again.");
-
-      const myReferralCode = generateReferralCode(fullName.trim());
-      const selectedServiceTitle = selectedService?.title || null;
-      const selectedServiceId = selectedService?.id || null;
-
-      await Promise.all([
-        supabase.from("profile").upsert({ id: authUser.id, full_name: fullName.trim(), phone: cleanPhone, referral_code: myReferralCode, referred_by_id: referrerId, service_selected: selectedServiceTitle }),
-        supabase.from("wallet").upsert({ user_id: authUser.id, balance: 0 })
-      ]);
-
-      await setClaimedOffer({ type: "NEW_USER", serviceId: selectedServiceId, serviceTitle: selectedServiceTitle, offerPercentage: 40, claimedAt: new Date().toISOString() });
-
-      if (referrerId) {
-        await supabase.from("referrals").insert({ referrer_id: referrerId, referred_user_id: authUser.id, status: 'pending', reward_amount: 50 });
-        const welcomeCouponCode = `WELCOME50_${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-        await supabase.from("coupons").insert({ coupon_code: welcomeCouponCode, discount_amount: 50, is_used: false, phone_number: cleanPhone });
-      }
-
-      await checkProfileAndNavigate(authUser.id);
-    } catch (err: any) {
-      showAlert({ type: "error", title: t("notifications.authFailed"), message: err.message });
     } finally {
       setLoading(false);
     }
@@ -629,51 +577,6 @@ export default function LoginScreen(props: any) {
                   </View>
                 </Animated.View>
               )}
-
-              {authStep === 'profile' && (
-                <Animated.View entering={FadeInDown.duration(400).delay(200)} style={{ gap: 12 }}>
-                  <AnimatedInput
-                    icon={<User size={20} color="#888" />}
-                    placeholder={t("login.fullName")}
-                    value={fullName}
-                    onChange={setFullName}
-                    autoCapitalize="words"
-                  />
-
-                  <AnimatedInput
-                    icon={<Gift size={20} color="#888" />}
-                    placeholder="Referral/Discount Code (Optional)"
-                    value={referralCode}
-                    onChange={(text: string) => setReferralCode(text.toUpperCase())}
-                    autoCapitalize="characters"
-                  />
-                  {eligibleServices.length > 0 ? (
-                    <View style={{ marginBottom: 4 }}>
-                      <Text style={styles.dropdownLabel}>🎁 Select Service for 40% OFF:</Text>
-                      <AnimatedServiceDropdown
-                        selectedService={selectedService}
-                        setShowServiceDropdown={setShowServiceDropdown}
-                      />
-                    </View>
-                  ) : (
-                    <View style={styles.expiredOfferContainer}>
-                      <Sparkles size={16} color="#888" />
-                      <Text style={styles.expiredOfferText}>40% Welcome Offer is currently expired / inactive.</Text>
-                    </View>
-                  )}
-
-                  <Pressable onPressIn={handlePressIn} onPressOut={handlePressOut} onPress={handleSignupSubmit} disabled={loading} style={{ marginTop: 8 }}>
-                    <Animated.View style={[styles.primaryBtn, buttonAnimatedStyle]}>
-                      {loading ? (
-                        <ActivityIndicator color="#111" />
-                      ) : (
-                        <Text style={styles.primaryText}>Complete Profile</Text>
-                      )}
-                    </Animated.View>
-                  </Pressable>
-                </Animated.View>
-              )}
-
 
 
             </View>

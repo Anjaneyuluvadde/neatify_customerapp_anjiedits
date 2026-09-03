@@ -947,9 +947,7 @@ export default function HomeScreen({ navigation }: any) {
       <SafeAreaView style={{ backgroundColor: "#FFC928", flex: 0 }} edges={["top"]} />
       <StatusBar barStyle="dark-content" backgroundColor="#FFC928" />
 
-      {loading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color={COLORS.saffron} /></View>
-      ) : (
+
         <ScrollView
           ref={scrollRef}
           onScroll={(e) => setShowGoUp(e.nativeEvent.contentOffset.y > 200)}
@@ -1018,7 +1016,6 @@ export default function HomeScreen({ navigation }: any) {
           {/* 6. Why Choose Us Section */}
           <WhyChooseUs onBookNow={navigateToExpressCleaning} />
         </ScrollView>
-      )}
 
       {/* Popups (Festive & Offers) */}
       <Modal visible={showPopup && !!popupType} transparent animationType="fade" onRequestClose={() => setShowPopup(false)}>
