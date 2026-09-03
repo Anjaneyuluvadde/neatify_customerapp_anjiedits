@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "The Neatify Team",
-    "slug": "neatifycustomerapp",
+    "slug": "the-neatify-team-app",
     "version": "1.0.5",
     "orientation": "portrait",
     "scheme": [
@@ -102,9 +102,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "f4df65e5-b12b-4045-9543-059c32a7e054"
+        "projectId": "38a64c1b-a244-4f07-ae9c-f2e285e307ea"
       }
     },
-    "owner": "vaddeanjaneyulu"
+    "owner": "akshitha0909"
   }
 }
